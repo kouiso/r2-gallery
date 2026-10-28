@@ -1,0 +1,56 @@
+name: web-deploy
+
+# Cloudflare Pages の r2-gallery プロジェクトは公開前の private リポジトリ
+# kouiso/r2-gallery-archive の pages-dist 枝に Git 連携で結び付いとる（Pages は連携先の
+# リポジトリを後から差し替えられん）。なので main の Flutter web dist をここでビルドし、
+# そのリポジトリだけに書ける deploy key で pages-dist へ置く。Pages はビルド無しで配信する
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
+    timeout-minutes: 30
+    env:
+      DIST_REPO: git@github.com:kouiso/r2-gallery-archive.git
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.6
+          cache: true
+      - name: Build Flutter web distribution
+        working-directory: flutter
+        run: |
+          flutter pub get
+          flutter build web --release
+      - name: Push dist to pages-dist
+        env:
+          PAGES_DEPLOY_KEY: ${{ secrets.PAGES_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          key="$RUNNER_TEMP/pages-key"
+          printf '%s\n' "$PAGES_DEPLOY_KEY" > "$key"
+          chmod 600 "$key"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          out="$RUNNER_TEMP/pages-dist"
+          git init -q -b pages-dist "$out"
+          cp -r flutter/build/web/. "$out/"
+          echo "$GITHUB_SHA" > "$out/.source-sha"
+          cd "$out"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add -A
+          git commit -qm "deploy: flutter web dist from main@$GITHUB_SHA"
+          # pages-dist はビルド成果物だけの枝で履歴を持たんので毎回置き換える
+          git push -f "$DIST_REPO" pages-dist
+          rm -f "$key"

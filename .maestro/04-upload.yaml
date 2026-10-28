@@ -1,0 +1,38 @@
+appId: app.r2gallery
+---
+# 端末のファイルを選んでアップロードし、一覧と Worker の両方に入ること
+- launchApp
+- runFlow: common/dismiss-no-lock.yaml
+- runFlow: common/open-photo-tab.yaml
+- extendedWaitUntil:
+    visible: "seed-photo.jpg"
+    timeout: 30000
+- tapOn: "追加"
+# 端末の選択画面は Android の版で DocumentsUI か写真ピッカーになる。どちらでも選べるようにする
+- extendedWaitUntil:
+    visible: "(maestro-upload\\.jpg|Photo taken.*|Photos|Recent|Images)"
+    timeout: 30000
+- runFlow:
+    when:
+      visible: "maestro-upload.jpg"
+    commands:
+      - tapOn: "maestro-upload.jpg"
+- runFlow:
+    when:
+      visible: "Photo taken.*"
+    commands:
+      - tapOn:
+          text: "Photo taken.*"
+          index: 0
+- extendedWaitUntil:
+    visible: "1件をアップロード"
+    timeout: 20000
+- tapOn: "アップロード"
+- extendedWaitUntil:
+    visible: "maestro-upload.jpg"
+    timeout: 60000
+- runScript:
+    file: check.js
+    env:
+      CHECK: uploaded
+- assertTrue: ${output.check}

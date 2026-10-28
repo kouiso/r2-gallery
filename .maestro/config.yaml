@@ -1,0 +1,12 @@
+# Flutter 版の通し確認（.github/workflows/maestro.yml から流す）。
+# 前の段で作ったデータを次の段が使うので、順番を固定し、落ちたらそこで止める
+flows:
+  - "*.yaml"
+executionOrder:
+  continueOnFailure: false
+  flowsOrder:
+    - 01-first-launch
+    - 02-list
+    - 03-play
+    - 04-upload
+    - 05-trash

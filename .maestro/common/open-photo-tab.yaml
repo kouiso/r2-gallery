@@ -1,0 +1,7 @@
+appId: app.r2gallery
+---
+# 起動直後は取り込みタブにいる（従来と同じ）。写真の一覧を見る各 flow の前に写真タブを開く
+- extendedWaitUntil:
+    visible: "写真(\\s.*)?"
+    timeout: 15000
+- tapOn: "写真(\\s.*)?"

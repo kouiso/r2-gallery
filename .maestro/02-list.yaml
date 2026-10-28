@@ -1,0 +1,11 @@
+appId: app.r2gallery
+---
+# 手元の Worker に置いた写真と動画が一覧に出ること
+- launchApp
+- runFlow: common/dismiss-no-lock.yaml
+- runFlow: common/open-photo-tab.yaml
+- extendedWaitUntil:
+    visible: "seed-photo.jpg"
+    timeout: 30000
+# 動画のタイルは「名前＋改行＋動画」と読み上げられるので、名前の後ろに続く行を許す
+- assertVisible: "seed-clip\\.mp4(\\s.*)?"

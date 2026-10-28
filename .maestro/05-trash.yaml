@@ -1,0 +1,49 @@
+appId: app.r2gallery
+---
+# 写真をゴミ箱へ送り、ゴミ箱タブで復元して元の一覧に戻ること。Worker 側の中身も確かめる
+- launchApp
+- runFlow: common/dismiss-no-lock.yaml
+- runFlow: common/open-photo-tab.yaml
+- extendedWaitUntil:
+    visible: "seed-photo.jpg"
+    timeout: 30000
+- tapOn: "seed-photo.jpg"
+- extendedWaitUntil:
+    visible: ".*件目 · seed-photo.jpg"
+    timeout: 15000
+- tapOn: "ゴミ箱へ"
+- extendedWaitUntil:
+    notVisible: ".*件目 · seed-photo.jpg"
+    timeout: 15000
+- extendedWaitUntil:
+    notVisible: "seed-photo.jpg"
+    timeout: 15000
+- runScript:
+    file: check.js
+    env:
+      CHECK: trashed
+- assertTrue: ${output.check}
+# ゴミ箱はボトムタブではなくアルバムタブ末尾の「その他」に入っている
+- tapOn: "アルバム(\\s.*)?"
+- scrollUntilVisible:
+    element:
+      text: "ゴミ箱(\\s.*)?"
+    timeout: 30000
+- tapOn: "ゴミ箱(\\s.*)?"
+# ゴミ箱の行は「種類・名前・移した日」をまとめて読み上げる
+- extendedWaitUntil:
+    visible: ".*\\sseed-photo\\.jpg\\s.*"
+    timeout: 20000
+- tapOn: "seed-photo.jpgを復元"
+- extendedWaitUntil:
+    visible: "ゴミ箱は空です(\\s.*)?"
+    timeout: 20000
+- runScript:
+    file: check.js
+    env:
+      CHECK: restored
+- assertTrue: ${output.check}
+- tapOn: "写真(\\s.*)?"
+- extendedWaitUntil:
+    visible: "seed-photo.jpg"
+    timeout: 30000

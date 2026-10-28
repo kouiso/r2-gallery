@@ -1,0 +1,11 @@
+appId: app.r2gallery
+---
+# 画面ロックの無い端末では起動時に「画面ロックがありません」の案内が出る。エミュレータはロック無しなので閉じて進む
+- extendedWaitUntil:
+    visible: "(R2 Gallery|ロックなしで続ける)"
+    timeout: 60000
+- runFlow:
+    when:
+      visible: "ロックなしで続ける"
+    commands:
+      - tapOn: "ロックなしで続ける"

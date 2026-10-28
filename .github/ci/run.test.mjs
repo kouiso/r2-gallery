@@ -64,7 +64,7 @@ test('each command failure propagates its exit code and stops later phases', t =
 test('incremental secret scan preserves exact original base-parent to head scope', t => {
   const f = fixture(t);
   assert.equal(f.run('secrets', { CI_SCAN_BASE: 'abc123', CI_SCAN_HEAD: 'def456' }).status, 0);
-  assert.equal(f.calls()[0].args.at(-1), '--log-opts=--no-merges --first-parent abc123^..def456');
+  assert.equal(f.calls()[0].args.at(-1), '--log-opts=--no-merges --first-parent abc123..def456');
 });
 
 test('initial push uses full history and scan findings retain exit 2', t => {

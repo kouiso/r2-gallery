@@ -1,9 +1,10 @@
 name: web-deploy
 
-# Cloudflare Pages の r2-gallery プロジェクトは公開前の private リポジトリ
-# kouiso/r2-gallery-archive の pages-dist 枝に Git 連携で結び付いとる（Pages は連携先の
-# リポジトリを後から差し替えられん）。なので main の Flutter web dist をここでビルドし、
-# そのリポジトリだけに書ける deploy key で pages-dist へ置く。Pages はビルド無しで配信する
+# Cloudflare Pages の r2-gallery プロジェクトは公開前の private リポジトリ（今の
+# kouiso/r2-gallery-archive、repo id で結び付き）の Git 連携のまま残っとる。Pages は連携先を
+# 後から差し替えられん。実測: push の通知は repo id（archive）で受け、clone は登録時の名前
+# kouiso/r2-gallery（このリポジトリ）から取る。なので同じ dist commit を先にこのリポジトリの
+# pages-dist へ、次に archive の pages-dist へ置く。archive への push が Pages のデプロイを起こす
 on:
   push:
     branches: [main]
@@ -18,6 +19,8 @@ concurrency:
 
 jobs:
   deploy:
+    permissions:
+      contents: write # このリポジトリの pages-dist へ push する
     runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
     timeout-minutes: 30
     env:
@@ -36,6 +39,7 @@ jobs:
       - name: Push dist to pages-dist
         env:
           PAGES_DEPLOY_KEY: ${{ secrets.PAGES_DEPLOY_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           key="$RUNNER_TEMP/pages-key"
@@ -51,6 +55,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git add -A
           git commit -qm "deploy: flutter web dist from main@$GITHUB_SHA"
-          # pages-dist はビルド成果物だけの枝で履歴を持たんので毎回置き換える
+          # pages-dist はビルド成果物だけの枝で履歴を持たんので毎回置き換える。
+          # clone 元（このリポジトリ）を先に置かんと、archive への push で始まる Pages の clone が落ちる
+          git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" pages-dist
           git push -f "$DIST_REPO" pages-dist
           rm -f "$key"

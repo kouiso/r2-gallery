@@ -13,7 +13,7 @@ fi
 BASE="${CI_SCAN_BASE:-}"
 if [ -n "$BASE" ] && [ "$BASE" != "0000000000000000000000000000000000000000" ]; then
   "$GITLEAKS" detect --redact -v --exit-code=2 --source . --log-level=warn \
-    --log-opts="--no-merges --first-parent ${BASE}^..${CI_SCAN_HEAD:-HEAD}"
+    --log-opts="--no-merges --first-parent ${BASE}..${CI_SCAN_HEAD:-HEAD}"
 else
   "$GITLEAKS" detect --redact -v --exit-code=2 --source . --log-level=warn
 fi

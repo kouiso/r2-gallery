@@ -56,6 +56,7 @@ cd worker && npx wrangler dev --local --port 8787   # local API (miniflare R2/D1
 Canonical skills live in `.agents/skills/<name>/SKILL.md`:
 
 - `fad-distribute` — merging to `main` ships the APK to Firebase App Distribution automatically (operator-managed `r2-flutter-build` lane); confirm or force a release.
+- `fad-invite` — FAD のテスター追加・削除: `fad-invite`. Run it before adding or removing any tester (one person at a time: env, project, OS, person).
 - `worker-deploy` — deploy `worker/` to the `notes-sync` Cloudflare Worker without local CF credentials.
 
 Claude Code resolves the generated stubs under `.claude/skills/` which point at the canonical files; other agents read `.agents/skills/` directly.

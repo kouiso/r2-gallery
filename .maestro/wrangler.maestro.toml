@@ -1,0 +1,20 @@
+# Maestro 用の手元 Worker の設定。prepare.sh が worker/ に写してから使う。
+# トークン・署名鍵はこの確認用の固定値で、本番の値ではない。
+name = "r2-gallery-worker-maestro"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+[[r2_buckets]]
+binding = "LIB_A"
+bucket_name = "maestro-a"
+[[r2_buckets]]
+binding = "LIB_B"
+bucket_name = "maestro-b"
+[[r2_buckets]]
+binding = "META"
+bucket_name = "maestro-meta"
+[vars]
+LIBRARIES = '[{"id":"a","binding":"LIB_A","title":"書けるA"},{"id":"b","binding":"LIB_B","title":"読み取り専用B","readOnly":true}]'
+ACCESS_TOKEN = "live-token"
+SIGNING_SECRET = "live-secret"
+URL_TTL_SECONDS = "3600"
+TRASH_RETENTION_DAYS = "30"

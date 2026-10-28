@@ -1,0 +1,17 @@
+appId: app.r2gallery
+---
+# 埋め込みの接続先で、トークン入力の画面を通らずに写真タブまで来ること（上書き更新の利用者が詰まらんため）
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+- runFlow: common/dismiss-no-lock.yaml
+- extendedWaitUntil:
+    visible: "R2 Gallery"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "写真(\\s.*)?"
+    timeout: 30000
+- assertVisible: "書けるA"
+- assertNotVisible: "アクセストークン"
+- assertNotVisible: "初期化に失敗.*"

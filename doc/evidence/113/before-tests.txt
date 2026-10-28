@@ -1,0 +1,121 @@
+Resolving dependencies...
+Downloading packages...
+  app_links 6.4.1 (7.2.2 available)
+  cached_network_image 4.0.3 (4.0.4 available)
+  cached_network_image_platform_interface 5.0.2 (5.0.3 available)
+  cached_network_image_web 2.0.2 (2.0.3 available)
+  clock 1.1.2 (1.1.3 available)
+  code_assets 1.2.1 (2.1.0 available)
+  cross_file 0.3.5+5 (0.4.0 available)
+  cupertino_icons 1.0.9 (2.0.0 available)
+  cupertino_ui 1.0.2 (1.1.4 available)
+  hooks 2.0.2 (2.2.0 available)
+  intl 0.20.2 (0.20.3 available)
+  matcher 0.12.19 (0.12.20 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  material_ui 1.2.0 (1.8.0 available)
+  meta 1.18.0 (1.19.0 available)
+  objective_c 9.5.0 (9.6.2 available)
+  petitparser 7.0.2 (7.1.0 available)
+  record_use 0.6.0 (1.1.1 available)
+  shared_preferences_android 2.5.0 (2.5.1 available)
+  shared_preferences_foundation 2.5.7 (2.6.0 available)
+  stack_trace 1.12.1 (1.12.2 available)
+  test_api 0.7.11 (0.7.15 available)
+  vector_math 2.2.0 (2.4.3 available)
+  webview_flutter_wkwebview 3.26.2 (3.27.1 available)
+  xml 7.0.1 (7.1.0 available)
+Got dependencies!
+25 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading <worktree>/flutter/test/viewer_test.dart
+00:00 +0: V2: 情報シートに種別・サイズ・追加日時・保存場所・メモ・講評を出す
+00:00 +1: V2: 講評を取れなかった時は理由と再読み込みを出し、押すと取り直して出す
+meta failed: HTTP 500: d1 down
+00:00 +2: V2: 講評が届く前に情報を開いても、届いたらそのシートに出す
+00:00 +3: V2: API の評価基準コメントと両方のスコアを情報シートに出す
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: exactly one matching candidate
+  Actual: _TextContainingWidgetFinder:<Found 0 widgets with text containing 照明の境界を確認: []>
+   Which: means none were found but one was expected
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file://<worktree>/flutter/test/viewer_test.dart:423:5)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1952:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file://<worktree>/flutter/test/viewer_test.dart line 423
+The test description was:
+  V2: API の評価基準コメントと両方のスコアを情報シートに出す
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:00 +3 -1: V2: API の評価基準コメントと両方のスコアを情報シートに出す [E]
+  Test failed. See exception logs above.
+  The test description was: V2: API の評価基準コメントと両方のスコアを情報シートに出す
+  
+00:00 +3 -1: V2: A→B→A の後に古い成功が届いても最新の講評を保つ
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: exactly one matching candidate
+  Actual: _TextWidgetFinder:<Found 0 widgets with text "最新A · pass · 2回目": []>
+   Which: means none were found but one was expected
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file://<worktree>/flutter/test/viewer_test.dart:455:7)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1952:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file://<worktree>/flutter/test/viewer_test.dart line 455
+The test description was:
+  V2: A→B→A の後に古い成功が届いても最新の講評を保つ
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:01 +3 -2: V2: A→B→A の後に古い成功が届いても最新の講評を保つ [E]
+  Test failed. See exception logs above.
+  The test description was: V2: A→B→A の後に古い成功が届いても最新の講評を保つ
+  
+00:01 +3 -2: V2: A→B→A の後に古い失敗が届いても最新の講評を保つ
+meta failed: HTTP 503: stale response
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: exactly one matching candidate
+  Actual: _TextWidgetFinder:<Found 0 widgets with text "最新A · pass · 2回目": []>
+   Which: means none were found but one was expected
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file://<worktree>/flutter/test/viewer_test.dart:455:7)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1952:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file://<worktree>/flutter/test/viewer_test.dart line 455
+The test description was:
+  V2: A→B→A の後に古い失敗が届いても最新の講評を保つ
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:01 +3 -3: V2: A→B→A の後に古い失敗が届いても最新の講評を保つ [E]
+  Test failed. See exception logs above.
+  The test description was: V2: A→B→A の後に古い失敗が届いても最新の講評を保つ
+  
+00:01 +3 -3: V2: 講評の無い件では何も出さず、前の件の講評も混ざらない
+00:01 +4 -3: Some tests failed.
+
+Failing tests:
+  <worktree>/flutter/test/viewer_test.dart: V2: API の評価基準コメントと両方のスコアを情報シートに出す
+  <worktree>/flutter/test/viewer_test.dart: V2: A→B→A の後に古い失敗が届いても最新の講評を保つ
+  <worktree>/flutter/test/viewer_test.dart: V2: A→B→A の後に古い成功が届いても最新の講評を保つ

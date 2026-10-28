@@ -1,0 +1,6 @@
+PASS: Pixel 7 Pro: criterion comment + both scores, error + retry, empty, personal, restart
+
+Before: main ac7c987, same Pixel 7 Pro + safe HTTP JSON fixture: overall comment is visible; criterion comment and panel score are absent.
+Application ID: local.fixture.review113_evidence (separate from app.r2gallery).
+No private media, R2 objects, D1 production rows, or stored production app data were opened or changed.
+Final theme-matched before/after: Pixel 7 Pro 1080x2340, same fixture and ViewerScreen. Before omits criterion comment and panel score; after shows both. PASS.

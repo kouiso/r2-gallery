@@ -1,0 +1,9 @@
+stack head aaf813b (=#198 v3 4c8c32e + #197 tip), auto-brightness off, setting 40/255
+before: 0.15354331
+after swipe up (app override on): 0.3541752
+-- HOME pressed
+      topResumedActivity=ActivityRecord{196015648 u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity t5}
+      mLastReportedMultiWindowMode=true mLastReportedPictureInPictureMode=true
+        mLastReportedMultiWindowMode=false mLastReportedPictureInPictureMode=false
+display while app is in PiP/background: 0.15354331
+-- back to app; display: 0.3541752

@@ -1,0 +1,72 @@
+
+> r2-gallery@0.4.0 lint <worktree>
+> eslint .
+
+
+> r2-gallery@0.4.0 worker:typecheck <worktree>
+> tsc -p worker --noEmit
+
+
+> r2-gallery@0.4.0 test <worktree>
+> vitest run && pnpm test:worker
+
+
+ RUN  v3.2.7 <worktree>
+
+missing env: FIREBASE_APP_ID
+refused: tester not in allow list: someone@example.com
+refused: QN_GROUPS is not supported; list testers in QN_TESTERS
+ ✓ tools/app-distribute.test.mjs (9 tests) 1154ms
+   ✓ app-distribute.sh tester allow list > uploads to the owner, normalising case and spaces  410ms
+   ✓ app-distribute.sh tester allow list > uploads without notifying anyone when no tester is given  680ms
+ ✓ tools/leak-check.test.mjs (13 tests) 1558ms
+ ✓ tools/index-upload.test.mjs (29 tests) 2640ms
+   ✓ index-upload > uploads a real WebP thumbnail and the index only under .system/ of the meta bucket  503ms
+   ✓ index-upload > renders a WebP poster for clips/long.mkv via ffmpeg  490ms
+   ✓ index-upload > renders a WebP poster for clips/short.mp4 via ffmpeg  475ms
+   ✓ index-upload > removes its scratch dir when interrupted mid-upload  312ms
+
+ Test Files  3 passed (3)
+      Tests  51 passed (51)
+   Start at  04:51:18
+   Duration  3.94s (transform 81ms, setup 0ms, collect 1.02s, tests 5.35s, environment 0ms, prepare 249ms)
+
+
+> r2-gallery@0.4.0 test:worker <worktree>
+> cd worker && vitest run
+
+
+ RUN  v3.2.7 <worktree>/worker
+
+(node:39999) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[vpw:debug] Adding `enable_nodejs_tty_module` compatibility flag during tests as this feature is needed to support the Vitest runner.
+[vpw:debug] Adding `enable_nodejs_fs_module` compatibility flag during tests as this feature is needed to support the Vitest runner.
+[vpw:debug] Adding `enable_nodejs_http_modules` compatibility flag during tests as this feature is needed to support the Vitest runner.
+[vpw:debug] Adding `enable_nodejs_perf_hooks_module` compatibility flag during tests as this feature is needed to support the Vitest runner.
+[vpw:info] Starting single runtime for vitest.config.ts...
+[mf:warn] The latest compatibility date supported by the installed Cloudflare Workers Runtime is "2026-03-10",
+but you've requested "2026-09-01". Falling back to "2026-03-10"...
+workerd/io/worker.c++:1150: info: console warning; message = Called .text() on an HTTP body which does not appear to be text. The body's Content-Type is "image/webp". The result will probably be corrupted. Consider checking the Content-Type header before interpreting entities as text.
+stdout | src/index.test.ts > trash > scheduled purge removes trash older than the retention period
+trash purge 2
+
+ ✓ src/index.test.ts (47 tests) 9059ms
+   ✓ writes > copies large objects via multipart upload  8773ms
+
+ Test Files  1 passed (1)
+      Tests  47 passed (47)
+   Start at  04:51:22
+   Duration  9.89s (transform 65ms, setup 0ms, collect 118ms, tests 9.06s, environment 0ms, prepare 56ms)
+
+[vpw:debug] Shutting down runtimes...
+[vpw:debug] Disposing remote proxy sessions...
+
+    ○
+    │╲
+    │ ○
+    ○ ░
+    ░    gitleaks
+
+no forbidden-word list supplied (QN_FORBIDDEN_WORDS[_FILE]); word scan skipped
+leak-check clean: 420 files, 6 author email(s)

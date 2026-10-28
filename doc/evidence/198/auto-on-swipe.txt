@@ -1,0 +1,8 @@
+mode=1 setting=102/255 display(before)=0.39763778
+t=1x0.3 display=0.39763778
+t=2x0.3 display=0.39763778
+t=3x0.3 display=0.39763778
+t=4x0.3 display=0.39763778
+t=5x0.3 display=0.39763778
+t=6x0.3 display=0.39763778
+display(after)=0.39763778

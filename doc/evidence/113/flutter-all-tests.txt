@@ -1,0 +1,451 @@
+00:00 +0: loading <worktree>/flutter/test/settings_port_test.dart
+00:00 +0: <worktree>/flutter/test/settings_port_test.dart: S1 ペアリングリンク tools/pairing-url.mjs の出力を読める
+00:00 +1: <worktree>/flutter/test/settings_port_test.dart: S1 ペアリングリンク 作った文字列はそのまま読み戻せる
+00:00 +2: <worktree>/flutter/test/settings_port_test.dart: S1 ペアリングリンク 崩れた文字列は例外にせず null
+00:00 +3: <worktree>/flutter/test/settings_port_test.dart: S1 ペアリングリンク リンクで開くと、その接続先とトークンで繋ぐ
+00:00 +4: <worktree>/flutter/test/settings_port_test.dart: S1 ペアリングリンク 以前の Flutter 版の endpoint/token 形式も受ける
+00:00 +5: <worktree>/flutter/test/settings_port_test.dart: S1 ペアリングリンク 読めないリンクでは何も試さない
+00:00 +6: <worktree>/flutter/test/settings_port_test.dart: S2 ペアリング文字列の貼り付け トークン欄に貼ると両方の欄が埋まり、そのまま接続できる
+00:01 +7: <worktree>/flutter/test/settings_port_test.dart: S3 接続入力の補正 ホスト名だけ・末尾スラッシュ・トークンの改行を補って繋ぐ
+00:01 +8: <worktree>/flutter/test/settings_port_test.dart: S3 接続入力の補正 http は平文でトークンが流れるので試さずに断る
+00:01 +9: <worktree>/flutter/test/settings_port_test.dart: S3 接続入力の補正 トークンが空白だけなら試さない
+00:01 +10: <worktree>/flutter/test/settings_port_test.dart: S3 接続入力の補正 表示用のホスト名は userinfo もパスも落とす
+00:01 +11: <worktree>/flutter/test/settings_port_test.dart: S4 読み取り専用への書き込みを止める 操作ごとに KMP 版と同じ文言で止める
+00:01 +12: <worktree>/flutter/test/settings_port_test.dart: S4 読み取り専用への書き込みを止める 読み取り専用ライブラリでは追加の＋も「写真・動画を追加」も出さない
+00:01 +13: <worktree>/flutter/test/settings_port_test.dart: S4 読み取り専用への書き込みを止める 読み取り専用ライブラリのゴミ箱では復元を送らず理由を出す
+00:01 +14: <worktree>/flutter/test/settings_port_test.dart: S4 読み取り専用への書き込みを止める 書けるライブラリなら復元は通る
+00:02 +15: <worktree>/flutter/test/settings_port_test.dart: S6 ロックの設定 再ロックまでの時間を選ぶと保存され、行にも出る
+00:02 +16: <worktree>/flutter/test/settings_port_test.dart: S8 接続状態 接続中はホスト名とライブラリ数だけ出し、URL 全体やトークンは出さない
+00:02 +17: <worktree>/flutter/test/settings_port_test.dart: S8 接続状態 未接続ならそう出し、タップで接続画面へ戻れる
+00:02 +18: <worktree>/flutter/test/settings_port_test.dart: S9 起動失敗バナー ライブラリが取れなければ理由を出し、再試行で直れば消える
+libraries failed: HTTP 503: unavailable
+00:03 +19: <worktree>/flutter/test/settings_port_test.dart: S9 起動失敗バナー 閉じるで帯だけ消せる
+libraries failed: offline
+00:03 +20: <worktree>/flutter/test/settings_port_test.dart: S9 起動失敗バナー 起動処理が想定外のエラーで落ちても、読み込み中のまま止めず理由を出す
+00:03 +21: <worktree>/flutter/test/settings_port_test.dart: S9 起動失敗バナー 一度取れた一覧は、取り直しに失敗しても手元のまま使い続ける
+00:03 +21: <worktree>/flutter/test/settings_port_test.dart: S9 起動失敗バナー 起動処理が想定外のエラーで落ちても、読み込み中のまま止めず理由を出す
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:03 +21: <worktree>/flutter/test/settings_port_test.dart: S9 起動失敗バナー 一度取れた一覧は、取り直しに失敗しても手元のまま使い続ける
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+libraries failed: offline
+00:03 +22: <worktree>/flutter/test/settings_port_test.dart: S9 起動失敗バナー 起動時の失敗の説明にトークンを出さない
+00:03 +23: <worktree>/flutter/test/settings_port_test.dart: S10 接続せずに取り込みだけ使う スキップすると取り込みタブが開き、写真タブは接続画面に戻る
+00:04 +24: <worktree>/flutter/test/settings_port_test.dart: S10 接続せずに取り込みだけ使う 写真タブの接続画面から繋ぐと、そのまま一覧に切り替わる
+00:04 +25: <worktree>/flutter/test/settings_port_test.dart: S12 ライブラリ切替 読み取り専用のライブラリには鍵を付ける
+00:04 +26: <worktree>/flutter/test/settings_port_test.dart: S12 ライブラリ切替 最後に開いたライブラリが消えていたら、残っている先頭へ切り替える
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:04 +27: loading <worktree>/flutter/test/baked_connection_test.dart
+00:05 +27: <worktree>/flutter/test/baked_connection_test.dart: 保存済みの接続が無く埋め込み値が通れば、入力なしで接続して保存する
+00:05 +28: <worktree>/flutter/test/baked_connection_test.dart: 埋め込み値で繋がらなければ保存せず接続画面に理由を出す
+00:05 +28: <worktree>/flutter/test/baked_connection_test.dart: 保存済みの接続が無く埋め込み値が通れば、入力なしで接続して保存する
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:05 +29: <worktree>/flutter/test/baked_connection_test.dart: 保存済みの接続があれば埋め込み値は試さない
+00:05 +29: <worktree>/flutter/test/baked_connection_test.dart: 埋め込み値で繋がらなければ保存せず接続画面に理由を出す
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:05 +30: <worktree>/flutter/test/baked_connection_test.dart: 埋め込み値を確かめている間にペアリングで繋いだら、そちらを上書きしない
+00:05 +30: <worktree>/flutter/test/baked_connection_test.dart: 保存済みの接続があれば埋め込み値は試さない
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:05 +31: <worktree>/flutter/test/baked_connection_test.dart: 埋め込み値が空なら何もせず接続画面のまま
+00:05 +31: <worktree>/flutter/test/baked_connection_test.dart: 埋め込み値を確かめている間にペアリングで繋いだら、そちらを上書きしない
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:05 +32: loading <worktree>/flutter/test/offline_store_test.dart
+00:06 +32: <worktree>/flutter/test/offline_store_test.dart: KMP 版（JCE の AES/GCM）と同じ並び: 先頭12バイトの IV・暗号文・16バイトのタグ
+00:06 +33: <worktree>/flutter/test/offline_store_test.dart: 保存すると平文は端末に残らず、復号すると元に戻る
+00:06 +34: <worktree>/flutter/test/offline_store_test.dart: 同じキーでもライブラリが違えば別の保存として扱う
+00:06 +35: <worktree>/flutter/test/offline_store_test.dart: 書き換えられた暗号文は読まずに null を返す
+offline blob rejected: SecretBoxAuthenticationError: SecretBox has wrong message authentication code (MAC)
+00:06 +36: <worktree>/flutter/test/offline_store_test.dart: すべて削除で暗号文と目録が消える。秘密置き場には鍵と目録しか書かない
+00:06 +37: <worktree>/flutter/test/offline_store_test.dart: 鍵は1回作ったら使い回す（作り直すと前の保存が読めなくなる）
+00:06 +38: loading <worktree>/flutter/test/viewer_test.dart
+00:07 +38: <worktree>/flutter/test/viewer_test.dart: V3: 上バーに日時と「N件目」、写真のメモを出し、スワイプで次の件に変わる
+00:08 +39: <worktree>/flutter/test/viewer_test.dart: P3/V1: 動画のページでは操作バーが隠れると上下バーも隠れ、隣の動画へ送ると前の動画を止める
+00:08 +40: <worktree>/flutter/test/viewer_test.dart: V1: 下の操作バーに 情報/端末に保存/アルバムへ/ゴミ箱へ。オフラインは口が無ければ出さない
+00:08 +41: <worktree>/flutter/test/viewer_test.dart: V1: オフライン保存の口を渡すとボタンが出て、保存後は「保存済み」になる
+00:08 +42: <worktree>/flutter/test/viewer_test.dart: V1: 読み取り専用ライブラリではアルバムへ・ゴミ箱へを出さない
+00:08 +43: <worktree>/flutter/test/viewer_test.dart: V1: ゴミ箱へは確認なしで移し、閉じた先で「元に戻す」で戻せる
+00:08 +44: <worktree>/flutter/test/viewer_test.dart: V1: 元に戻す時に同名が元の場所にあれば、その旨を出す
+00:08 +45: <worktree>/flutter/test/viewer_test.dart: V1: ゴミ箱への移動に失敗したらビューワーに留まって知らせる
+trash failed: HTTP 500: boom
+00:08 +46: <worktree>/flutter/test/viewer_test.dart: V2: 情報シートに種別・サイズ・追加日時・保存場所・メモ・講評を出す
+00:08 +47: <worktree>/flutter/test/viewer_test.dart: V2: 講評を取れなかった時は理由と再読み込みを出し、押すと取り直して出す
+meta failed: HTTP 500: d1 down
+00:08 +48: <worktree>/flutter/test/viewer_test.dart: V2: 講評が届く前に情報を開いても、届いたらそのシートに出す
+00:08 +49: <worktree>/flutter/test/viewer_test.dart: V2: API の評価基準コメントと両方のスコアを情報シートに出す
+00:08 +50: <worktree>/flutter/test/viewer_test.dart: V2: A→B→A の後に古い成功が届いても最新の講評を保つ
+00:08 +51: <worktree>/flutter/test/viewer_test.dart: V2: A→B→A の後に古い失敗が届いても最新の講評を保つ
+meta failed: HTTP 503: stale response
+00:08 +52: <worktree>/flutter/test/viewer_test.dart: V2: 講評の無い件では空状態を出し、前の件の講評も混ざらない
+00:08 +53: <worktree>/flutter/test/viewer_test.dart: V4: 書き込めるアルバムだけを出し、選ぶと追加して知らせる
+00:09 +54: <worktree>/flutter/test/viewer_test.dart: V4: 新しいアルバム名を入れると作ってから追加する。失敗は知らせる
+album add failed: HTTP 500: boom
+00:09 +55: <worktree>/flutter/test/viewer_test.dart: X1: 端末に保存を押すと原本を落として端末のギャラリーへ登録する
+00:09 +56: <worktree>/flutter/test/viewer_test.dart: X1: 署名URLが切れていたら一覧から取り直して一度だけ再試行する
+00:09 +57: <worktree>/flutter/test/viewer_test.dart: X1: 許可ダイアログが出る登録の間だけ外部画面として扱い、ダウンロード中の裏回りは普通にロックする
+00:09 +58: <worktree>/flutter/test/viewer_test.dart: X1: 画像・動画以外は書き出さず、理由を返す
+00:09 +59: <worktree>/flutter/test/viewer_test.dart: 整形: サイズと MIME は KMP 版と同じ
+00:09 +60: <worktree>/flutter/test/viewer_test.dart: ガード: 書けないライブラリの項目はゴミ箱へ送らず、ビューワーに留まって理由を出す
+00:09 +61: <worktree>/flutter/test/viewer_test.dart: V1: 一覧から開いたビューワーの「オフライン」は #149 のオフライン保存に積む
+00:09 +62: loading <worktree>/flutter/test/webdl_logic_test.dart
+00:10 +62: <worktree>/flutter/test/webdl_logic_test.dart: detectKind / displayName 動画・音声・画像・HLS を拡張子で分類する
+00:10 +63: <worktree>/flutter/test/webdl_logic_test.dart: detectKind / displayName 名前は URL デコードして安全な文字だけにする
+00:10 +64: <worktree>/flutter/test/webdl_logic_test.dart: HLS BANDWIDTH 最大の変種を選ぶ
+00:10 +65: <worktree>/flutter/test/webdl_logic_test.dart: HLS AVERAGE-BANDWIDTH を BANDWIDTH と取り違えない
+00:10 +66: <worktree>/flutter/test/webdl_logic_test.dart: HLS 相対の変種は基準 URL から解決する
+00:10 +67: <worktree>/flutter/test/webdl_logic_test.dart: HLS メディアプレイリストは変種なし、セグメントを順に返す
+00:10 +68: <worktree>/flutter/test/webdl_logic_test.dart: HLS 絶対パス・プロトコル相対・相対のセグメントを解決する
+00:10 +69: <worktree>/flutter/test/webdl_logic_test.dart: HLS 暗号化と fMP4 を見分ける
+00:10 +70: <worktree>/flutter/test/webdl_logic_test.dart: SniffCollector 通信由来はリクエストのヘッダを守り、Cookie と Referer は無い時だけ補う
+00:10 +71: <worktree>/flutter/test/webdl_logic_test.dart: SniffCollector リクエストに Cookie が無ければ Cookie の入れ物から補う
+00:10 +72: <worktree>/flutter/test/webdl_logic_test.dart: SniffCollector 画像とメディアでない URL は通信から拾わない
+00:10 +73: <worktree>/flutter/test/webdl_logic_test.dart: SniffCollector 通信で拾った方が DOM 走査より優先される
+00:10 +74: <worktree>/flutter/test/webdl_logic_test.dart: SniffCollector DOM 走査は URL で重複を除き、メディアでないものは捨て、画像は取り込む
+00:10 +75: <worktree>/flutter/test/webdl_logic_test.dart: SniffCollector clear で前のページの検出を空にする
+00:10 +76: <worktree>/flutter/test/webdl_logic_test.dart: 名前と MIME 一覧に出る拡張子ならそのまま、無ければ MIME から借りる
+00:10 +77: <worktree>/flutter/test/webdl_logic_test.dart: 名前と MIME 同名キーの候補は (2)(3) を拡張子の前に付ける
+00:10 +78: <worktree>/flutter/test/webdl_logic_test.dart: 名前と MIME HLS は ts の名前と MIME で置く。音声は一覧に出ないので保存不可
+00:10 +79: <worktree>/flutter/test/webdl_logic_test.dart: 取り込み画面の部品 保存を止める理由は保存先の状態で決まる
+00:10 +80: <worktree>/flutter/test/webdl_logic_test.dart: 取り込み画面の部品 サイズ表記
+00:10 +81: <worktree>/flutter/test/webdl_logic_test.dart: 取り込み画面の部品 履歴の日時は月/日 時:分
+00:10 +82: <worktree>/flutter/test/webdl_logic_test.dart: 取り込み画面の部品 転送の要約
+00:10 +83: <worktree>/flutter/test/webdl_logic_test.dart: 履歴 新しい順で、200件を超えたら古いものから落とす
+00:10 +84: <worktree>/flutter/test/webdl_logic_test.dart: 履歴 壊れた保存値は空として扱う
+00:10 +85: <worktree>/flutter/test/webdl_logic_test.dart: URL の決まり スキームを省いた入力は https、http/https はそのまま
+00:10 +86: <worktree>/flutter/test/webdl_logic_test.dart: URL の決まり 端末内や他アプリへ抜けるスキームは開かない
+00:10 +87: <worktree>/flutter/test/webdl_logic_test.dart: URL の決まり ページが送ってきた http/https 以外の URL は検出に入れない
+00:10 +88: <worktree>/flutter/test/webdl_logic_test.dart: URL の決まり 1ページで抱える検出には上限がある
+00:10 +89: loading <worktree>/flutter/test/viewer_paging_test.dart
+00:10 +89: <worktree>/flutter/test/viewer_paging_test.dart: スワイプで前後のメディアへ移る 開いたメディアから始まり、スワイプで次へ移る
+00:11 +90: <worktree>/flutter/test/viewer_paging_test.dart: スワイプで前後のメディアへ移る 動画のコントローラは表示中のページの 1 本だけ（隣は先読みしない）
+00:11 +91: <worktree>/flutter/test/viewer_paging_test.dart: スワイプで前後のメディアへ移る スワイプの途中（半分未満）でも隣の動画は読み込まない
+00:11 +92: <worktree>/flutter/test/viewer_paging_test.dart: スワイプで前後のメディアへ移る 画像のページへ移っても動画のコントローラは残らない
+00:11 +93: <worktree>/flutter/test/viewer_paging_test.dart: 拡大した画像からのスワイプ 端に着く前は外へ流してもページは動かない
+00:11 +94: <worktree>/flutter/test/viewer_paging_test.dart: 拡大した画像からのスワイプ 左端まで寄せたあと外へ引けば、1.01 倍超でも前の画像へ移る
+00:11 +95: <worktree>/flutter/test/viewer_paging_test.dart: 拡大した画像からのスワイプ 2 倍を超えて拡大したら原寸を重ね、等倍へ戻したら外す
+00:11 +96: <worktree>/flutter/test/viewer_paging_test.dart: 一覧の続きと対象外のメディア 開いた後に一覧が読み込んだ続きのページも、末尾に足されてスワイプできる
+00:11 +97: <worktree>/flutter/test/viewer_paging_test.dart: 一覧の続きと対象外のメディア 一覧が先頭から取り直されても並びは崩れない
+00:11 +98: <worktree>/flutter/test/viewer_paging_test.dart: 一覧の続きと対象外のメディア 画像と動画以外はスワイプの対象にしない
+00:11 +99: <worktree>/flutter/test/viewer_paging_test.dart: 動画のシーク スライダーはドラッグ中に seek せず、離した時に 1 回だけ seek する
+00:12 +100: <worktree>/flutter/test/viewer_paging_test.dart: 背面に回った時の再生 再生中なら止め、戻ったら再開する（inactive→paused と続いても再開できる）
+00:12 +101: <worktree>/flutter/test/viewer_paging_test.dart: 背面に回った時の再生 読み込み中に背面へ回ったら、読み終えても鳴らさず戻った時に再生する
+00:12 +102: <worktree>/flutter/test/viewer_paging_test.dart: 背面に回った時の再生 自分で止めていた動画は、戻っても勝手に再生しない
+00:12 +103: <worktree>/flutter/test/viewer_paging_test.dart: 画像の表示 原本は専用キャッシュにパスだけのキーで入れ、decode 幅を画面に合わせる
+00:12 +104: <worktree>/flutter/test/viewer_paging_test.dart: 画像の表示 画面幅が取れない時は decode 幅を指定しない
+00:12 +105: <worktree>/flutter/test/viewer_paging_test.dart: ロック中の再生 ロックした瞬間に再生中の動画を止め、戻っても勝手に再開しない
+00:12 +106: <worktree>/flutter/test/viewer_paging_test.dart: ロック中の再生 ロック中に読み込みが終わった動画は鳴らさない
+00:12 +107: loading <worktree>/flutter/test/library_switch_test.dart
+00:12 +107: <worktree>/flutter/test/library_switch_test.dart: ライブラリを切り替えて戻ると、取り直しを待たずに前の一覧をすぐ出す
+00:13 +108: <worktree>/flutter/test/library_switch_test.dart: 署名クエリが変わってもサムネのキャッシュキーは同じ
+00:13 +109: <worktree>/flutter/test/library_switch_test.dart: サムネのバックフィルは同時に1本しか走らせない
+00:13 +110: loading <worktree>/flutter/test/video_view_test.dart
+00:13 +110: <worktree>/flutter/test/video_view_test.dart: P3: 再生中は操作バーを3.5秒で隠し、タップでまた出す
+00:14 +111: <worktree>/flutter/test/video_view_test.dart: P3: 一時停止中は操作バーを隠さない
+00:14 +112: <worktree>/flutter/test/video_view_test.dart: P2: ±10秒ボタンでその分だけ動く
+00:14 +113: <worktree>/flutter/test/video_view_test.dart: P2: 操作ロック中はタップしても操作が出ず、解除で戻る
+00:14 +114: <worktree>/flutter/test/video_view_test.dart: P2: 一時停止中は中央に再生アイコン、読み込み中はスピナーを出す
+00:14 +115: <worktree>/flutter/test/video_view_test.dart: P2: 最後まで再生したらリプレイを出し、押すと頭から再生する
+00:14 +116: <worktree>/flutter/test/video_view_test.dart: P2: 開けなかったら「再生できませんでした」を出し、押すと読み直す
+video init failed: Exception: cannot open
+00:14 +117: <worktree>/flutter/test/video_view_test.dart: P1: 右半分の縦ドラッグで音量、左半分で明るさを変えて表示する
+00:14 +118: <worktree>/flutter/test/video_view_test.dart: #141: アプリがロックされたら再生を止める（PauseOnLock）
+00:14 +119: loading <worktree>/flutter/test/trash_test.dart
+00:15 +119: <worktree>/flutter/test/trash_test.dart: T1 ゴミ箱へ → 元に戻す 一括でゴミ箱へ送ると「元に戻す」が出て、押すと全部戻る
+00:15 +120: <worktree>/flutter/test/trash_test.dart: T1 ゴミ箱へ → 元に戻す 6秒たつと「元に戻す」は消え、何も戻さない
+00:15 +121: <worktree>/flutter/test/trash_test.dart: T1 ゴミ箱へ → 元に戻す 元の場所に同名があって戻せない時は理由を出す
+00:15 +122: <worktree>/flutter/test/trash_test.dart: T1 ゴミ箱へ → 元に戻す 一部だけ戻せなかった時は件数で伝える
+00:15 +123: <worktree>/flutter/test/trash_test.dart: T2 行ごとの復元と失敗理由 復元が 409 で失敗したら「同じ名前の項目が元の場所にあるため戻せませんでした」と出す
+00:15 +124: <worktree>/flutter/test/trash_test.dart: T2 行ごとの復元と失敗理由 復元が 403 で失敗したら「このライブラリは読み取り専用のため、戻せません」と出す
+00:16 +125: <worktree>/flutter/test/trash_test.dart: T2 行ごとの復元と失敗理由 復元が 404 で失敗したら「すでに元の場所に戻されています」と出す
+00:16 +126: <worktree>/flutter/test/trash_test.dart: T2 行ごとの復元と失敗理由 復元が 500 で失敗したら「戻せませんでした。もう一度お試しください」と出す
+00:16 +127: <worktree>/flutter/test/trash_test.dart: T2 行ごとの復元と失敗理由 行の「復元」を押すとその1件だけ戻り、一覧から消える
+00:16 +128: <worktree>/flutter/test/trash_test.dart: 復元した写真を写真タブに戻す ゴミ箱タブで1件戻すと、写真タブに戻った時にその写真が出る
+00:16 +129: <worktree>/flutter/test/trash_test.dart: 復元した写真を写真タブに戻す まとめて戻した時も写真タブに出る
+00:16 +130: <worktree>/flutter/test/trash_test.dart: T3/S5 保持期間の案内 Worker が返した保持日数で自動削除までの日数を出す
+00:16 +131: <worktree>/flutter/test/trash_test.dart: T3/S5 保持期間の案内 保持日数を返さない古い Worker では既定の30日を出す
+00:16 +132: <worktree>/flutter/test/trash_test.dart: T4 ゴミ箱の行と状態表示 種類アイコンと「10月9日にゴミ箱へ · 3.1 MB」を出し、全ページ新しい順に並べる
+00:16 +133: <worktree>/flutter/test/trash_test.dart: T4 ゴミ箱の行と状態表示 空なら説明を出し、引っ張ると読み直す
+00:16 +134: <worktree>/flutter/test/trash_test.dart: T4 ゴミ箱の行と状態表示 一覧がある時に読み直しだけ失敗したら帯を出し、再試行で消える
+00:16 +135: <worktree>/flutter/test/trash_test.dart: T4 ゴミ箱の行と状態表示 裏から戻ってきたら読み直し、写真タブで捨てた分を映す
+00:16 +136: <worktree>/flutter/test/trash_test.dart: T4 ゴミ箱の行と状態表示 最初の読み込みに失敗したら理由と再試行を出す
+00:16 +137: <worktree>/flutter/test/trash_test.dart: T4 ゴミ箱の行と状態表示 読み取り専用ライブラリでは聞きに行かず、復元ボタンも出さない
+00:16 +138: <worktree>/flutter/test/trash_test.dart: T4 ゴミ箱の行と状態表示 行の部品は canRestore=false なら復元ボタンを出さない
+00:16 +139: <worktree>/flutter/test/trash_test.dart: T4 ゴミ箱の行と状態表示 選択してまとめて復元できる
+00:16 +140: <worktree>/flutter/test/trash_test.dart: 下端にジェスチャー帯がある端末 下タブの無い画面でも、まとめて復元のバーは帯の上に収まって押せる
+00:16 +141: <worktree>/flutter/test/trash_test.dart: 下端にジェスチャー帯がある端末 アプリの画面（下タブあり）でも、まとめて復元のバーは帯の上に収まって押せる
+00:16 +142: <worktree>/flutter/test/trash_test.dart: バイト数の表示は KMP 版と同じ丸め
+00:16 +143: loading <worktree>/flutter/test/widget_test.dart
+00:17 +143: <worktree>/flutter/test/widget_test.dart: app boots to connect screen when unconfigured
+device lock probe failed: TimeoutException after 0:00:03.000000: Future not completed
+00:17 +144: loading <worktree>/flutter/test/transfer_queue_test.dart
+00:17 +144: <worktree>/flutter/test/transfer_queue_test.dart: アップロード 選んだファイルは退避してから上がり、終わったら退避ファイルと台帳から消える
+00:17 +145: <worktree>/flutter/test/transfer_queue_test.dart: アップロード 同名があれば「name (2)」で上げる
+00:18 +146: <worktree>/flutter/test/transfer_queue_test.dart: アップロード 大きいファイルは multipart で分けて上がる
+00:18 +147: <worktree>/flutter/test/transfer_queue_test.dart: アップロード アプリが落とされても、次の起動で続きのパートから上げ直す
+00:18 +148: <worktree>/flutter/test/transfer_queue_test.dart: アップロード 一時停止は退避と確定パートを残し、再開で続きから送る
+00:18 +149: <worktree>/flutter/test/transfer_queue_test.dart: アップロード 取り消すと multipart を片付け、退避ファイルと行を消す
+00:18 +150: <worktree>/flutter/test/transfer_queue_test.dart: アップロード 同時に走るのは2件まで
+00:18 +151: <worktree>/flutter/test/transfer_queue_test.dart: アップロード 元ファイルを退避できないまま落とされた行は、理由つきの失敗として戻す
+00:18 +152: <worktree>/flutter/test/transfer_queue_test.dart: 接続の復旧 圏外では待機のまま始めず、回線が戻ると自動で上げる
+00:18 +153: <worktree>/flutter/test/transfer_queue_test.dart: 接続の復旧 通信が切れたら失敗にせず待機に戻し、繋がれば続きをやる
+00:18 +154: <worktree>/flutter/test/transfer_queue_test.dart: 接続の復旧 失敗した行は復帰時の再試行でまとめて積み直す
+00:18 +155: <worktree>/flutter/test/transfer_queue_test.dart: オフライン保存 取った中身を暗号化して端末に置き、復号すると元に戻る
+00:18 +156: <worktree>/flutter/test/transfer_queue_test.dart: オフライン保存 署名URLが切れていたら一覧から取り直す
+00:18 +157: loading <worktree>/flutter/test/transfers_ui_test.dart
+00:18 +157: <worktree>/flutter/test/transfers_ui_test.dart: アップロード確認 保存先・合計サイズ・先頭3件を出し、押した時だけ積む
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:19 +158: <worktree>/flutter/test/transfers_ui_test.dart: アップロード確認 キャンセルすれば積まない
+00:19 +159: <worktree>/flutter/test/transfers_ui_test.dart: アップロード確認 読み取り専用のライブラリでは警告を出して押せない
+00:19 +160: <worktree>/flutter/test/transfers_ui_test.dart: アップロード確認 ライブラリが見つからない時も警告を出して押せない
+00:19 +161: <worktree>/flutter/test/transfers_ui_test.dart: アップロード確認 サイズが分からないものは「一部サイズ不明」と出す
+00:19 +162: <worktree>/flutter/test/transfers_ui_test.dart: 転送バーと転送シート 転送中の要約を下に出し、タップでシートを開いて一時停止・再開・取り消しできる
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:19 +163: <worktree>/flutter/test/transfers_ui_test.dart: 転送バーと転送シート 圏外の間は「オフライン（接続待ち）」と出す
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:19 +164: <worktree>/flutter/test/transfers_ui_test.dart: 転送バーと転送シート 転送が無ければ何も出さない
+00:19 +165: <worktree>/flutter/test/transfers_ui_test.dart: 転送が多い時も操作を塞がない（#106 / #111） アップロード6件と失敗1件があっても、取り込みの URL 欄はキーボードを出しても入力できる
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:20 +166: <worktree>/flutter/test/transfers_ui_test.dart: 転送が多い時も操作を塞がない（#106 / #111） 先頭の失敗行の「やり直す」は小さい画面でも画面内で押せ、その行だけやり直す（文字 1.0x）
+00:20 +167: <worktree>/flutter/test/transfers_ui_test.dart: 転送が多い時も操作を塞がない（#106 / #111） 先頭の失敗行の「やり直す」は小さい画面でも画面内で押せ、その行だけやり直す（文字 1.3x）
+00:20 +168: <worktree>/flutter/test/transfers_ui_test.dart: オフライン保存 選択して「オフライン保存」を押すとキューに積み、保存済みには印が付く
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:20 +169: <worktree>/flutter/test/transfers_ui_test.dart: オフライン保存 設定に件数を出し、すべて削除できる
+00:20 +170: <worktree>/flutter/test/transfers_ui_test.dart: オフライン保存 保存した写真は回線なしで一覧から開ける
+00:21 +171: <worktree>/flutter/test/transfers_ui_test.dart: AppState のつなぎ 失敗したアップロードはアプリへの復帰で積み直され、転送中だけサービスを張る
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:21 +172: <worktree>/flutter/test/transfers_ui_test.dart: AppState のつなぎ 回線の知らせで待機と再開が切り替わる
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:21 +173: loading <worktree>/flutter/test/import_ui_test.dart
+00:21 +173: <worktree>/flutter/test/import_ui_test.dart: 取り込みタブは URL を入れるまで内蔵ブラウザを作らない
+00:22 +174: <worktree>/flutter/test/import_ui_test.dart: 内蔵ブラウザを作れない環境では、真っ黒にせず再試行できる表示にする
+00:22 +175: <worktree>/flutter/test/import_ui_test.dart: URL 欄は文字がある時だけ「×」を出し、押すと空にしてそのまま打ち直せる
+00:22 +176: <worktree>/flutter/test/import_ui_test.dart: 「×」で消すのは入力欄だけで、開いているページは閉じない
+00:22 +177: <worktree>/flutter/test/import_ui_test.dart: 空白だけの入力でも「×」で消せる
+00:22 +178: <worktree>/flutter/test/import_ui_test.dart: 取り込み済みの確認（#162） 「それでも取り込む」を選ぶと取り込む
+00:22 +179: <worktree>/flutter/test/import_ui_test.dart: 取り込み済みの確認（#162） 「やめる」を選ぶと取り込まない
+00:22 +180: <worktree>/flutter/test/import_ui_test.dart: 検出一覧は保存できるものだけ保存ボタンが効く
+00:22 +181: <worktree>/flutter/test/import_ui_test.dart: 保存先が書き込めない時は理由を出して保存を止める
+00:22 +182: <worktree>/flutter/test/import_ui_test.dart: 検出バーは件数を出してタップで開く
+00:22 +183: <worktree>/flutter/test/import_ui_test.dart: 転送シートは失敗の理由を出し、終わった行を消せる
+00:22 +184: <worktree>/flutter/test/import_ui_test.dart: http/https 以外の入力は開かず理由を出す
+00:22 +185: <worktree>/flutter/test/import_ui_test.dart: 保存を押すと転送キューに積まれ、すでに転送中なら積み直さない
+00:22 +186: loading <worktree>/flutter/test/webdl_transfer_test.dart
+00:23 +186: <worktree>/flutter/test/webdl_transfer_test.dart: ApiClient.putFile 小さいファイルは一括 PUT
+00:23 +187: <worktree>/flutter/test/webdl_transfer_test.dart: ApiClient.putFile 大きいファイルは8MBずつ読んで multipart に流す（全体をメモリに載せない）
+00:24 +188: <worktree>/flutter/test/webdl_transfer_test.dart: ApiClient.putFile パートの途中で失敗したら multipart を中止して例外を返す
+00:24 +189: <worktree>/flutter/test/webdl_transfer_test.dart: WebTransferQueue 取得→アップロード→サムネ→履歴まで通り、一時ファイルは消える
+00:24 +190: <worktree>/flutter/test/webdl_transfer_test.dart: WebTransferQueue 取り込み済みの見分け（#162） 同じ保存先へ同じ URL から取り込み済みで、R2 に残っていれば記録を返す
+00:24 +191: <worktree>/flutter/test/webdl_transfer_test.dart: WebTransferQueue 取り込み済みの見分け（#162） URL が違えば、名前と大きさが同じ別の動画でも止めない
+00:24 +192: <worktree>/flutter/test/webdl_transfer_test.dart: WebTransferQueue 取り込み済みの見分け（#162） R2 から消した（ゴミ箱へ移した）動画は「既にあります」にしない
+00:24 +193: <worktree>/flutter/test/webdl_transfer_test.dart: WebTransferQueue 取り込み済みの見分け（#162） 消した後に同じ名前の別ファイルが置かれていたら止めない
+00:24 +194: <worktree>/flutter/test/webdl_transfer_test.dart: WebTransferQueue 取り込み済みの見分け（#162） 別のライブラリへの取り込みは、この保存先の重複にしない
+00:24 +195: <worktree>/flutter/test/webdl_transfer_test.dart: WebTransferQueue 取り込み済みの見分け（#162） 確かめられない時（一覧の取得に失敗）は止めず、今まで通り取り込ませる
+duplicate check skipped: HTTP 500: This exception was thrown because the response has a status code of 500 and RequestOptions.validateStatus was configured to throw for this status code.
+The status code of 500 has the following meaning: "Server error - the server failed to fulfil an apparently valid request"
+Read more about status codes at https://developer.mozilla.org/en-US/docs/Web/HTTP/Status
+In order to resolve this exception you typically have either to verify and fix your request code or you have to fix the server code.
+
+00:25 +196: <worktree>/flutter/test/webdl_transfer_test.dart: WebTransferQueue 取り込み済みの見分け（#162） 保存先を持たない古い履歴は、キーと大きさが両方合う時だけ重複とみなす
+00:25 +197: <worktree>/flutter/test/webdl_transfer_test.dart: WebTransferQueue 取り込み済みの見分け（#162） 履歴に無い URL は R2 に問い合わせもしない
+00:25 +198: <worktree>/flutter/test/webdl_transfer_test.dart: WebTransferQueue ページのヘッダ（UA / Referer / Cookie）を載せて取り、Range は引き継がない
+00:25 +199: <worktree>/flutter/test/webdl_transfer_test.dart: WebTransferQueue 同名キーが既にあれば (2)(3) と進めて上書きしない
+00:25 +200: <worktree>/flutter/test/webdl_transfer_test.dart: WebTransferQueue 一覧に出ない形式（音声）は取りに行かず理由を出す
+00:25 +201: <worktree>/flutter/test/webdl_transfer_test.dart: WebTransferQueue 処理中の同じ URL は積み直さない
+00:25 +202: <worktree>/flutter/test/webdl_transfer_test.dart: WebTransferQueue 通信が途中で切れたら Range で続きから取る
+00:25 +203: <worktree>/flutter/test/webdl_transfer_test.dart: WebTransferQueue Range を無視するサーバーでは、部分ファイルに追記せず最初から取り直す
+00:25 +204: <worktree>/flutter/test/webdl_transfer_test.dart: WebTransferQueue HTTP エラーは失敗として残り、直ってからのやり直しで完了する
+00:25 +205: <worktree>/flutter/test/webdl_transfer_test.dart: WebTransferQueue 0バイトの応答は取れたことにしない
+00:25 +206: <worktree>/flutter/test/webdl_transfer_test.dart: WebTransferQueue アップロードが失敗しても落とした分は残り、やり直しは上げ直すだけ
+00:25 +207: <worktree>/flutter/test/webdl_transfer_test.dart: WebTransferQueue 取得中に取り消すと、何も上げず一時ファイルも消える
+00:25 +208: <worktree>/flutter/test/webdl_transfer_test.dart: WebTransferQueue 取得中に一時停止すると落とした分を残し、再開は続きから取る
+00:25 +209: <worktree>/flutter/test/webdl_transfer_test.dart: WebTransferQueue 同時に走るのは2件まで
+00:30 +210: <worktree>/flutter/test/webdl_transfer_test.dart: WebTransferQueue 大きい動画は8MBずつの multipart で上がる
+00:31 +211: <worktree>/flutter/test/webdl_transfer_test.dart: WebTransferQueue HLS 最良の画質を選び、全セグメントを順に繋いだ ts を上げる
+00:31 +212: <worktree>/flutter/test/webdl_transfer_test.dart: WebTransferQueue HLS 暗号化された HLS は壊れた動画を作らず失敗にする
+00:31 +213: <worktree>/flutter/test/webdl_transfer_test.dart: WebTransferQueue HLS 途中のセグメントで失敗しても、やり直しは続きのセグメントから取る
+00:31 +214: <worktree>/flutter/test/webdl_transfer_test.dart: 取得の安全策 別ホストへのリダイレクトには、検出元の Cookie を持ち越さない
+00:31 +215: <worktree>/flutter/test/webdl_transfer_test.dart: 取得の安全策 Cookie は送り先ごとにブラウザから引き直す
+00:31 +216: <worktree>/flutter/test/webdl_transfer_test.dart: 取得の安全策 http/https 以外へのリダイレクトはたどらず失敗にする
+00:31 +217: <worktree>/flutter/test/webdl_transfer_test.dart: 取得の安全策 http/https 以外の URL は積んでも取りに行かない
+00:31 +218: loading <worktree>/flutter/test/import_lock_test.dart
+00:31 +218: <worktree>/flutter/test/import_lock_test.dart: ロックすると取り込みタブ（内蔵ブラウザ）も見えず触れなくなる
+00:32 +219: <worktree>/flutter/test/import_lock_test.dart: 取り込みタブから開いた転送シートもロックで隠れる
+00:32 +220: loading <worktree>/flutter/test/lock_prefetch_test.dart
+00:32 +220: <worktree>/flutter/test/lock_prefetch_test.dart: PIN ロック中でもライブラリ一覧は先に取っておく
+00:32 +221: <worktree>/flutter/test/lock_prefetch_test.dart: 解除時、先読みが通っていれば取り直さない
+00:32 +221: <worktree>/flutter/test/lock_prefetch_test.dart: PIN ロック中でもライブラリ一覧は先に取っておく
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:32 +222: <worktree>/flutter/test/lock_prefetch_test.dart: 先読みが圏外で空のままなら、解除時にもう一度取る
+00:32 +222: <worktree>/flutter/test/lock_prefetch_test.dart: 解除時、先読みが通っていれば取り直さない
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:32 +222: <worktree>/flutter/test/lock_prefetch_test.dart: 先読みが圏外で空のままなら、解除時にもう一度取る
+libraries failed: offline
+00:32 +223: <worktree>/flutter/test/lock_prefetch_test.dart: 先読みが圏外で空のままなら、解除時にもう一度取る
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:32 +223: loading <worktree>/flutter/test/grid_test.dart
+00:33 +223: <worktree>/flutter/test/grid_test.dart: H1 並び替え 4種の並びと、同点は元の順を保つ
+00:33 +224: <worktree>/flutter/test/grid_test.dart: H1 並び替え メニューで「サイズ順」を選ぶと並びが変わり、日付見出しが消える
+00:34 +225: <worktree>/flutter/test/grid_test.dart: H2 日付見出し 今日・昨日・今年は曜日つき・去年は年つき・無ければ日付不明
+00:34 +226: <worktree>/flutter/test/grid_test.dart: H2 日付見出し 写真タブに日ごとの見出しが出る
+00:34 +227: <worktree>/flutter/test/grid_test.dart: H3/H14 選択 見出しの丸でその日をまとめて選択・解除できる
+00:34 +228: <worktree>/flutter/test/grid_test.dart: H3/H14 選択 選択中は見出しが「N件を選択」になり、すべて選択/すべて解除を切り替えられる
+00:34 +229: <worktree>/flutter/test/grid_test.dart: H3/H14 選択 閉じるボタンで選択を抜ける
+00:34 +230: <worktree>/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す 文字付きの操作が並び、オフライン保存できない環境ではオフラインを出さない
+00:34 +231: <worktree>/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す 下端にジェスチャー帯がある端末でも、操作バーは帯の上に収まって押せる
+00:34 +232: <worktree>/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す オフライン保存できる環境なら、選んだ分をライブラリごとに #149 のオフライン保存へ積む
+00:34 +233: <worktree>/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す ゴミ箱へ送ると「元に戻す」が出て、押すと trashKey で戻す
+00:34 +234: <worktree>/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す 元の場所に同じ名前があると戻せなかった旨を出す
+00:34 +235: <worktree>/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す 「元に戻す」は6秒で消える
+00:34 +236: <worktree>/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す 送れなかった件数を知らせる
+00:35 +237: <worktree>/flutter/test/grid_test.dart: H5 アルバムへ 200件ずつに分けて送り、別ライブラリが混ざったら送らない
+00:35 +238: <worktree>/flutter/test/grid_test.dart: H5 アルバムへ 書き込めるアルバムだけ選べて、選ぶと選択分を追加する
+00:35 +239: <worktree>/flutter/test/grid_test.dart: H5 アルバムへ 新しい名前を入れると作成してから追加する
+00:35 +240: <worktree>/flutter/test/grid_test.dart: H7 長押しの個別メニュー 選択中の長押しで個別メニュー。ゴミ箱へはすぐ送って元に戻すを出す
+00:35 +241: <worktree>/flutter/test/grid_test.dart: H7 長押しの個別メニュー 読み取り専用では書き換える項目を出さず、端末に保存だけ出す
+00:35 +242: <worktree>/flutter/test/grid_test.dart: H10 読み取り専用 鍵を付け、追加ボタンを出さず、長押しでも選択に入らない
+00:35 +243: <worktree>/flutter/test/grid_test.dart: H10 読み取り専用 空の読み取り専用ライブラリでは「写真・動画を追加」を出さない
+00:35 +244: <worktree>/flutter/test/grid_test.dart: H12 グリッド スマホの幅で4列
+00:35 +245: <worktree>/flutter/test/grid_test.dart: H12 グリッド 見出しの無い並びでも、末尾9件手前まで見えたら続きを取る
+00:36 +246: <worktree>/flutter/test/grid_test.dart: H12 グリッド 選択中は丸のチェックが出て、選んだタイルだけ選択中になる
+00:36 +247: <worktree>/flutter/test/grid_test.dart: H13 空・エラー 読み込めない時は理由と「再試行」「接続先を確認する」を出す
+00:36 +248: <worktree>/flutter/test/grid_test.dart: H13 空・エラー 一覧が出ている時の更新失敗は、一覧を残したまま帯で知らせる
+00:36 +249: <worktree>/flutter/test/grid_test.dart: H13 空・エラー 空なら案内と「写真・動画を追加」を出す
+00:36 +250: <worktree>/flutter/test/grid_test.dart: H15 フォルダ 末尾のフォルダカードから下の階層へ辿れる
+00:36 +251: <worktree>/flutter/test/grid_test.dart: H15 フォルダ 空のフォルダは空と出す
+00:36 +252: <worktree>/flutter/test/grid_test.dart: 書き込みガード 長押しの「ゴミ箱へ」も、書けないライブラリなら送らず理由を出す
+00:36 +253: loading <worktree>/flutter/test/gallery_state_test.dart
+00:36 +253: <worktree>/flutter/test/gallery_state_test.dart: 続きページの取得失敗 失敗した直後はスクロール通知が来ても再試行せず、間を空けたら再試行する
+00:37 +254: <worktree>/flutter/test/gallery_state_test.dart: 続きページの取得失敗 成功すれば待ち時間は残らず、取り直しでも解ける
+00:37 +255: <worktree>/flutter/test/gallery_state_test.dart: サムネのバックフィル 動画のサムネを保存できたら、その行だけ差し替えて読み込み済みの続きページは残す
+00:37 +256: <worktree>/flutter/test/gallery_state_test.dart: サムネのバックフィル 画像だけのバックフィルでは一覧を取り直さない（画像は元から thumbUrl を持つ）
+00:37 +257: <worktree>/flutter/test/gallery_state_test.dart: サムネのバックフィル サムネを作れなかった動画だけなら取り直さない
+00:37 +258: <worktree>/flutter/test/gallery_state_test.dart: サムネのバックフィル サムネを保存できた画像ごとに後始末を呼ぶ（保存できなかった分は呼ばない）
+00:37 +259: loading <worktree>/flutter/test/api_retry_test.dart
+00:37 +259: <worktree>/flutter/test/api_retry_test.dart: GET は接続エラーを 2 回まで再試行して、通れば成功にする
+00:37 +260: <worktree>/flutter/test/api_retry_test.dart: GET は 2 回再試行してもだめなら ApiError で返す（それ以上は粘らない）
+00:37 +261: <worktree>/flutter/test/api_retry_test.dart: GET は 5xx も再試行する
+00:37 +262: <worktree>/flutter/test/api_retry_test.dart: GET でも 4xx は再試行しない
+00:37 +263: <worktree>/flutter/test/api_retry_test.dart: POST は接続エラーでも再試行しない（二重実行になり得る）
+00:37 +264: <worktree>/flutter/test/api_retry_test.dart: PUT は接続エラー・5xx のどちらでも再試行しない（ストリーム本文は再送できない）
+00:37 +265: loading <worktree>/flutter/test/lock_test.dart
+00:38 +265: <worktree>/flutter/test/lock_test.dart: ロックの判定（純粋関数） 起動時は画面ロックが既定ONでロックする。web は PIN がある時だけ
+00:38 +266: <worktree>/flutter/test/lock_test.dart: ロックの判定（純粋関数） 解除手段が無ければロックできない（行き止まりを作らない）
+00:38 +267: <worktree>/flutter/test/lock_test.dart: ロックの判定（純粋関数） 猶予を超えた時だけ再ロックする（ちょうどは許す）
+00:38 +268: <worktree>/flutter/test/lock_test.dart: ロックの判定（純粋関数） 猶予の表示名
+00:38 +269: <worktree>/flutter/test/lock_test.dart: 保存値 画面ロックは既定ON、猶予は既定1時間、保存すると読み戻せる
+00:38 +270: <worktree>/flutter/test/lock_test.dart: 保存値 壊れた猶予の値は既定に戻す
+00:38 +271: <worktree>/flutter/test/lock_test.dart: AppState のロック PIN が無くても、端末の画面ロックがあれば起動時にロックされる
+00:38 +272: <worktree>/flutter/test/lock_test.dart: AppState のロック 端末の認証に成功したら解除できる
+00:38 +272: <worktree>/flutter/test/lock_test.dart: AppState のロック PIN が無くても、端末の画面ロックがあれば起動時にロックされる
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:38 +273: <worktree>/flutter/test/lock_test.dart: AppState のロック 認証に失敗したらロックのまま
+00:38 +273: <worktree>/flutter/test/lock_test.dart: AppState のロック 端末の認証に成功したら解除できる
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:38 +274: <worktree>/flutter/test/lock_test.dart: AppState のロック PIN が無くても「今すぐロック」でロックできる
+00:38 +274: <worktree>/flutter/test/lock_test.dart: AppState のロック 認証に失敗したらロックのまま
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:38 +275: <worktree>/flutter/test/lock_test.dart: AppState のロック 画面ロックを切ると起動時にロックしない
+00:38 +275: <worktree>/flutter/test/lock_test.dart: AppState のロック PIN が無くても「今すぐロック」でロックできる
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:38 +276: <worktree>/flutter/test/lock_test.dart: AppState のロック 解除手段が無い端末では覆わず、起動時の画面から続けられる
+00:38 +276: <worktree>/flutter/test/lock_test.dart: AppState のロック 画面ロックを切ると起動時にロックしない
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:38 +277: <worktree>/flutter/test/lock_test.dart: AppState のロック web は PIN が無ければロックしない。PIN があればロックする
+00:38 +277: <worktree>/flutter/test/lock_test.dart: AppState のロック 解除手段が無い端末では覆わず、起動時の画面から続けられる
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:38 +278: <worktree>/flutter/test/lock_test.dart: AppState のロック 猶予を超えてバックグラウンドにいたら再ロックする
+00:38 +278: <worktree>/flutter/test/lock_test.dart: AppState のロック web は PIN が無ければロックしない。PIN があればロックする
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:38 +279: <worktree>/flutter/test/lock_test.dart: AppState のロック 猶予内に戻ったらロックしない
+00:38 +279: <worktree>/flutter/test/lock_test.dart: AppState のロック 猶予を超えてバックグラウンドにいたら再ロックする
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:38 +280: <worktree>/flutter/test/lock_test.dart: AppState のロック 設定した猶予が効く（毎回ロック）
+00:38 +280: <worktree>/flutter/test/lock_test.dart: AppState のロック 猶予内に戻ったらロックしない
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:38 +281: <worktree>/flutter/test/lock_test.dart: AppState のロック 認証ダイアログが出す一時停止は、バックグラウンドに数えない
+00:38 +281: <worktree>/flutter/test/lock_test.dart: AppState のロック 設定した猶予が効く（毎回ロック）
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:38 +282: <worktree>/flutter/test/lock_test.dart: AppState のロック ロック中に裏へ行っても、戻った時に二重で処理しない
+00:38 +282: <worktree>/flutter/test/lock_test.dart: AppState のロック 認証ダイアログが出す一時停止は、バックグラウンドに数えない
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:38 +283: <worktree>/flutter/test/lock_test.dart: AppState のロック 画面ロックをONにすると、その場でロックして解除できるか確かめさせる
+00:38 +283: <worktree>/flutter/test/lock_test.dart: AppState のロック ロック中に裏へ行っても、戻った時に二重で処理しない
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:38 +284: <worktree>/flutter/test/lock_test.dart: 画面 ロック画面は入った瞬間に認証を一度出し、失敗したら再試行ボタンを出す
+00:38 +284: <worktree>/flutter/test/lock_test.dart: AppState のロック 画面ロックをONにすると、その場でロックして解除できるか確かめさせる
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:38 +285: <worktree>/flutter/test/lock_test.dart: 画面 画面ロックが無く PIN も無ければ「ロックなしで続ける」で抜けられる
+00:38 +286: <worktree>/flutter/test/lock_test.dart: 画面 PIN がある端末では PIN 入力も並べる
+00:39 +287: <worktree>/flutter/test/lock_test.dart: 画面 「今すぐロック」は PIN が無くてもホームに常に出る
+00:39 +288: <worktree>/flutter/test/lock_test.dart: 画面 ロックできない時は無反応にせず理由を出す
+00:39 +289: <worktree>/flutter/test/lock_test.dart: ロックは Navigator の上に被せる 上に積んだ画面もロックで見えなくなり、触れなくなる
+00:39 +290: <worktree>/flutter/test/lock_test.dart: ロックは Navigator の上に被せる 積んだダイアログもロックで見えなくなる
+00:39 +291: <worktree>/flutter/test/lock_test.dart: ロックは Navigator の上に被せる ロックしても下の画面は捨てず、解除すると元の状態のまま戻る
+00:39 +292: <worktree>/flutter/test/lock_test.dart: ロックは Navigator の上に被せる ロックした瞬間に再生中の画面へ止めるよう知らせる
+00:39 +293: <worktree>/flutter/test/lock_test.dart: 外部画面（ファイル選択）からの復帰 選択中に裏へ回って戻っても「毎回ロック」で即ロックしない
+00:39 +294: <worktree>/flutter/test/lock_test.dart: 外部画面（ファイル選択）からの復帰 選択画面を開いたまま長く放置されたらロックする
+00:39 +294: <worktree>/flutter/test/lock_test.dart: 外部画面（ファイル選択）からの復帰 選択中に裏へ回って戻っても「毎回ロック」で即ロックしない
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:39 +295: <worktree>/flutter/test/lock_test.dart: 外部画面（ファイル選択）からの復帰 猶予が外部画面の下限より長ければ、そちらを使う
+00:39 +295: <worktree>/flutter/test/lock_test.dart: 外部画面（ファイル選択）からの復帰 選択画面を開いたまま長く放置されたらロックする
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:39 +296: <worktree>/flutter/test/lock_test.dart: 問い合わせの失敗ではロックを外さない 起動時に問い合わせが返らなくても、ロックしたまま抜け道を出さない
+device lock probe failed: TimeoutException after 0:00:03.000000: Future not completed
+00:42 +297: <worktree>/flutter/test/lock_test.dart: 問い合わせの失敗ではロックを外さない 起動時に問い合わせが失敗したら「ロックなしで続ける」を出さない
+00:42 +297: <worktree>/flutter/test/lock_test.dart: 問い合わせの失敗ではロックを外さない 起動時に問い合わせが返らなくても、ロックしたまま抜け道を出さない
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:42 +297: <worktree>/flutter/test/lock_test.dart: 問い合わせの失敗ではロックを外さない 起動時に問い合わせが失敗したら「ロックなしで続ける」を出さない
+device lock probe failed: PlatformException(auth_error, null, null, null)
+device lock probe failed: PlatformException(auth_error, null, null, null)
+device lock probe failed: PlatformException(auth_error, null, null, null)
+device lock probe failed: PlatformException(auth_error, null, null, null)
+00:42 +298: <worktree>/flutter/test/lock_test.dart: 問い合わせの失敗ではロックを外さない 前面復帰ではまずロックし、問い合わせはその後。時間切れでもロックのまま
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+device lock probe failed: TimeoutException after 0:00:03.000000: Future not completed
+00:45 +299: <worktree>/flutter/test/lock_test.dart: 問い合わせの失敗ではロックを外さない 問い合わせがエラーでも、前に使えた端末なら使える扱いのまま
+device lock probe failed: PlatformException(auth_error, null, null, null)
+00:45 +300: <worktree>/flutter/test/lock_test.dart: 問い合わせの失敗ではロックを外さない 問い合わせの結果が変わったら画面に知らせる
+00:45 +300: <worktree>/flutter/test/lock_test.dart: 問い合わせの失敗ではロックを外さない 問い合わせがエラーでも、前に使えた端末なら使える扱いのまま
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:45 +301: <worktree>/flutter/test/lock_test.dart: 猶予の時計と窓の保護 端末の時計を戻しても、起動からの経過で再ロックする
+00:45 +301: <worktree>/flutter/test/lock_test.dart: 問い合わせの失敗ではロックを外さない 問い合わせの結果が変わったら画面に知らせる
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:45 +302: <worktree>/flutter/test/lock_test.dart: 猶予の時計と窓の保護 起動からの経過が取れない環境では、Stopwatch と壁時計の長い方で測る
+00:45 +302: <worktree>/flutter/test/lock_test.dart: 猶予の時計と窓の保護 端末の時計を戻しても、起動からの経過で再ロックする
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:45 +303: <worktree>/flutter/test/lock_test.dart: 猶予の時計と窓の保護 ロックを使っている間は窓を保護する
+00:45 +304: <worktree>/flutter/test/lock_test.dart: 猶予の時計と窓の保護 アプリは保護の要否が変わる度に窓へ伝える
+00:45 +304: <worktree>/flutter/test/lock_test.dart: 猶予の時計と窓の保護 ロックを使っている間は窓を保護する
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:45 +305: loading <worktree>/flutter/test/pin_test.dart
+00:46 +305: <worktree>/flutter/test/pin_test.dart: 設定した PIN は照合を通り、違う PIN は通らない
+00:47 +306: <worktree>/flutter/test/pin_test.dart: 照合のハッシュ計算中も UI isolate のイベントループは止まらない
+00:48 +307: loading <worktree>/flutter/test/image_thumb_test.dart
+00:48 +307: <worktree>/flutter/test/image_thumb_test.dart: 横長は長辺 512px に縮めて JPEG にする
+00:48 +308: <worktree>/flutter/test/image_thumb_test.dart: 縦長も長辺 512px に縮める
+00:48 +309: <worktree>/flutter/test/image_thumb_test.dart: 512px より小さい画像は拡大しない
+00:48 +310: <worktree>/flutter/test/image_thumb_test.dart: 画像として読めないバイト列はサムネ無し（null）にする
+00:48 +311: loading <worktree>/flutter/test/albums_test.dart
+00:49 +311: <worktree>/flutter/test/albums_test.dart: アルバム一覧 A1: 新規アルバムカードから名前を入れて作成すると一覧に出る
+00:50 +312: <worktree>/flutter/test/albums_test.dart: アルバム一覧 A1: 読み取り専用ライブラリでは作成の入口を出さない
+00:50 +313: <worktree>/flutter/test/albums_test.dart: アルバム一覧 A2: 長押しメニューから名前変更・確認つき削除
+00:50 +314: <worktree>/flutter/test/albums_test.dart: アルバム一覧 A2: 取り込みで作られたアルバムは長押ししてもメニューを出さない
+00:50 +315: <worktree>/flutter/test/albums_test.dart: アルバム一覧 A9: フォルダに切り替えると一覧が出て、フォルダを作成できる
+00:50 +316: <worktree>/flutter/test/albums_test.dart: アルバム一覧 B1: フォルダを開くと階層をたどれ、空なら空と出す
+00:50 +317: <worktree>/flutter/test/albums_test.dart: フォルダ閲覧 A3: 複数選択して「アルバムへ」→書けるアルバムだけ出て追加できる
+00:50 +318: <worktree>/flutter/test/albums_test.dart: フォルダ閲覧 A3: 新しい名前で作成してから追加する
+00:50 +319: <worktree>/flutter/test/albums_test.dart: フォルダ閲覧 B2: 日付見出しと日ごとの丸選択、名前順で見出しが消える
+00:51 +320: <worktree>/flutter/test/albums_test.dart: フォルダ閲覧 B2: 並び順の4種
+00:51 +321: <worktree>/flutter/test/albums_test.dart: フォルダ閲覧 B2: 日付見出しの文言
+00:51 +322: <worktree>/flutter/test/albums_test.dart: フォルダ閲覧 B1: 読み取り専用では選択にも入らず操作バーを出さない
+00:51 +323: <worktree>/flutter/test/albums_test.dart: アルバムの中 A6/A8: 件数つきの見出し、長押しで選択、すべて選択/解除
+00:51 +324: <worktree>/flutter/test/albums_test.dart: アルバムの中 A5: 選択1件を後ろへ動かすと全件の並びを書き戻す
+00:51 +325: <worktree>/flutter/test/albums_test.dart: アルバムの中 A4: 選択して外すと、項目のライブラリごとに外す
+00:51 +326: <worktree>/flutter/test/albums_test.dart: アルバムの中 A7: ゴミ箱へ→元に戻すで復元する
+00:51 +327: <worktree>/flutter/test/albums_test.dart: アルバムの中 A7: 元に戻すが 409 なら同名があると伝える
+00:51 +328: <worktree>/flutter/test/albums_test.dart: アルバムの中 A7: 選択中の長押しで個別メニュー、そこから外す
+00:51 +329: <worktree>/flutter/test/albums_test.dart: アルバムの中 A8: 読み取り専用アルバムでは並び替え・外すを出さない
+00:51 +330: <worktree>/flutter/test/albums_test.dart: アルバムの中 A8: 読み取り専用ライブラリでは選択に入らない
+00:51 +331: <worktree>/flutter/test/albums_test.dart: アルバムの中 A8: 末尾付近で続きを読み、引っ張って取り直す
+00:51 +332: <worktree>/flutter/test/albums_test.dart: A8: 続きの取得に失敗したら、取り直すまで自動では読みに行かない
+00:51 +333: <worktree>/flutter/test/albums_test.dart: 書き込みガード 書けないライブラリではアルバム作成もフォルダ作成も送らず理由を出す
+00:51 +334: All tests passed!

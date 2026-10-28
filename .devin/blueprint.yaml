@@ -1,0 +1,69 @@
+runs-on: macos
+# One-time setup (e.g., install system tools, global CLIs).
+initialize:
+  - name: install JDK 21 (capacitor-file-transfer toolchain) and pnpm deps
+    run: |
+      brew install openjdk@21 pnpm
+      echo "JAVA_HOME=/opt/homebrew/opt/openjdk@21" >> $ENVRC
+  - name: install Android SDK + required packages
+    run: |
+      if [ ! -d "$HOME/android-sdk/cmdline-tools/latest" ]; then
+        mkdir -p "$HOME/android-sdk/cmdline-tools"
+        curl -sSL -o /tmp/cmdtools.zip https://dl.google.com/android/repository/commandlinetools-mac-11076708_latest.zip
+        unzip -oq /tmp/cmdtools.zip -d "$HOME/android-sdk/cmdline-tools"
+        mv "$HOME/android-sdk/cmdline-tools/cmdline-tools" "$HOME/android-sdk/cmdline-tools/latest"
+      fi
+      export ANDROID_HOME="$HOME/android-sdk"
+      yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+      "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-36" "build-tools;36.1.0"
+      echo "ANDROID_HOME=$HOME/android-sdk" >> $ENVRC
+  - name: gradle Maven Central mirror (this box gets HTTP 429)
+    run: |
+      mkdir -p "$HOME/.gradle/init.d"
+      cat > "$HOME/.gradle/init.d/mirror.gradle" <<'EOF'
+      def gcsMirror = { repo ->
+          if (repo instanceof MavenArtifactRepository && repo.url.toString().contains('repo.maven.apache.org')) {
+              repo.url = 'https://maven-central.storage-download.googleapis.com/maven2/'
+          }
+      }
+      allprojects {
+          buildscript { repositories.all(gcsMirror) }
+          repositories.all(gcsMirror)
+      }
+      settingsEvaluated { settings ->
+          settings.pluginManagement.repositories.all(gcsMirror)
+          try { settings.dependencyResolutionManagement.repositories.all(gcsMirror) } catch (ignored) {}
+      }
+      EOF
+# Install project dependencies (runs during builds, surfaced to agent at session start).
+  - name: install Flutter (flutter/ client toolchain)
+    run: |
+      mise use -g flutter@3.44.6
+maintenance: |
+  pnpm install
+  (cd flutter && flutter pub get) || true
+knowledge:
+  - name: lint
+    contents: |
+      pnpm lint
+  - name: test
+    contents: |
+      pnpm test   # app vitest + worker vitest
+  - name: build
+    contents: |
+      pnpm build                          # web bundle
+      ANDROID_HOME=$HOME/android-sdk pnpm apk:debug   # debug APK with .env creds baked
+  - name: secrets-and-setup
+    contents: |
+      worker ACCESS_TOKEN + endpoint: 1Password「磯貝プライベート共有」→ item "R2 Gallery worker (notes-sync)" (id x2h3pari43tdqllwjd2ndrrxb4).
+      .env (git-ignored) に VITE_DEFAULT_ENDPOINT / VITE_DEFAULT_TOKEN を置くと ensureConnection() が初回起動で自動接続する。worker/wrangler.toml も git-ignored（example を写して実値を入れる）。
+      Never commit .env / wrangler.toml — CI runs gitleaks + tools/leak-check.mjs.
+      Emulator cannot run on this Mac (kern.hv_support=0) — APK verify is manual install only.
+  - name: ios-simulator-verify
+    contents: |
+      iOS Simulator (e.g. iPhone 17, app.r2gallery.r2Gallery) E2E recipe:
+      `flutter build ios --debug --simulator` fails — file-picker-darwin (SPM) needs iOS 14.0 while Runner targets 13.0. Build instead with xcodebuild and an override:
+        xcodebuild -workspace flutter/ios/Runner.xcworkspace -scheme Runner -configuration Debug -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' IPHONEOS_DEPLOYMENT_TARGET=14.0 build
+      then `xcrun simctl install booted <DerivedData>/Build/Products/Debug-iphonesimulator/Runner.app` and `xcrun simctl launch booted app.r2gallery.r2Gallery`.
+      Unlock: "接続せずに取り込みだけ使う" → "ロックを解除" → Face ID prompt; enroll via Simulator menu Features > Face ID > Enrolled, then Matching Face (sim window must be frontmost). -34018 SecureStorage banner on launch is a known ad-hoc-sim limitation.
+      Flutter text fields don't accept AX set_text — press then type. WebView pages need a <meta charset> or labels render mojibake.

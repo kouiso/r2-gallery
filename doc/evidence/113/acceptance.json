@@ -1,0 +1,99 @@
+{
+  "issue": "https://github.com/kouiso/r2-gallery/issues/113",
+  "base": "ac7c987553ca52f79a942b0595d5a2285dc01ff7",
+  "status": "Code fixed and locally verified; issue remains open pending production configuration verification and delivery.",
+  "root_causes": [
+    "ReviewCriterion.fromJson discarded criterion.comment; viewer discarded panelScore when directorScore existed.",
+    "Review requests were identified only by page index. On A-B-A, the first A response could overwrite the newer A result, including with a stale error.",
+    "A successful null response produced no explicit empty state."
+  ],
+  "acceptance": [
+    {
+      "condition": "Existing review notes, evaluations and comments appear in Info",
+      "evidence": [
+        "before-review.png",
+        "after-review.png",
+        "android-results.txt",
+        "before-tests.txt",
+        "after-tests.txt"
+      ],
+      "remaining": "Production REVIEW_DB / REVIEW_LIBS and known r2_key join are not verified; no private media was viewed."
+    },
+    {
+      "condition": "Switching items never mixes or overwrites review information",
+      "evidence": [
+        "after-tests.txt: stale A success and stale A failure, B response during A, empty next item"
+      ],
+      "remaining": null
+    },
+    {
+      "condition": "Review is fetched again after restart/reload",
+      "evidence": [
+        "android-results.txt: force-stop and reopen of fixture app, fresh HTTP /meta fetch"
+      ],
+      "remaining": null
+    },
+    {
+      "condition": "No-data and fetch-failure states differ; retry works",
+      "evidence": [
+        "after-tests.txt",
+        "android-results.txt: 503 on three GET attempts, retry succeeds; null gives explicit empty state"
+      ],
+      "remaining": null
+    },
+    {
+      "condition": "Unauthorized libraries never expose review metadata",
+      "evidence": [
+        "fast-checks.txt: Worker meta test outside REVIEW_LIBS, missing bearer token; 47 API tests pass",
+        "android-results.txt: personal fixture does not display review data"
+      ],
+      "remaining": null
+    },
+    {
+      "condition": "Before reproduction and after Android/API test results are recorded",
+      "evidence": [
+        "before-tests.txt: 3 new tests fail on main",
+        "before-review.png",
+        "after-review.png",
+        "android-results.txt",
+        "fast-checks.txt"
+      ],
+      "remaining": "Production validation remains separate from safe fixture verification."
+    }
+  ],
+  "validation": {
+    "flutter_tests": 334,
+    "viewer_tests": 24,
+    "new_regressions": 3,
+    "worker_tests": 47,
+    "tools_tests": 51,
+    "ci_contract_tests": 8,
+    "changed_file_analysis": "No issues",
+    "full_analysis": "7 pre-existing info-level diagnostics outside changed files",
+    "fast": "pass on Node 22.22.2; Node 26 workerd setup failed and was replaced with CI-matched Node 22",
+    "initial_full_test_attempt": "Disk full; own generated files removed; sequential rerun passed all 334"
+  },
+  "production_blocker": {
+    "action": "Read-only verify notes-sync REVIEW_DB, REVIEW_LIBS, r2_key join and deployed build",
+    "status": "pending",
+    "reason": "No production worker/wrangler.toml or CF auth/baked API environment available in this environment. Production configuration changes and deploy are prohibited by the task. No denial or uncertain remote mutation occurred."
+  },
+  "push_safety": {
+    "own_ci": "workflow_dispatch only (at the time of this evidence)",
+    "external_ci": "r2-ci cron excludes draft PRs",
+    "apk_and_web_delivery": "main-only scheduled lanes",
+    "references": [
+      "operator-managed build repository: r2-ci.yml",
+      "operator-managed build repository: r2-flutter-build.yml",
+      "operator-managed build repository: r2-web-deploy.yml"
+    ]
+  },
+  "android_reproduction": [
+    "Create a disposable Flutter Android app with a distinct application ID and a path dependency on this repository flutter/.",
+    "Use android_fixture.dart as lib/main.dart; enable localhost cleartext HTTP on the disposable app only; add androidx.lifecycle:lifecycle-runtime-ktx:2.8.7 if required by the generated Android template.",
+    "Build with Flutter 3.44.6: flutter build apk --debug --target-platform android-arm64. Install only the disposable app; never overwrite app.r2gallery.",
+    "Open review then Info: object note, label, verdict, intent, director score/comment, criterion comment, both scores and veto are present.",
+    "Open failure then Info: HTTP 503 yields error/retry; retry fetches data. Open empty/personal: explicit no-review state. Force-stop only the fixture app, restart, reopen review and Info.",
+    "For before comparison, use the base SHA lib/ sources with the same fixture and theme. Criterion comment and panel score disappear."
+  ]
+}

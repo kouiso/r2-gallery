@@ -1,0 +1,4 @@
+# leak-check の email 検査から外す commit（完全な hash を 1 行に 1 つ）。
+# main に公開済みで、force push せんと書き換えられん commit だけを載せる。新しい commit は載せない
+e635359b99c5e3bfc2080e6cafec4a173839225a
+1b561ef719b16e469d2af94e8b2b88b0c9af1bd9

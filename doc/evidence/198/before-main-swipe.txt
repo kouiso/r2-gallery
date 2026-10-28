@@ -1,0 +1,13 @@
+setting=40/255  display(before)=0.15354331
+t=.3s display=0.15354331
+t=.6s display=0.4889476
+t=.9s display=0.5202697
+t=1.2s display=0.5302533
+t=1.5s display=0.54026425
+t=1.8s display=0.5500001
+t=2.1s display=0.56097394
+t=2.4s display=0.5710397
+t=2.7s display=0.5737901
+t=3.0s display=0.5737901
+t=3.3s display=0.5737901
+after swipe: display=0.5737901

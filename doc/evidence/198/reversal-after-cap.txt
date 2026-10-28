@@ -1,0 +1,7 @@
+mode=0 setting=40/255 display(before)=0.15354331
+after 3 small moves up: 0.16747095
+after fast jump up 200px: 0.21747094
+reverse +20px #1 (finger down): 0.20568405
+reverse +20px #2 (finger down): 0.19389716
+reverse +20px #3 (finger down): 0.18211026
+reverse +20px #4 (finger down): 0.17032337

@@ -1,0 +1,7 @@
+Analyzing 3 items...                                            
+
+   info • Use the null-aware marker '?' rather than a null check via an 'if'. Try using '?' • lib/src/api/client.dart:132:7 • use_null_aware_elements
+   info • Use the null-aware marker '?' rather than a null check via an 'if'. Try using '?' • lib/src/api/client.dart:214:7 • use_null_aware_elements
+   info • Use the null-aware marker '?' rather than a null check via an 'if'. Try using '?' • lib/src/api/client.dart:292:7 • use_null_aware_elements
+
+3 issues found. (ran in 0.9s)

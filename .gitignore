@@ -1,0 +1,30 @@
+node_modules/
+dist/
+.env
+.env.*
+*.log
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+
+# worker local config / secrets
+worker/wrangler.toml
+worker/.dev.vars
+worker/.wrangler/
+
+# local-only data (never commit)
+.work/
+index.json
+*.index.json
+
+# android signing / local config
+*.jks
+*.keystore
+android/local.properties
+android/keystore.properties
+
+worker/wrangler.local.toml
+
+# build caches (never commit)
+.gradle/
+kmp/

@@ -1,0 +1,5 @@
+build/
+.gradle/
+out/
+.kotlin/
+src/main/kotlin/app/

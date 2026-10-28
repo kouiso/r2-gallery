@@ -1,0 +1,40 @@
+{
+  "name": "r2-gallery",
+  "private": true,
+  "version": "0.4.0",
+  "type": "module",
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "build": "node -e \"console.log('web dist は運用側の r2-web-deploy レーンが flutter/build/web から pages-dist へ出す。ここでは何もしない')\"",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "test": "vitest run && pnpm test:worker",
+    "test:worker": "cd worker && vitest run",
+    "worker:dev": "cd worker && wrangler dev",
+    "worker:deploy": "cd worker && wrangler deploy",
+    "worker:typecheck": "tsc -p worker --noEmit",
+    "leak:check": "node tools/leak-check.mjs",
+    "tools:index-upload": "node tools/index-upload.mjs"
+  },
+  "dependencies": {
+    "hono": "^4.13.9"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.12.21",
+    "@cloudflare/workers-types": "^5.20260930.1",
+    "@eslint/js": "^9",
+    "eslint": "^9",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.6",
+    "globals": "^17.12.0",
+    "prettier": "^3.9.9",
+    "sharp": "0.35.4",
+    "typescript": "~5.9",
+    "typescript-eslint": "^8.71.0",
+    "vitest": "3.2.7",
+    "wrangler": "^4.144.0"
+  }
+}

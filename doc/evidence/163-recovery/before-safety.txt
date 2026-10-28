@@ -1,0 +1,79 @@
+00:00 +0: loading <worktree>/flutter/test/webdl_transfer_test.dart
+00:00 +0: アプリを消しても取り込みを失わない（#163） 復旧の安全性: 内容照合が503なら原本と台帳を残し再試行できる
+00:00 +0 -1: アプリを消しても取り込みを失わない（#163） 復旧の安全性: 内容照合が503なら原本と台帳を残し再試行できる [E]
+  Expected: WebTaskStatus:<WebTaskStatus.error>
+    Actual: WebTaskStatus:<WebTaskStatus.done>
+  
+  package:matcher                                     expect
+  package:flutter_test/src/widget_tester.dart 473:18  expect
+  test/webdl_transfer_test.dart 975:9                 main.<fn>.<fn>
+  
+00:00 +0 -1: アプリを消しても取り込みを失わない（#163） 復旧の安全性: 内容照合が途中切断なら原本と台帳を残し再試行できる
+00:00 +0 -2: アプリを消しても取り込みを失わない（#163） 復旧の安全性: 内容照合が途中切断なら原本と台帳を残し再試行できる [E]
+  Expected: WebTaskStatus:<WebTaskStatus.error>
+    Actual: WebTaskStatus:<WebTaskStatus.done>
+  
+  package:matcher                                     expect
+  package:flutter_test/src/widget_tester.dart 473:18  expect
+  test/webdl_transfer_test.dart 975:9                 main.<fn>.<fn>
+  
+00:00 +0 -2: アプリを消しても取り込みを失わない（#163） 復旧の安全性: 大容量の送信済み動画も内容を照合し二重に送らない
+00:00 +0 -3: アプリを消しても取り込みを失わない（#163） 復旧の安全性: 大容量の送信済み動画も内容を照合し二重に送らない [E]
+  Expected: [null]
+    Actual: <null>
+     Which: is not Iterable
+  
+  package:matcher                                     expect
+  package:flutter_test/src/widget_tester.dart 473:18  expect
+  test/webdl_transfer_test.dart 1009:7                main.<fn>.<fn>
+  
+00:00 +0 -3: アプリを消しても取り込みを失わない（#163） 復旧の安全性: 単発PUTの保存結果が不正なら完了にせず原本と台帳を残す
+00:00 +0 -4: アプリを消しても取り込みを失わない（#163） 復旧の安全性: 単発PUTの保存結果が不正なら完了にせず原本と台帳を残す [E]
+  Expected: WebTaskStatus:<WebTaskStatus.error>
+    Actual: WebTaskStatus:<WebTaskStatus.done>
+  
+  package:matcher                                     expect
+  package:flutter_test/src/widget_tester.dart 473:18  expect
+  test/webdl_transfer_test.dart 1024:9                main.<fn>.<fn>
+  
+00:00 +0 -4: アプリを消しても取り込みを失わない（#163） 復旧の安全性: multipartの保存結果が不正なら完了にせず原本と台帳を残す
+00:00 +0 -5: アプリを消しても取り込みを失わない（#163） 復旧の安全性: multipartの保存結果が不正なら完了にせず原本と台帳を残す [E]
+  Expected: WebTaskStatus:<WebTaskStatus.error>
+    Actual: WebTaskStatus:<WebTaskStatus.done>
+  
+  package:matcher                                     expect
+  package:flutter_test/src/widget_tester.dart 473:18  expect
+  test/webdl_transfer_test.dart 1024:9                main.<fn>.<fn>
+  
+00:00 +0 -5: アプリを消しても取り込みを失わない（#163） 復旧の安全性: 送信前の台帳書込み失敗では原本と台帳を残し再試行できる
+web ledger not saved: Exception: secure storage write failed
+web ledger not saved: Exception: secure storage write failed
+web ledger not saved: Exception: secure storage write failed
+web ledger not saved: Exception: secure storage write failed
+00:00 +0 -6: アプリを消しても取り込みを失わない（#163） 復旧の安全性: 送信前の台帳書込み失敗では原本と台帳を残し再試行できる [E]
+  Expected: WebTaskStatus:<WebTaskStatus.error>
+    Actual: WebTaskStatus:<WebTaskStatus.done>
+  
+  package:matcher                                     expect
+  package:flutter_test/src/widget_tester.dart 473:18  expect
+  test/webdl_transfer_test.dart 1052:9                main.<fn>.<fn>
+  
+00:00 +0 -6: アプリを消しても取り込みを失わない（#163） 復旧の安全性: 完了の台帳書込み失敗では原本と台帳を残し再試行できる
+web ledger not saved: Exception: secure storage write failed
+web ledger not saved: Exception: secure storage write failed
+00:00 +0 -7: アプリを消しても取り込みを失わない（#163） 復旧の安全性: 完了の台帳書込み失敗では原本と台帳を残し再試行できる [E]
+  Expected: WebTaskStatus:<WebTaskStatus.error>
+    Actual: WebTaskStatus:<WebTaskStatus.done>
+  
+  package:matcher                                     expect
+  package:flutter_test/src/widget_tester.dart 473:18  expect
+  test/webdl_transfer_test.dart 1052:9                main.<fn>.<fn>
+  
+00:00 +0 -7: Some tests failed.
+
+Failing tests:
+  <worktree>/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 復旧の安全性: multipartの保存結果が不正なら完了にせず原本と台帳を残す
+  <worktree>/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 復旧の安全性: 内容照合が503なら原本と台帳を残し再試行できる
+  <worktree>/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 復旧の安全性: 内容照合が途中切断なら原本と台帳を残し再試行できる
+  <worktree>/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 復旧の安全性: 単発PUTの保存結果が不正なら完了にせず原本と台帳を残す
+  ... and 3 more

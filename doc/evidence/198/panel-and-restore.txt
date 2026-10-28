@@ -1,0 +1,5 @@
+volume(before)=volume is 5 in range [0..15]  display(before)=0.23748498
+明るさ 20% 位置をタップ → display=0.216
+音量 60% 位置をタップ → volume=volume is 9 in range [0..15]
+ホームへ（背面）→ display=0.15354331 setting=40/255
+アプリへ戻る → display=0.216

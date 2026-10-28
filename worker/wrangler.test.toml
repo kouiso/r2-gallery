@@ -1,0 +1,36 @@
+# Test-only wrangler config for @cloudflare/vitest-pool-workers.
+# Local R2 only; no real buckets or secrets are referenced here.
+name = "r2-gallery-worker-test"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+
+[[r2_buckets]]
+binding = "LIB_A"
+bucket_name = "test-bucket-a"
+
+[[r2_buckets]]
+binding = "LIB_B"
+bucket_name = "test-bucket-b"
+
+[[r2_buckets]]
+binding = "META"
+bucket_name = "test-bucket-meta"
+
+# Local-only D1 used to exercise the read-only review-meta join.
+[[d1_databases]]
+binding = "REVIEW_DB"
+database_name = "test-review-db"
+database_id = "00000000-0000-0000-0000-0000000000d1"
+
+[vars]
+LIBRARIES = '[{"id":"a","binding":"LIB_A","title":"Test A"},{"id":"b","binding":"LIB_B","title":"Test B","readOnly":true}]'
+ACCESS_TOKEN = "test-access-token"
+SIGNING_SECRET = "test-signing-secret"
+URL_TTL_SECONDS = "3600"
+TRASH_RETENTION_DAYS = "30"
+# Shrink the multipart copy threshold so tests exercise the multipart path.
+MULTIPART_COPY_MIN_BYTES = "64"
+MULTIPART_COPY_PART_BYTES = "5242880"
+IMPORT_MAX_BYTES = "1048576"
+# Only library "a" may join objects to REVIEW_DB rows.
+REVIEW_LIBS = "a"

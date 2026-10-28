@@ -1,0 +1,70 @@
+
+> r2-gallery@0.4.0 lint <worktree>
+> eslint .
+
+
+> r2-gallery@0.4.0 worker:typecheck <worktree>
+> tsc -p worker --noEmit
+
+
+> r2-gallery@0.4.0 test <worktree>
+> vitest run && pnpm test:worker
+
+
+ RUN  v3.2.7 <worktree>
+
+missing env: FIREBASE_APP_ID
+refused: tester not in allow list: someone@example.com
+refused: QN_GROUPS is not supported; list testers in QN_TESTERS
+ ✓ tools/app-distribute.test.mjs (9 tests) 621ms
+ ✓ tools/leak-check.test.mjs (13 tests) 1802ms
+ ✓ tools/index-upload.test.mjs (29 tests) 2565ms
+   ✓ index-upload > uploads a real WebP thumbnail and the index only under .system/ of the meta bucket  397ms
+   ✓ index-upload > renders a WebP poster for clips/long.mkv via ffmpeg  553ms
+   ✓ index-upload > renders a WebP poster for clips/short.mp4 via ffmpeg  484ms
+   ✓ index-upload > removes its scratch dir when interrupted mid-upload  333ms
+
+ Test Files  3 passed (3)
+      Tests  51 passed (51)
+   Start at  04:19:09
+   Duration  2.83s (transform 43ms, setup 0ms, collect 130ms, tests 4.99s, environment 0ms, prepare 122ms)
+
+
+> r2-gallery@0.4.0 test:worker <worktree>
+> cd worker && vitest run
+
+
+ RUN  v3.2.7 <worktree>/worker
+
+(node:65112) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[vpw:debug] Adding `enable_nodejs_tty_module` compatibility flag during tests as this feature is needed to support the Vitest runner.
+[vpw:debug] Adding `enable_nodejs_fs_module` compatibility flag during tests as this feature is needed to support the Vitest runner.
+[vpw:debug] Adding `enable_nodejs_http_modules` compatibility flag during tests as this feature is needed to support the Vitest runner.
+[vpw:debug] Adding `enable_nodejs_perf_hooks_module` compatibility flag during tests as this feature is needed to support the Vitest runner.
+[vpw:info] Starting single runtime for vitest.config.ts...
+[mf:warn] The latest compatibility date supported by the installed Cloudflare Workers Runtime is "2026-03-10",
+but you've requested "2026-09-01". Falling back to "2026-03-10"...
+workerd/io/worker.c++:1150: info: console warning; message = Called .text() on an HTTP body which does not appear to be text. The body's Content-Type is "image/webp". The result will probably be corrupted. Consider checking the Content-Type header before interpreting entities as text.
+stdout | src/index.test.ts > trash > scheduled purge removes trash older than the retention period
+trash purge 2
+
+ ✓ src/index.test.ts (47 tests) 8583ms
+   ✓ writes > copies large objects via multipart upload  8200ms
+
+ Test Files  1 passed (1)
+      Tests  47 passed (47)
+   Start at  04:19:12
+   Duration  9.34s (transform 69ms, setup 0ms, collect 106ms, tests 8.58s, environment 0ms, prepare 61ms)
+
+[vpw:debug] Shutting down runtimes...
+[vpw:debug] Disposing remote proxy sessions...
+
+    ○
+    │╲
+    │ ○
+    ○ ░
+    ░    gitleaks
+
+no forbidden-word list supplied (QN_FORBIDDEN_WORDS[_FILE]); word scan skipped
+leak-check clean: 419 files, 6 author email(s)

@@ -1,0 +1,12 @@
+00:00 +0: loading flutter/test_live/live_trash_test.dart
+00:00 +0: 書けるライブラリ: 4枚を選んでゴミ箱へ→Worker から消え .trash に移る→元に戻すで戻る
+LIVE a/bulk before: [bulk/p0.png, bulk/p1.png, bulk/p2.png, bulk/p3.png]
+LIVE a/bulk after trash: []
+LIVE a trash: [.trash/1792415912891/bulk/p0.png, .trash/1792415913042/bulk/p3.png, .trash/1792415913057/bulk/p2.png, .trash/1792415913058/bulk/p1.png]
+LIVE a/bulk after undo: [bulk/p0.png, bulk/p1.png, bulk/p2.png, bulk/p3.png], trash left 0
+00:04 +1: 読み取り専用ライブラリ: 選択はできる（オフライン保存用）がゴミ箱・アルバムは出ない。API で直接送っても 403 で中身は残る
+LIVE b/ro before: [ro/p0.png, ro/p1.png]
+LIVE b offlineSupported=true selecting=true trashBtn=0 albumBtn=0 offlineBtn=1
+LIVE b direct trash -> 403 (DioException 403)
+LIVE b/ro after: [ro/p0.png, ro/p1.png]
+00:04 +2: All tests passed!

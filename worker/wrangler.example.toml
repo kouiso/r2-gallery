@@ -1,0 +1,43 @@
+# Copy to wrangler.toml (git-ignored) and fill in your own values.
+name = "r2-gallery-worker"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+# One binding per library bucket.
+[[r2_buckets]]
+binding = "LIB_A"
+bucket_name = "your-first-bucket"
+
+[[r2_buckets]]
+binding = "LIB_B"
+bucket_name = "your-second-bucket"
+
+# Bucket that stores index files and thumbnails under `.system/` (can be one of the above).
+[[r2_buckets]]
+binding = "META"
+bucket_name = "your-second-bucket"
+
+# Optional: read-only join of objects to per-key review rows in a D1 database.
+# Only libraries listed in REVIEW_LIBS (below) expose /v1/:lib/meta.
+# [[d1_databases]]
+# binding = "REVIEW_DB"
+# database_name = "your-review-db"
+# database_id = "00000000-0000-0000-0000-000000000000"
+
+[vars]
+# Set "readOnly": true on a library to disable every write operation for it.
+LIBRARIES = '[{"id":"a","binding":"LIB_A","title":"Library A"},{"id":"b","binding":"LIB_B","title":"Library B"}]'
+# Days a deleted object stays under `.trash/` before the cron removes it.
+TRASH_RETENTION_DAYS = "30"
+# Signed media URL lifetime in seconds.
+URL_TTL_SECONDS = "3600"
+# Comma-separated library ids allowed to join objects to REVIEW_DB review rows.
+# REVIEW_LIBS = "a"
+
+[triggers]
+crons = ["17 3 * * *"]
+
+# Secrets (set with `wrangler secret put <NAME>`):
+#   ACCESS_TOKEN   - bearer token the app sends for API calls
+#   SIGNING_SECRET - HMAC key used to sign media URLs

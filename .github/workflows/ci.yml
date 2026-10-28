@@ -1,0 +1,76 @@
+name: ci
+
+# public リポジトリなので GitHub ホストのランナーが無料で回る。main への push と
+# draft 以外の PR で check / test / secrets-scan を走らせる
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read # gitleaks-action lists PR commits on pull_request events
+
+# 連続 push で古い run を捨てる（Devin の連続 push で 30 本が重なった実績がある）
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    if: github.event.pull_request.draft != true
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Shared CI entry contracts
+        run: node --test .github/ci/run.test.mjs
+      - run: node .github/ci/run.mjs check
+      - name: AI rule files drift check
+        run: node tools/sync-ai-rules.mjs --check
+
+  test:
+    if: github.event.pull_request.draft != true
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node .github/ci/run.mjs test
+
+  secrets-scan:
+    if: github.event.pull_request.draft != true
+    runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # gitleaks-action@v2 は scan 成功後に SARIF を artifact upload するため
+      # 個人アカウントの artifact ストレージ枠で不可避に失敗した。直接CLIに置き換え、
+      # 検出ロジック（exit-code 2）だけ残して upload 依存を断つ。
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: gitleaks
+        env:
+          CI_SCAN_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CI_SCAN_HEAD: ${{ github.sha }}
+        run: node .github/ci/run.mjs gitleaks
+      - name: Hygiene scan (forbidden words / emails / tracked files)
+        run: node .github/ci/run.mjs hygiene
+        env:
+          # Operator-managed repository secret (comma-separated words). Never commit the list.
+          QN_FORBIDDEN_WORDS: ${{ secrets.QN_FORBIDDEN_WORDS }}

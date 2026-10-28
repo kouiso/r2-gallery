@@ -1,0 +1,66 @@
+# r2-gallery
+
+Private media viewer: a Cloudflare Worker fronts R2 buckets with short-lived signed URLs. The client is a single **Flutter app (`flutter/`)** that ships to Android (FAD release APK), and to Cloudflare Pages as a Flutter web build (upload confirmation + playback check only).
+
+> ⚠️ `CLAUDE.md`, `GEMINI.md`, `.github/copilot-instructions.md`, `.cursor/rules/r2-gallery.mdc`
+> and the stubs under `.claude/skills/` are auto-generated from this file and `.agents/skills/`
+> by `tools/sync-ai-rules.mjs`. Do NOT edit them directly — run `node tools/sync-ai-rules.mjs`.
+
+## Tech Stack
+
+| Category | Technology |
+|---|---|
+| App (mobile + web) | Flutter / Dart (`flutter/`) — Android APK + `flutter build web` |
+| Backend | Cloudflare Worker + Hono (`worker/`), R2 + D1 |
+| Package manager | pnpm (worker/tools only), flutter pub (client) |
+| Tests | Vitest (worker + tools), flutter test (client) |
+
+## Layout
+
+```
+flutter/    Flutter client — Android APK (FAD) and web build (Pages)
+worker/     Worker API: upload, folders, ops/trash, signed URLs, albums.json in META
+tools/      ops scripts (index-upload, app-distribute)
+.agents/skills/  canonical shared skills — adapters live under .claude/skills/
+```
+
+## Commands
+
+```bash
+pnpm install
+pnpm test                 # vitest (tools) + worker (miniflare)
+pnpm test:worker          # worker tests only
+pnpm lint                 # eslint + prettier over worker/tools
+cd flutter && flutter pub get && flutter analyze && flutter test
+cd flutter && flutter build apk --release  # FAD artifact (AOT; never ship a debug/JIT build)
+cd flutter && flutter build web --release  # Pages artifact
+cd worker && npx wrangler dev --local --port 8787   # local API (miniflare R2/D1)
+```
+
+## Coding Rules
+
+- Comments: Japanese, explain *why* only. Commit subjects: English Conventional Commits. PR titles: Japanese.
+- No secrets in the repo: worker `wrangler.toml`, `.dev.vars`, keystores, tokens stay git-ignored or in GitHub secrets / 1Password.
+- Worker deploys are operational (Cloudflare account `6e206506efda3871a2d6e81da38b4b0b`, worker `notes-sync`) — never commit credentials for them.
+- Media keys must keep a media extension: files uploaded without an extension upload fine but never appear in listings.
+- FAD distribution ships the **Flutter release APK** (`app-release.apk`, applicationId `app.r2gallery`, signed with the pinned debug key) automatically after a merge to `main` — see `.agents/skills/fad-distribute`. Never ship a debug APK: Flutter debug builds run JIT with asserts and are several times slower than the KMP client was.
+- Web hosting: the `pages-dist` branch is the Pages production branch (no build). It is produced by the operator-managed `r2-web-deploy` lane (separate build repository) from `flutter/build/web` — never edit `pages-dist` by hand.
+- `ci.yml` runs `check` / `test` / `secrets-scan` on every push to `main` and every non-draft PR. Before pushing, run `node .github/ci/run.mjs fast` locally; the operator-managed `r2-flutter-build` lane (separate build repository) covers `flutter pub get` / `flutter test` / `flutter build apk --release` / `flutter build web`.
+- `node tools/sync-ai-rules.mjs --check` must stay green.
+- Never drop a user-facing feature. A rewrite or client replacement ships only after every feature of the old client is listed in `doc/feature-parity.md` and confirmed present in the new one; removing a feature needs the owner's explicit OK first. (The KMP→Flutter replacement in #138 silently lost "今すぐロック"/device lock and the in-app web downloader.)
+
+## Shared skills
+
+Canonical skills live in `.agents/skills/<name>/SKILL.md`:
+
+- `fad-distribute` — merging to `main` ships the APK to Firebase App Distribution automatically (operator-managed `r2-flutter-build` lane); confirm or force a release.
+- `worker-deploy` — deploy `worker/` to the `notes-sync` Cloudflare Worker without local CF credentials.
+
+Claude Code resolves the generated stubs under `.claude/skills/` which point at the canonical files; other agents read `.agents/skills/` directly.
+
+## GitHub Project での作業管理
+
+- この repo の作業は GitHub Project（`.github/scrum-board.yml` の番号）で管理する
+- 次にやる物を決める・課題を起票する・Status を動かす・繰り越す時は必ず先に `.agents/skills/scrum-board/SKILL.md`（`.claude/skills/scrum-board/`）を読んでから手を付ける
+- 読めない・見つからない場合の要点: 次にやる物=盤の「今週の Iteration」で Wait 空の先頭（無ければ「無し」と答える・issue一覧や open PR から選ばない）・課題は題の頭に `[PBI]`/`[SBI]` を付け sub-issue と盤登録と項目（Iteration・Priority・Estimate・Size）までやる・繰り越しは `kouiso/.github` の `scripts/scrum_keeper/scrum_keeper.py --job carryover|okawari` を使う
+- Status は Backlog / In progress / In review / Done の 4 つ。Todo は作らん

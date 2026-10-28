@@ -1,0 +1,8 @@
+[extend]
+useDefault = true
+
+# NIST の AES-GCM 公開テストベクタ（Test Case 13〜18 の鍵）。秘密やないのに generic-api-key に当たり、
+# main の履歴にあるので全履歴スキャンが毎回落ちる。この値そのものだけを外す
+[allowlist]
+description = "public NIST AES-GCM test vector key"
+regexes = ['''^feffe9928665731c6d6a8f9467308308feffe9928665731c6d6a8f9467308308$''']

@@ -1,0 +1,13 @@
+version: '3'
+
+tasks:
+  ci:fast:
+    desc: Run the web/worker checks, tests and security scans
+    cmds:
+      - node --test .github/ci/run.test.mjs
+      - node .github/ci/run.mjs fast
+  ci:
+    desc: Run all web/worker checks
+    cmds:
+      - node --test .github/ci/run.test.mjs
+      - node .github/ci/run.mjs full

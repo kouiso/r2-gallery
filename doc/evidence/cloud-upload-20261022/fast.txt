@@ -1,0 +1,66 @@
+
+> r2-gallery@0.4.0 lint /workspace/r2-gallery
+> eslint .
+
+
+> r2-gallery@0.4.0 worker:typecheck /workspace/r2-gallery
+> tsc -p worker --noEmit
+
+
+> r2-gallery@0.4.0 test /workspace/r2-gallery
+> vitest run && pnpm test:worker
+
+
+ RUN  v3.2.7 /workspace/r2-gallery
+
+missing env: FIREBASE_APP_ID
+refused: tester not in allow list: someone@example.com
+refused: QN_GROUPS is not supported; list testers in QN_TESTERS
+ ✓ tools/app-distribute.test.mjs (9 tests) 169ms
+ ✓ tools/index-upload.test.mjs (29 tests) 1642ms
+ ✓ tools/leak-check.test.mjs (13 tests) 1937ms
+
+ Test Files  3 passed (3)
+      Tests  51 passed (51)
+   Start at  02:17:44
+   Duration  2.24s (transform 46ms, setup 0ms, collect 173ms, tests 3.75s, environment 0ms, prepare 186ms)
+
+
+> r2-gallery@0.4.0 test:worker /workspace/r2-gallery
+> cd worker && vitest run
+
+
+ RUN  v3.2.7 /workspace/r2-gallery/worker
+
+[vpw:debug] Adding `enable_nodejs_tty_module` compatibility flag during tests as this feature is needed to support the Vitest runner.
+[vpw:debug] Adding `enable_nodejs_fs_module` compatibility flag during tests as this feature is needed to support the Vitest runner.
+[vpw:debug] Adding `enable_nodejs_http_modules` compatibility flag during tests as this feature is needed to support the Vitest runner.
+[vpw:debug] Adding `enable_nodejs_perf_hooks_module` compatibility flag during tests as this feature is needed to support the Vitest runner.
+[vpw:info] Starting single runtime for vitest.config.ts...
+[mf:warn] The latest compatibility date supported by the installed Cloudflare Workers Runtime is "2026-03-10",
+but you've requested "2026-09-01". Falling back to "2026-03-10"...
+workerd/io/worker.c++:1150: info: console warning; message = Called .text() on an HTTP body which does not appear to be text. The body's Content-Type is "image/webp". The result will probably be corrupted. Consider checking the Content-Type header before interpreting entities as text.
+stdout | src/index.test.ts > trash > scheduled purge removes trash older than the retention period
+trash purge 2
+
+ ✓ src/index.test.ts (55 tests) 10188ms
+   ✓ writes > copies large objects via multipart upload  8972ms
+   ✓ writes > lists a newly completed multipart video after reload and serves its original byte range  396ms
+   ✓ trash > moves objects to .trash, lists them, and restores  317ms
+
+ Test Files  1 passed (1)
+      Tests  55 passed (55)
+   Start at  02:17:46
+   Duration  11.08s (transform 76ms, setup 0ms, collect 152ms, tests 10.19s, environment 0ms, prepare 84ms)
+
+[vpw:debug] Shutting down runtimes...
+[vpw:debug] Disposing remote proxy sessions...
+
+    ○
+    │╲
+    │ ○
+    ○ ░
+    ░    gitleaks
+
+no forbidden-word list supplied (QN_FORBIDDEN_WORDS[_FILE]); word scan skipped
+leak-check clean: 471 files, 6 author email(s)

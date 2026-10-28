@@ -1,0 +1,76 @@
+{
+  "issue": "https://github.com/kouiso/r2-gallery/issues/163",
+  "depends_on_pr": "https://github.com/kouiso/r2-gallery/pull/174",
+  "base_branch": "feat/import-resume-after-kill",
+  "base_sha": "75f31156a5811b5fde9b096cc8f9caf5b89d020f",
+  "scope": "Recovery integrity fix on an independent branch. Does not replace PR #174, alter its branch, or close #163.",
+  "root_causes": [
+    "A pending destination with the same size was assumed to be this transfer, even if another device wrote different bytes. The queue then reported done and deleted the only local source and ledger row.",
+    "Completion ledger write exceptions were logged and swallowed, so cleanup continued without a successful durable write.",
+    "File upload success responses were not checked against the expected key and size."
+  ],
+  "fix": [
+    "On recovery only, compare local and remote SHA-256 using file/HTTP streams. Require the full expected byte count. Matching content avoids a duplicate; different content is saved under the next available name; verification errors retain the source and ledger for retry.",
+    "Require successful ledger writes before fetching, after staging, before sending to a new destination and before completion cleanup. Keep later retry writes runnable after an earlier write fails.",
+    "Verify key and size in simple PUT and multipart completion responses for putFile. Invalid receipts produce an error; retry verifies the saved content instead of uploading it twice.",
+    "Do not write successful history until the completion ledger write succeeds."
+  ],
+  "new_acceptance": [
+    {
+      "condition": "Same name and size are insufficient proof of identity",
+      "evidence": "Same-size, different-byte regression fails on base; passes after fix; existing foreign object is unchanged and own bytes are saved under the next name."
+    },
+    {
+      "condition": "Unverified uploads or persistence must not delete the source/ledger or claim success",
+      "evidence": "503, interrupted body, clean short body, invalid PUT/multipart receipt and pre-send/completion ledger write failures retain the exact staged bytes and ledger row, display error and permit retry."
+    },
+    {
+      "condition": "Verified recovery must not duplicate or corrupt data",
+      "evidence": "Identical 9 MiB saved video is compared as a stream and not uploaded again; retry after receipt/write failure creates no second object."
+    }
+  ],
+  "issue_163_dod": [
+    {
+      "condition": "Android continues after dismissal when OS permits (A)",
+      "status": "pending inherited PR #174 device evidence; native lifecycle code is unchanged by this fix"
+    },
+    {
+      "condition": "Android/iOS resume interrupted imports next launch (B)",
+      "status": "shared Dart queue restored via real localhost HTTP fixtures; Android/iOS termination device matrix remains pending"
+    },
+    {
+      "condition": "Reason and retry are available when resume fails",
+      "status": "verified by safety tests and existing transfer UI tests"
+    },
+    {
+      "condition": "Large videos, HLS, disconnect/reconnect cause no duplicates, missing data or false done",
+      "status": "full suite passes, including large multipart, HLS segment resume, HTTP cut/retry and 9 new recovery cases; real device termination matrix still pending"
+    },
+    {
+      "condition": "Document A/B by OS",
+      "status": "PR #174 defines Android A+B and iOS B. This dependent fix changes no platform lifecycle capability"
+    },
+    {
+      "condition": "If iOS A omitted, document attempts and limitation",
+      "status": "PR #174 documents OS limitation; this fix performs no new iOS background runtime experiment"
+    },
+    {
+      "condition": "Record physical-device dismissal/screen-off/disconnect results",
+      "status": "pending; this fix uses real I/O in Flutter tests and makes no claim of new device background validation"
+    }
+  ],
+  "validation": {
+    "flutter_all_tests": 358,
+    "new_recovery_tests": 9,
+    "worker_api_tests": 47,
+    "tools_tests": 51,
+    "ci_contract_tests": 8,
+    "fast": "passed on Node 22.22.2",
+    "analysis": "No errors/warnings; 3 existing info-level null-aware-element suggestions in untouched client lines",
+    "security": "gitleaks/leak-check passed; operator forbidden-word list unavailable, so word scan skipped"
+  },
+  "performance": "A resumed pending object of equal size requires one full remote read and local SHA-256 read. Both are streamed with bounded memory. New uploads and differently sized collisions do not incur this verification download.",
+  "compatibility": "No Worker API or deployment changes. Uses existing signed original URL and existing PUT/multipart key+size responses.",
+  "boundaries": "No private media or production R2/D1 was opened or changed. No deploy, auth/settings change, force push, merge or external-owner contact.",
+  "prior_191": "PR #191 remains separate. Its remote r2-ci is unexecuted for draft; production REVIEW_DB/REVIEW_LIBS/key join remain unverified."
+}

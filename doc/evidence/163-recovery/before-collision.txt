@@ -1,0 +1,20 @@
+00:00 +0: loading <worktree>/flutter/test/webdl_transfer_test.dart
+00:00 +0: アプリを消しても取り込みを失わない（#163） 同じサイズの別ファイルを復旧済みと誤認せず、自分のデータを保存する
+collision result: status=WebTaskStatus.done, key=downloads/clip.mp4, stageFiles=0, ledgerRows=0
+00:00 +0 -1: アプリを消しても取り込みを失わない（#163） 同じサイズの別ファイルを復旧済みと誤認せず、自分のデータを保存する [E]
+  Expected: 'downloads/clip (2).mp4'
+    Actual: 'downloads/clip.mp4'
+     Which: is different.
+            Expected: ... loads/clip (2).mp4
+              Actual: ... loads/clip.mp4
+                                    ^
+             Differ at offset 14
+  
+  package:matcher                                     expect
+  package:flutter_test/src/widget_tester.dart 473:18  expect
+  test/webdl_transfer_test.dart 946:7                 main.<fn>.<fn>
+  
+00:00 +0 -1: Some tests failed.
+
+Failing tests:
+  <worktree>/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 同じサイズの別ファイルを復旧済みと誤認せず、自分のデータを保存する

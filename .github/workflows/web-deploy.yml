@@ -1,10 +1,10 @@
 name: web-deploy
 
-# Cloudflare Pages の r2-gallery プロジェクトは公開前の private リポジトリ（今の
-# kouiso/r2-gallery-archive、repo id で結び付き）の Git 連携のまま残っとる。Pages は連携先を
-# 後から差し替えられん。実測: push の通知は repo id（archive）で受け、clone は登録時の名前
-# kouiso/r2-gallery（このリポジトリ）から取る。なので同じ dist commit を先にこのリポジトリの
-# pages-dist へ、次に archive の pages-dist へ置く。archive への push が Pages のデプロイを起こす
+# Cloudflare Pages のプロジェクトはこのリポジトリ（kouiso/r2-gallery）の Git 連携で、
+# production branch は pages-dist・build 無し・出力は root。main への push ごとに dist を
+# ビルドしてこのリポジトリの pages-dist へ置くと、その push が Pages のデプロイを起こす。
+# 旧経路は archive リポジトリの pages-dist へ PAGES_DEPLOY_KEY で中継 push する形だったが、
+# 新プロジェクトがこのリポジトリを直接見るので廃止した（#10）。
 on:
   push:
     branches: [main]
@@ -23,8 +23,6 @@ jobs:
       contents: write # このリポジトリの pages-dist へ push する
     runs-on: ${{ vars.RUNNER_LINUX || 'ubuntu-latest' }}
     timeout-minutes: 30
-    env:
-      DIST_REPO: git@github.com:kouiso/r2-gallery-archive.git
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -38,14 +36,9 @@ jobs:
           flutter build web --release
       - name: Push dist to pages-dist
         env:
-          PAGES_DEPLOY_KEY: ${{ secrets.PAGES_DEPLOY_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          key="$RUNNER_TEMP/pages-key"
-          printf '%s\n' "$PAGES_DEPLOY_KEY" > "$key"
-          chmod 600 "$key"
-          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
           out="$RUNNER_TEMP/pages-dist"
           git init -q -b pages-dist "$out"
           cp -r flutter/build/web/. "$out/"
@@ -56,7 +49,4 @@ jobs:
           git add -A
           git commit -qm "deploy: flutter web dist from main@$GITHUB_SHA"
           # pages-dist はビルド成果物だけの枝で履歴を持たんので毎回置き換える。
-          # clone 元（このリポジトリ）を先に置かんと、archive への push で始まる Pages の clone が落ちる
           git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" pages-dist
-          git push -f "$DIST_REPO" pages-dist
-          rm -f "$key"

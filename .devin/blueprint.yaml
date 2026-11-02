@@ -1,6 +1,5 @@
 runs-on: macos
 # One-time setup (e.g., install system tools, global CLIs).
-# One-time setup (e.g., install system tools, global CLIs).
 initialize:
   - name: install JDK 21 (capacitor-file-transfer toolchain) and pnpm deps
     run: |
@@ -37,7 +36,6 @@ initialize:
       }
       EOF
 # Install project dependencies (runs during builds, surfaced to agent at session start).
-# Install project dependencies (runs during builds, surfaced to agent at session start).
   - name: install Flutter (flutter/ client toolchain)
     run: |
       mise use -g flutter@3.44.6
@@ -65,6 +63,7 @@ knowledge:
     contents: |
       worker ACCESS_TOKEN + endpoint: 1Password「磯貝プライベート共有」→ item "R2 Gallery worker (notes-sync)" (id x2h3pari43tdqllwjd2ndrrxb4).
       Current Flutter baked configuration uses R2_BAKED_ENDPOINT / R2_BAKED_TOKEN, not legacy VITE_DEFAULT_* variables.
+      R2_BAKED_TOKEN is native-only and must never be embedded in a Web artifact; Web uses runtime pairing.
       Never commit tokens, .env, worker/.dev.vars, or worker/wrangler.toml.
       Existing local Worker (8787), static Web server (8080), and HTTPS proxy (8443) can be reused for UI verification. The Flutter client requires HTTPS even for local test endpoints.
       Use synthetic local media only. A narrow desktop Chrome viewport is not Android Chrome, Safari, or native-device evidence.

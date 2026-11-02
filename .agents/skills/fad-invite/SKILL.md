@@ -100,16 +100,19 @@ Apply only the PASS rows, through this repo's route. This repo has two gates and
 1. Allow-list: a PR that edits `ALLOWED_TESTERS` in `tools/app-distribute.sh` together with
    `tools/app-distribute.test.mjs` (the test pins the list). Merging is what authorises the address for
    future distributions.
-2. FAD tester record: after the PR merges, add or remove the address on the app itself —
-   `pnpm dlx firebase-tools appdistribution:testers:add|remove <addr> --app 1:380147062326:android:5a77ec11925136089c2a97`.
+2. FAD tester record: these commands affect the whole Firebase project, not one app.
+   Confirm that the person's approval covers that scope before running either command after the PR merges:
+   - Add: `pnpm dlx firebase-tools appdistribution:testers:add <addr> --project r2-gallery-c0ca`
+   - Remove: `pnpm dlx firebase-tools appdistribution:testers:remove <addr> --project r2-gallery-c0ca`
 
 Removing an address from `ALLOWED_TESTERS` only stops future uploads reaching them; deleting their FAD
-tester record (it drops their access to every release) is a separate action that needs its own question.
+tester record (it drops their access across the project) is a separate action that needs its own question.
 
-Then read the state back — `appdistribution:testers:list --app 1:380147062326:android:5a77ec11925136089c2a97`
-shows the registered testers on the app — and report one line per person:
+Then read the state back — `pnpm dlx firebase-tools appdistribution:testers:list --project r2-gallery-c0ca`
+shows the project's registered testers, not access to an app's releases. App-specific release distribution
+still goes through `tools/app-distribute.sh`. Report only the state verified, one line per person:
 
-`✅ 名前 — r2-gallery — 本番 — Android — 追加/削除（FAD で確認済み）`
+`✅ 名前 — r2-gallery — 本番 — Android — 登録/削除（プロジェクトの名簿で確認済み、配信は別）`
 
 If neither gate could be applied, do not report a row as complete: say which gate is still open.
 Rows still waiting on kouiso are listed as `⬜ 名前 — 確認待ち: <the one question>`.

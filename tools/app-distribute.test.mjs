@@ -8,6 +8,20 @@ const SCRIPT = join(process.cwd(), "tools/app-distribute.sh");
 const PUBSPEC = join(process.cwd(), "flutter/pubspec.yaml");
 const PKG = join(process.cwd(), "package.json");
 
+describe("FAD tester instructions", () => {
+  it("uses project-scoped commands and distinguishes registration from release access", () => {
+    const skill = readFileSync(".agents/skills/fad-invite/SKILL.md", "utf8");
+    for (const action of ["add", "remove", "list"]) {
+      expect(skill).toContain(
+        `pnpm dlx firebase-tools appdistribution:testers:${action}${action === "list" ? "" : " <addr>"} --project r2-gallery-c0ca`,
+      );
+    }
+    expect(skill).not.toMatch(/appdistribution:testers:[^\n`]*--app\b/);
+    expect(skill).toContain("whole Firebase project, not one app");
+    expect(skill).toContain("not access to an app's releases");
+  });
+});
+
 function sh(args, env = {}) {
   try {
     const stdout = execFileSync("bash", [SCRIPT, ...args], {

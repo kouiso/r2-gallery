@@ -14,13 +14,22 @@ import 'theme.dart';
 /// メディアを検出し、タップで端末→R2 に取り込む。KMP 版 ImportBrowserScreen.kt に対応。
 class ImportBrowserTab extends StatefulWidget {
   final AppState app;
+
   /// 内蔵ブラウザを開いた・閉じた時。開いている間、外側は下タブを隠す（#165）
   final ValueChanged<bool>? onBrowserOpenChanged;
+
   /// 戻るの問い合わせ先。テストでは WebView が無いので、履歴の有無を決めた物を渡す
   @visibleForTesting
   final BrowserBack? back;
-  const ImportBrowserTab(
-      {super.key, required this.app, this.onBrowserOpenChanged, this.back});
+  @visibleForTesting
+  final BrowserRescan? rescan;
+  const ImportBrowserTab({
+    super.key,
+    required this.app,
+    this.onBrowserOpenChanged,
+    this.back,
+    this.rescan,
+  });
 
   @override
   State<ImportBrowserTab> createState() => _ImportBrowserTabState();
@@ -33,6 +42,7 @@ class _ImportBrowserTabState extends State<ImportBrowserTab> {
   int _nonce = 0;
   final _detected = ValueNotifier<List<DetectedItem>>(const []);
   late final BrowserBack _back = widget.back ?? BrowserBack();
+  late final BrowserRescan _rescan = widget.rescan ?? BrowserRescan();
   // 取得はブラウザと同じ UA / Referer / Cookie の扱いにするため、取り込みと同じ取得役を使う
   late final _thumbs = DetectedThumbs(fetcher: app.webQueue.fetcher);
 
@@ -40,6 +50,7 @@ class _ImportBrowserTabState extends State<ImportBrowserTab> {
 
   @override
   void dispose() {
+    if (widget.rescan == null) _rescan.dispose();
     _url.dispose();
     _urlFocus.dispose();
     _detected.dispose();
@@ -57,8 +68,9 @@ class _ImportBrowserTabState extends State<ImportBrowserTab> {
     final u = normalizeBrowserInput(_url.text);
     if (u == null) {
       // file: や javascript: などは開かない。内蔵ブラウザから端末内や他アプリへ抜けさせんため
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('http/https のページだけ開けます')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('http/https のページだけ開けます')));
       return;
     }
     FocusScope.of(context).unfocus();
@@ -92,9 +104,13 @@ class _ImportBrowserTabState extends State<ImportBrowserTab> {
     final lib = app.activeLib;
     // 一覧に無い保存先は、読み取り専用か分からないので「保存先なし」として止める
     final found = lib != null && app.libraries.any((l) => l.id == lib);
-    final readOnly = found && app.libraries.firstWhere((l) => l.id == lib).readOnly;
+    final readOnly =
+        found && app.libraries.firstWhere((l) => l.id == lib).readOnly;
     return saveBlockFor(
-        libFound: found, hasConnection: app.connected, libReadOnly: readOnly);
+      libFound: found,
+      hasConnection: app.connected,
+      libReadOnly: readOnly,
+    );
   }
 
   Future<void> _save(DetectedItem d) async {
@@ -107,10 +123,15 @@ class _ImportBrowserTabState extends State<ImportBrowserTab> {
     if (dup != null && !await confirmDuplicateImport(context, dup)) return;
     if (!mounted) return;
     final added = app.webQueue.enqueue(lib, [d]);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(added.isEmpty
-            ? 'すでに転送中です: ${d.displayName}'
-            : '転送キューに追加: ${d.displayName}')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          added.isEmpty
+              ? 'すでに転送中です: ${d.displayName}'
+              : '転送キューに追加: ${d.displayName}',
+        ),
+      ),
+    );
   }
 
   void _openDetected() {
@@ -131,7 +152,11 @@ class _ImportBrowserTabState extends State<ImportBrowserTab> {
             return const SizedBox.shrink();
           }
           return DetectedSheetContent(
-              items: items, block: _block(), onSave: _save, thumbs: _thumbs);
+            items: items,
+            block: _block(),
+            onSave: _save,
+            thumbs: _thumbs,
+          );
         },
       ),
     );
@@ -147,7 +172,9 @@ class _ImportBrowserTabState extends State<ImportBrowserTab> {
         content: HistoryList(entries: entries),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('閉じる')),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('閉じる'),
+          ),
         ],
       ),
     );
@@ -181,92 +208,129 @@ class _ImportBrowserTabState extends State<ImportBrowserTab> {
         }
       },
       child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              if (browserOpen)
-                IconButton(
-                  tooltip: 'ブラウザを閉じる',
-                  icon: const Icon(Icons.close),
-                  onPressed: _closeBrowser,
-                ),
-              const Expanded(
-                child: Padding(
-                  padding: EdgeInsets.only(left: 4),
-                  child: Text('ネットから取り込む',
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                ),
-              ),
-              IconButton(
-                tooltip: 'ダウンロード履歴',
-                icon: const Icon(Icons.history),
-                onPressed: _openHistory,
-              ),
-            ],
-          ),
-          Row(
-            children: [
-              Expanded(
-                child: ValueListenableBuilder<TextEditingValue>(
-                  valueListenable: _url,
-                  builder: (context, value, _) => TextField(
-                    controller: _url,
-                    focusNode: _urlFocus,
-                    keyboardType: TextInputType.url,
-                    textInputAction: TextInputAction.go,
-                    onSubmitted: (_) => _go(),
-                    decoration: InputDecoration(
-                      hintText: 'https://…',
-                      isDense: true,
-                      // 空の時に出しても押す意味が無いので、文字がある時だけ出す
-                      suffixIcon: value.text.isEmpty
-                          ? null
-                          : IconButton(
-                              tooltip: '入力を消す',
-                              icon: const Icon(Icons.close),
-                              onPressed: _clearUrl,
-                            ),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                if (browserOpen)
+                  IconButton(
+                    tooltip: 'ブラウザを閉じる',
+                    icon: const Icon(Icons.close),
+                    onPressed: _closeBrowser,
+                  ),
+                const Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(left: 4),
+                    child: Text(
+                      'ネットから取り込む',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              FilledButton(
-                onPressed: _go,
-                child: const Icon(Icons.public, semanticLabel: '移動'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: _loadedUrl.isEmpty
-                // URL を入れるまで WebView を作らない。空の WebView が面全体を覆ってタップを食うのを避ける
-                ? const Center(
-                    child: Text('動画ページのURLを入力して移動',
-                        style: TextStyle(color: AppColors.textDim)),
-                  )
-                : BrowserSurface(
-                    url: _loadedUrl,
-                    nonce: _nonce,
-                    onDetected: _onDetected,
-                    back: _back,
+                IconButton(
+                  tooltip: 'ダウンロード履歴',
+                  icon: const Icon(Icons.history),
+                  onPressed: _openHistory,
+                ),
+              ],
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: _url,
+                    builder: (context, value, _) => TextField(
+                      controller: _url,
+                      focusNode: _urlFocus,
+                      keyboardType: TextInputType.url,
+                      textInputAction: TextInputAction.go,
+                      onSubmitted: (_) => _go(),
+                      decoration: InputDecoration(
+                        hintText: 'https://…',
+                        isDense: true,
+                        // 空の時に出しても押す意味が無いので、文字がある時だけ出す
+                        suffixIcon: value.text.isEmpty
+                            ? null
+                            : IconButton(
+                                tooltip: '入力を消す',
+                                icon: const Icon(Icons.close),
+                                onPressed: _clearUrl,
+                              ),
+                      ),
+                    ),
                   ),
-          ),
-          ValueListenableBuilder<List<DetectedItem>>(
-            valueListenable: _detected,
-            builder: (context, items, _) => items.isEmpty
-                ? const SizedBox(height: 8)
-                : Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child:
-                        DetectionBar(count: items.length, onTap: _openDetected),
-                  ),
-          ),
-        ],
-      ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: _go,
+                  child: const Icon(Icons.public, semanticLabel: '移動'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: _loadedUrl.isEmpty
+                  // URL を入れるまで WebView を作らない。空の WebView が面全体を覆ってタップを食うのを避ける
+                  ? const Center(
+                      child: Text(
+                        '動画ページのURLを入力して移動',
+                        style: TextStyle(color: AppColors.textDim),
+                      ),
+                    )
+                  : BrowserSurface(
+                      url: _loadedUrl,
+                      nonce: _nonce,
+                      onDetected: _onDetected,
+                      back: _back,
+                      rescan: _rescan,
+                    ),
+            ),
+            if (browserOpen)
+              AnimatedBuilder(
+                animation: _rescan,
+                builder: (context, _) => Row(
+                  children: [
+                    Expanded(
+                      child: Semantics(
+                        liveRegion: true,
+                        child: Text(
+                          _rescan.message ?? '',
+                          style: const TextStyle(color: AppColors.textDim),
+                        ),
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: _rescan.running ? null : _rescan.run,
+                      icon: _rescan.running
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.refresh, size: 18),
+                      label: Text(_rescan.running ? '再検知中' : '再検知'),
+                    ),
+                  ],
+                ),
+              ),
+            ValueListenableBuilder<List<DetectedItem>>(
+              valueListenable: _detected,
+              builder: (context, items, _) => items.isEmpty
+                  ? const SizedBox(height: 8)
+                  : Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: DetectionBar(
+                        count: items.length,
+                        onTap: _openDetected,
+                      ),
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }

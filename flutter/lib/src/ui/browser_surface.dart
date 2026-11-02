@@ -114,9 +114,15 @@ const _hookJs = r'''
         v.querySelectorAll('source').forEach(function(s){ if(s.src) pushv(s.src,'',label) });
       });
       performance.getEntriesByType('resource').forEach(function(r){ res(r.name||'') });
-    }catch(e){}
+      return true;
+    }catch(e){ return false; }
   }
   window.__r2scan=scan;
+  window.__r2rescan=function(){
+    if(!scan()) throw new Error('media scan failed');
+    var q=queue; queue=[];
+    return JSON.stringify(q);
+  };
   try{ new PerformanceObserver(function(l){ l.getEntries().forEach(function(r){ res(r.name||'') }); }).observe({type:'resource',buffered:true}); }catch(e){}
   try{
     var of=window.fetch;
@@ -140,6 +146,61 @@ const _pauseJs = r'''
 /// 1回の通知で受け取る件数の上限。ページは信用できんので、巨大な配列で固まらんようにする。
 const _maxPairsPerMessage = 200;
 
+class BrowserRescan extends ChangeNotifier {
+  Future<int> Function()? _scan;
+  bool _running = false;
+  String? _message;
+  int _epoch = 0;
+
+  bool get running => _running;
+  String? get message => _message;
+
+  void bind(Future<int> Function() scan) => _scan = scan;
+
+  void unbind() {
+    _epoch++;
+    _scan = null;
+    _running = false;
+    _message = null;
+  }
+
+  void reset() {
+    _epoch++;
+    _running = false;
+    _message = null;
+    notifyListeners();
+  }
+
+  Future<void> run() async {
+    if (_running) return;
+    final epoch = _epoch;
+    _running = true;
+    _message = null;
+    notifyListeners();
+    try {
+      final scan = _scan;
+      if (scan == null) throw StateError('browser unavailable');
+      final count = await scan().timeout(const Duration(seconds: 10));
+      if (epoch != _epoch) return;
+      _message = count == 0 ? '新しいメディアはありません' : '$count件の新しいメディアを検出しました';
+    } catch (_) {
+      if (epoch != _epoch) return;
+      _message = '再検知できませんでした。もう一度お試しください';
+    } finally {
+      if (epoch == _epoch) {
+        _running = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    unbind();
+    super.dispose();
+  }
+}
+
 /// 端末の「戻る」をページの戻るにつなぐための窓口。外側の画面が持ち、[BrowserSurface] が中身を入れる。
 class BrowserBack {
   Future<bool> Function()? _canGoBack;
@@ -151,9 +212,10 @@ class BrowserBack {
   void goBack() => _goBack?.call();
 
   /// 表示中の WebView につなぐ。[BrowserSurface] が作られた時に呼ぶ
-  void bind(
-      {required Future<bool> Function() canGoBack,
-      required VoidCallback goBack}) {
+  void bind({
+    required Future<bool> Function() canGoBack,
+    required VoidCallback goBack,
+  }) {
     _canGoBack = canGoBack;
     _goBack = goBack;
   }
@@ -173,12 +235,14 @@ class BrowserSurface extends StatefulWidget {
   final int nonce;
   final ValueChanged<List<DetectedItem>> onDetected;
   final BrowserBack? back;
+  final BrowserRescan? rescan;
   const BrowserSurface({
     super.key,
     required this.url,
     required this.nonce,
     required this.onDetected,
     this.back,
+    this.rescan,
   });
 
   @override
@@ -196,10 +260,13 @@ class _BrowserSurfaceState extends State<BrowserSurface>
   String? _error;
   bool _canGoBack = false;
   bool _loading = false;
+  Future<void> _messageWork = Future<void>.value();
+  int _scanId = 0;
 
   @override
   void initState() {
     super.initState();
+    widget.rescan?.bind(_rescan);
     widget.back?.bind(
       canGoBack: () async => await _controller?.canGoBack() ?? false,
       goBack: () => _controller?.goBack(),
@@ -209,6 +276,8 @@ class _BrowserSurfaceState extends State<BrowserSurface>
 
   @override
   void dispose() {
+    _scanId++;
+    widget.rescan?.unbind();
     widget.back?.unbind();
     super.dispose();
   }
@@ -224,19 +293,21 @@ class _BrowserSurfaceState extends State<BrowserSurface>
       final c = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
         ..addJavaScriptChannel('R2Sniff', onMessageReceived: _onMessage)
-        ..setNavigationDelegate(NavigationDelegate(
-          onNavigationRequest: _onNavigationRequest,
-          onPageStarted: _onPageStarted,
-          onPageFinished: _onPageFinished,
-          onUrlChange: (c) {
-            if (c.url != null) _pageUrl = c.url!;
-          },
-          onWebResourceError: (e) {
-            if (e.isForMainFrame ?? false) {
-              if (mounted) setState(() => _error = e.description);
-            }
-          },
-        ));
+        ..setNavigationDelegate(
+          NavigationDelegate(
+            onNavigationRequest: _onNavigationRequest,
+            onPageStarted: _onPageStarted,
+            onPageFinished: _onPageFinished,
+            onUrlChange: (c) {
+              if (c.url != null) _pageUrl = c.url!;
+            },
+            onWebResourceError: (e) {
+              if (e.isForMainFrame ?? false) {
+                if (mounted) setState(() => _error = e.description);
+              }
+            },
+          ),
+        );
       _controller = c;
       c.getUserAgent().then((ua) => _userAgent = ua ?? '');
       _load();
@@ -265,8 +336,9 @@ class _BrowserSurfaceState extends State<BrowserSurface>
       return NavigationDecision.navigate;
     }
     if (r.isMainFrame && mounted) {
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
-          content: Text('このリンクはアプリ内ブラウザでは開けません')));
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(const SnackBar(content: Text('このリンクはアプリ内ブラウザでは開けません')));
     }
     return NavigationDecision.prevent;
   }
@@ -280,9 +352,16 @@ class _BrowserSurfaceState extends State<BrowserSurface>
   void _runJs(String js) {
     final c = _controller;
     if (c == null) return;
-    unawaited(c.runJavaScript(js).then((_) {}, onError: (Object e) {
-      debugPrint('browser js skipped: $e');
-    }));
+    unawaited(
+      c
+          .runJavaScript(js)
+          .then(
+            (_) {},
+            onError: (Object e) {
+              debugPrint('browser js skipped: $e');
+            },
+          ),
+    );
   }
 
   void _report() {
@@ -290,8 +369,11 @@ class _BrowserSurfaceState extends State<BrowserSurface>
   }
 
   void _onPageStarted(String url) {
+    if (!mounted) return;
     _pageUrl = url;
     _gen++;
+    _scanId++;
+    widget.rescan?.reset();
     // 新しいページへ移ったら前のページの検出は捨てる。件数が今のページのものだけになるように
     _collector.clear();
     _report();
@@ -312,8 +394,41 @@ class _BrowserSurfaceState extends State<BrowserSurface>
     _runJs(_hookJs);
   }
 
-  Future<void> _onMessage(JavaScriptMessage m) async {
+  Future<int> _rescan() async {
+    final c = _controller;
+    if (c == null || _loading || _error != null) {
+      throw StateError('browser unavailable');
+    }
     final gen = _gen;
+    final id = ++_scanId;
+    final before = _collector.list().length;
+    final result = await c.runJavaScriptReturningResult('window.__r2rescan()');
+    if (!mounted || gen != _gen || id != _scanId) {
+      throw StateError('page changed');
+    }
+    if (result is! String) throw const FormatException('invalid scan result');
+    Object? pairs = jsonDecode(result);
+    // Android は JavaScript の文字列を JSON の文字列として返す。
+    if (pairs is String) pairs = jsonDecode(pairs);
+    if (pairs is! List) throw const FormatException('invalid scan result');
+    await _onMessage(JavaScriptMessage(message: jsonEncode(pairs)));
+    if (!mounted || gen != _gen || id != _scanId) {
+      throw StateError('page changed');
+    }
+    return _collector.list().length - before;
+  }
+
+  Future<void> _onMessage(JavaScriptMessage m) {
+    final gen = _gen;
+    final work = _messageWork.then((_) => _consumeMessage(m, gen));
+    _messageWork = work.catchError((Object e) {
+      debugPrint('browser detection skipped: ${e.runtimeType}');
+    });
+    return work;
+  }
+
+  Future<void> _consumeMessage(JavaScriptMessage m, int gen) async {
+    if (!mounted || gen != _gen) return;
     final Object? decoded;
     try {
       decoded = jsonDecode(m.message);
@@ -361,8 +476,10 @@ class _BrowserSurfaceState extends State<BrowserSurface>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('内蔵ブラウザを開けませんでした: ${_error ?? ''}',
-                style: const TextStyle(color: AppColors.textDim)),
+            Text(
+              '内蔵ブラウザを開けませんでした: ${_error ?? ''}',
+              style: const TextStyle(color: AppColors.textDim),
+            ),
             const SizedBox(height: 8),
             TextButton(
               onPressed: () => setState(() {

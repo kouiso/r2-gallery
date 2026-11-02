@@ -1,10 +1,6 @@
 name: web-deploy
 
-# Cloudflare Pages のプロジェクトはこのリポジトリ（kouiso/r2-gallery）の Git 連携で、
-# production branch は pages-dist・build 無し・出力は root。main への push ごとに dist を
-# ビルドしてこのリポジトリの pages-dist へ置くと、その push が Pages のデプロイを起こす。
-# 旧経路は archive リポジトリの pages-dist へ PAGES_DEPLOY_KEY で中継 push する形だったが、
-# 新プロジェクトがこのリポジトリを直接見るので廃止した（#10）。
+# 新しい Pages プロジェクトがこのリポジトリを直接参照するため、旧 archive 中継を廃止する。
 on:
   push:
     branches: [main]

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:r2_gallery/src/state/app_state.dart';
 import 'package:r2_gallery/src/ui/app_lock_layer.dart';
@@ -90,6 +91,38 @@ Future<void> _dispose(WidgetTester tester) =>
     tester.pumpWidget(const SizedBox.shrink());
 
 void main() {
+  testWidgets('読み上げの増減操作を保ち、バー内の指操作は離した時だけ確定する', (tester) async {
+    final semantics = tester.ensureSemantics();
+    final rig = await _pump(tester, paged: true);
+    final slider = find.byKey(const ValueKey('seek-slider'));
+    final node = find.semantics
+        .byFlag(SemanticsFlag.isSlider)
+        .evaluate()
+        .single;
+    expect(node.getSemanticsData().hasAction(SemanticsAction.increase), isTrue);
+    expect(node.getSemanticsData().hasAction(SemanticsAction.decrease), isTrue);
+    node.owner!.performAction(node.id, SemanticsAction.increase);
+    await tester.pump();
+    final increasedPosition = rig.video.seeks.single;
+    expect(increasedPosition, greaterThan(Duration.zero));
+    node.owner!.performAction(node.id, SemanticsAction.decrease);
+    await tester.pump();
+    expect(rig.video.seeks.last, lessThan(increasedPosition));
+    rig.video.seeks.clear();
+    final pointer = await tester.startGesture(tester.getCenter(slider));
+    await pointer.moveBy(const Offset(-100, 0));
+    await tester.pump();
+    expect(rig.video.seeks, isEmpty);
+    expect(find.byKey(const ValueKey('seek-preview')), findsOneWidget);
+    expect(find.text('next-page').hitTestable(), findsNothing);
+    await pointer.up();
+    await tester.pump();
+    expect(rig.video.seeks, hasLength(1));
+    expect(find.text('next-page').hitTestable(), findsNothing);
+    await _dispose(tester);
+    semantics.dispose();
+  });
+
   testWidgets('シーク位置と確保領域は指定寸法で、ドラッグ中は非表示もページ送りもしない', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(390, 844);

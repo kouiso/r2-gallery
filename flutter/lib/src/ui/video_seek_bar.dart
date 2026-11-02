@@ -97,34 +97,31 @@ class _VideoSeekBarState extends State<VideoSeekBar> {
                       left: 0,
                       right: 0,
                       height: 56,
-                      child: IgnorePointer(
-                        child: SliderTheme(
-                          data: SliderTheme.of(context).copyWith(
-                            trackHeight: dragging ? 6 : 4,
-                            thumbShape: RoundSliderThumbShape(
-                              enabledThumbRadius: dragging ? 12 : 7,
-                            ),
-                            overlayShape: const RoundSliderOverlayShape(
-                              overlayRadius: 20,
-                            ),
-                            overlayColor: Colors.white24,
+                      child: SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          trackHeight: dragging ? 6 : 4,
+                          thumbShape: RoundSliderThumbShape(
+                            enabledThumbRadius: dragging ? 12 : 7,
                           ),
-                          child: Slider(
-                            key: const ValueKey('seek-slider'),
-                            padding: EdgeInsets.zero,
-                            value: value,
-                            max: max,
-                            activeColor: Colors.white,
-                            inactiveColor: Colors.white30,
-                            semanticFormatterCallback: (x) => widget.format(
-                              Duration(milliseconds: x.round()),
-                            ),
-                            onChanged: _max <= 0
-                                ? null
-                                : (x) => widget.onSeek(
-                                    Duration(milliseconds: x.round()),
-                                  ),
+                          overlayShape: const RoundSliderOverlayShape(
+                            overlayRadius: 20,
                           ),
+                          overlayColor: Colors.white24,
+                        ),
+                        child: Slider(
+                          key: const ValueKey('seek-slider'),
+                          padding: EdgeInsets.zero,
+                          value: value,
+                          max: max,
+                          activeColor: Colors.white,
+                          inactiveColor: Colors.white30,
+                          semanticFormatterCallback: (x) =>
+                              widget.format(Duration(milliseconds: x.round())),
+                          onChanged: _max <= 0
+                              ? null
+                              : (x) => widget.onSeek(
+                                  Duration(milliseconds: x.round()),
+                                ),
                         ),
                       ),
                     ),

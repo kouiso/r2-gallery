@@ -57,16 +57,30 @@ class _Rig {
   FakeVideo get video => videos.last;
 }
 
-Future<_Rig> _pump(WidgetTester tester,
-    {bool failFirst = false, AppState? app}) async {
+Future<_Rig> _pump(
+  WidgetTester tester, {
+  bool failFirst = false,
+  AppState? app,
+  bool paged = false,
+  double bottomInset = 0,
+}) async {
   final rig = _Rig()..failFirst = failFirst;
   Widget view = VideoView(
     url: 'https://w.example/m/a.mp4',
     controllerFactory: rig.make,
     system: rig.system,
+    bottomInset: bottomInset,
     onControlsVisibleChange: rig.controls.add,
   );
   if (app != null) view = AppLockScope(app: app, child: view);
+  if (paged) {
+    view = PageView(
+      children: [
+        view,
+        const Center(child: Text('next-page')),
+      ],
+    );
+  }
   await tester.pumpWidget(MaterialApp(home: Scaffold(body: view)));
   await tester.pump();
   return rig;
@@ -76,6 +90,74 @@ Future<void> _dispose(WidgetTester tester) =>
     tester.pumpWidget(const SizedBox.shrink());
 
 void main() {
+  testWidgets('シーク位置と確保領域は指定寸法で、ドラッグ中は非表示もページ送りもしない', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final rig = await _pump(tester, paged: true, bottomInset: 110);
+    final slider = find.byKey(const ValueKey('seek-slider'));
+    final region = find.byKey(const ValueKey('seek-region'));
+    expect(tester.getSize(slider), const Size(358, 56));
+    expect(844 - tester.getCenter(slider).dy, 220);
+    expect(tester.getSize(region), const Size(358, 92));
+    final pointer = await tester.startGesture(
+      tester.getTopLeft(region) + const Offset(160, 8),
+    );
+    await tester.pump();
+    await pointer.moveBy(const Offset(-100, -150));
+    await tester.pump(const Duration(seconds: 5));
+    expect(find.byKey(const ValueKey('seek-preview')), findsOneWidget);
+    expect(slider, findsOneWidget);
+    expect(find.text('next-page').hitTestable(), findsNothing);
+    expect(rig.system.volumeSets, isEmpty);
+    expect(rig.system.brightSets, isEmpty);
+    await pointer.up();
+    await tester.pump();
+    expect(rig.video.seeks.single.inSeconds, closeTo(10, 1));
+    expect(find.byKey(const ValueKey('seek-preview')), findsNothing);
+    await tester.pump(controlsAutoHide + const Duration(milliseconds: 1));
+    expect(slider, findsNothing);
+    await tester.drag(find.byType(PageView), const Offset(-350, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('next-page').hitTestable(), findsOneWidget);
+    await _dispose(tester);
+  });
+
+  testWidgets('時間表示からの縦操作を確保し、キャンセル時はシークせず自動非表示へ戻る', (tester) async {
+    final rig = await _pump(tester, paged: true);
+    final region = find.byKey(const ValueKey('seek-region'));
+    final pointer = await tester.startGesture(
+      tester.getBottomRight(region) - const Offset(10, 5),
+    );
+    await pointer.moveBy(const Offset(0, -200));
+    await tester.pump();
+    expect(rig.system.volumeSets, isEmpty);
+    expect(find.byKey(const ValueKey('seek-preview')), findsOneWidget);
+    await pointer.cancel();
+    await tester.pump();
+    expect(rig.video.seeks, isEmpty);
+    await tester.pump(controlsAutoHide + const Duration(milliseconds: 1));
+    expect(region, findsNothing);
+    await _dispose(tester);
+  });
+
+  testWidgets('シーク領域外の横ドラッグではページを送れる', (tester) async {
+    await _pump(tester, paged: true);
+    expect(find.byKey(const ValueKey('seek-region')), findsOneWidget);
+    final page = find.byType(PageView);
+    expect(
+      tester
+          .getRect(find.byKey(const ValueKey('seek-region')))
+          .contains(tester.getCenter(page)),
+      isFalse,
+    );
+    await tester.drag(page, const Offset(-450, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('next-page').hitTestable(), findsOneWidget);
+    await _dispose(tester);
+  });
+
   testWidgets('P3: 再生中は操作バーを3.5秒で隠し、タップでまた出す', (tester) async {
     final rig = await _pump(tester);
     expect(rig.video.plays, 1);
@@ -154,9 +236,10 @@ void main() {
   testWidgets('P2: 最後まで再生したらリプレイを出し、押すと頭から再生する', (tester) async {
     final rig = await _pump(tester);
     rig.video.value = rig.video.value.copyWith(
-        isPlaying: false,
-        isCompleted: true,
-        position: const Duration(seconds: 60));
+      isPlaying: false,
+      isCompleted: true,
+      position: const Duration(seconds: 60),
+    );
     await tester.pump();
     expect(find.text('再生が終了しました'), findsOneWidget);
 
@@ -226,8 +309,12 @@ void main() {
   });
 
   group('#198: 明るさ・音量の操作', () {
-    Future<void> drag(WidgetTester tester, Offset from, double dy,
-        {int steps = 8}) async {
+    Future<void> drag(
+      WidgetTester tester,
+      Offset from,
+      double dy, {
+      int steps = 8,
+    }) async {
       final g = await tester.startGesture(from);
       await tester.pump();
       for (var i = 0; i < steps; i++) {
@@ -347,7 +434,8 @@ void main() {
       await tester.pump();
       expect(find.byKey(const ValueKey('level-明るさ')), findsNothing);
       final msg = tester.widget<Text>(
-          find.byKey(const ValueKey('level-明るさ-unavailable')));
+        find.byKey(const ValueKey('level-明るさ-unavailable')),
+      );
       expect(msg.data, contains('自動調整'));
       await _dispose(tester);
     });
@@ -373,10 +461,14 @@ void main() {
       await tester.pump();
       final badge = find.byKey(const ValueKey('brightness-indicator'));
       expect(badge, findsOneWidget);
-      expect(find.descendant(of: badge, matching: find.text('明るさ')),
-          findsOneWidget);
-      expect(find.descendant(of: badge, matching: find.text('37%')),
-          findsOneWidget);
+      expect(
+        find.descendant(of: badge, matching: find.text('明るさ')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: badge, matching: find.text('37%')),
+        findsOneWidget,
+      );
       await g.up();
       await tester.pump(const Duration(seconds: 1));
       await _dispose(tester);
@@ -441,7 +533,9 @@ void main() {
       expect(find.text('60%'), findsOneWidget);
       expect(find.textContaining('画面の左側を上下になぞると明るさ'), findsOneWidget);
 
-      final slider = tester.widget<Slider>(find.byKey(const ValueKey('level-明るさ')));
+      final slider = tester.widget<Slider>(
+        find.byKey(const ValueKey('level-明るさ')),
+      );
       slider.onChanged!(0.8);
       await tester.pump();
       expect(rig.system.brightSets.last, 0.8);
@@ -479,10 +573,15 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('level-toggle')));
       await tester.pump();
       await tester.pump();
-      expect(find.byKey(const ValueKey('level-明るさ-unavailable')),
-          findsOneWidget);
-      expect(find.byKey(const ValueKey('level-音量')), findsOneWidget,
-          reason: '音量はこの動画の音量で代わりに動かせる');
+      expect(
+        find.byKey(const ValueKey('level-明るさ-unavailable')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('level-音量')),
+        findsOneWidget,
+        reason: '音量はこの動画の音量で代わりに動かせる',
+      );
       expect(find.byKey(const ValueKey('level-明るさ')), findsNothing);
       await _dispose(tester);
     });
@@ -506,7 +605,10 @@ void main() {
 
     testWidgets('画面の端に何を変える操作かの案内を出し、操作バーと一緒に消える', (tester) async {
       await _pump(tester);
-      expect(find.byKey(const ValueKey('edge-hint-brightness')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('edge-hint-brightness')),
+        findsOneWidget,
+      );
       expect(find.byKey(const ValueKey('edge-hint-volume')), findsOneWidget);
       await tester.pump(const Duration(milliseconds: 3600));
       expect(find.byKey(const ValueKey('edge-hint-brightness')), findsNothing);

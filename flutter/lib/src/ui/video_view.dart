@@ -7,6 +7,7 @@ import '../viewer/level_gesture.dart';
 import '../viewer/player_system.dart';
 import 'app_lock_layer.dart';
 import 'video_levels.dart';
+import 'video_seek_bar.dart';
 
 typedef VideoControllerFactory = VideoPlayerController Function(String url);
 
@@ -43,8 +44,8 @@ class VideoView extends StatefulWidget {
     this.onControlsVisibleChange,
     VideoControllerFactory? controllerFactory,
     PlayerSystem? system,
-  })  : controllerFactory = controllerFactory ?? _networkController,
-        system = system ?? PlatformPlayerSystem();
+  }) : controllerFactory = controllerFactory ?? _networkController,
+       system = system ?? PlatformPlayerSystem();
 
   @override
   State<VideoView> createState() => _VideoViewState();
@@ -63,7 +64,6 @@ class _VideoViewState extends State<VideoView>
   Object? _hideKey;
 
   bool _seeking = false;
-  double _seekTarget = 0;
 
   _DragTarget? _drag;
   LevelGesture? _gesture;
@@ -116,21 +116,25 @@ class _VideoViewState extends State<VideoView>
   }
 
   void _create() {
+    _seeking = false;
     final c = widget.controllerFactory(widget.url);
     _c = c;
     _initFailed = false;
     _started = false;
     c.addListener(_onTick);
-    c.initialize().then((_) {
-      if (!mounted || c != _c) return;
-      setState(() {});
-      _maybeStart();
-    }).catchError((Object e) {
-      debugPrint('video init failed: $e');
-      if (!mounted || c != _c) return;
-      setState(() => _initFailed = true);
-      _setControls(true);
-    });
+    c
+        .initialize()
+        .then((_) {
+          if (!mounted || c != _c) return;
+          setState(() {});
+          _maybeStart();
+        })
+        .catchError((Object e) {
+          debugPrint('video init failed: $e');
+          if (!mounted || c != _c) return;
+          setState(() => _initFailed = true);
+          _setControls(true);
+        });
   }
 
   // ロック中や裏のページで読み込みが終わった時は、見えない所で音だけ流さないよう始めない
@@ -205,7 +209,10 @@ class _VideoViewState extends State<VideoView>
     if (_controls != v) {
       setState(() {
         _controls = v;
-        if (!v) _closePanel();
+        if (!v) {
+          _seeking = false;
+          _closePanel();
+        }
       });
     }
     if (widget.active) widget.onControlsVisibleChange?.call(v);
@@ -215,11 +222,16 @@ class _VideoViewState extends State<VideoView>
   /// 再生中に操作バーを出したままにしない。条件が変わった時だけ数え直す（位置更新のたびには延ばさない）。
   void _scheduleHide({bool restart = false}) {
     final playing = _c.value.isPlaying;
-    final key = (_controls, playing, _ended, _locked, _panelOpen);
+    final key = (_controls, playing, _ended, _locked, _panelOpen, _seeking);
     if (!restart && key == _hideKey) return;
     _hideKey = key;
     _hideTimer?.cancel();
-    if (_controls && playing && !_ended && !_locked && !_panelOpen) {
+    if (_controls &&
+        playing &&
+        !_ended &&
+        !_locked &&
+        !_panelOpen &&
+        !_seeking) {
       _hideTimer = Timer(controlsAutoHide, () {
         if (mounted) _setControls(false);
       });
@@ -350,8 +362,7 @@ class _VideoViewState extends State<VideoView>
     });
   }
 
-  static const _brightnessUnavailable =
-      'この環境では明るさを変えられません。端末の設定から変えてください';
+  static const _brightnessUnavailable = 'この環境では明るさを変えられません。端末の設定から変えてください';
   static const _brightnessAutoUnavailable =
       '端末が明るさを自動調整中で、いまの明るさを読めません。端末の設定で自動調整をオフにすると変えられます';
   static const _volumeUnavailable = 'この環境では音量を変えられません。端末の音量ボタンを使ってください';
@@ -377,8 +388,10 @@ class _VideoViewState extends State<VideoView>
     _scheduleHide(restart: true);
     _syncLevels();
     _syncTimer?.cancel();
-    _syncTimer =
-        Timer.periodic(const Duration(milliseconds: 500), (_) => _syncLevels());
+    _syncTimer = Timer.periodic(
+      const Duration(milliseconds: 500),
+      (_) => _syncLevels(),
+    );
   }
 
   void _closePanel() {
@@ -405,8 +418,9 @@ class _VideoViewState extends State<VideoView>
   }
 
   void _slideVolume(double v) {
-    final next =
-        v.clamp(LevelGesture.minVolume, LevelGesture.maxVolume).toDouble();
+    final next = v
+        .clamp(LevelGesture.minVolume, LevelGesture.maxVolume)
+        .toDouble();
     setState(() => _volume = next);
     _writeVolume(next);
   }
@@ -510,167 +524,180 @@ class _VideoViewState extends State<VideoView>
     final ended = _ended;
     final buffering = _buffering;
 
-    return LayoutBuilder(builder: (context, box) {
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          ColoredBox(
-            color: Colors.black,
-            child: initialized
-                ? Center(
-                    child: AspectRatio(
-                      aspectRatio: v.aspectRatio,
-                      child: VideoPlayer(_c),
-                    ),
-                  )
-                : const SizedBox.expand(),
-          ),
-          if (!_locked)
-            GestureDetector(
-              key: const ValueKey('video-gestures'),
-              behavior: HitTestBehavior.opaque,
-              onTap: () => _setControls(!_controls),
-              onDoubleTapDown: (d) => _doubleTapAt = d.localPosition,
-              onDoubleTap: () {
-                final at = _doubleTapAt;
-                if (at == null) return;
-                _skip(at.dx > box.maxWidth / 2 ? 10 : -10);
-              },
-              onVerticalDragStart: (d) => _dragStart(d, box.maxWidth),
-              onVerticalDragUpdate: (d) => _dragUpdate(d, box.maxHeight),
-              onVerticalDragEnd: (_) => _dragEnd(),
-              onVerticalDragCancel: _dragEnd,
+    return LayoutBuilder(
+      builder: (context, box) {
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            ColoredBox(
+              color: Colors.black,
+              child: initialized
+                  ? Center(
+                      child: AspectRatio(
+                        aspectRatio: v.aspectRatio,
+                        child: VideoPlayer(_c),
+                      ),
+                    )
+                  : const SizedBox.expand(),
             ),
-          if (buffering)
-            const Center(
-              child: SizedBox(
-                width: 50,
-                height: 50,
-                child: CircularProgressIndicator(
-                    key: ValueKey('video-buffering'), color: Colors.white),
+            if (!_locked)
+              GestureDetector(
+                key: const ValueKey('video-gestures'),
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _setControls(!_controls),
+                onDoubleTapDown: (d) => _doubleTapAt = d.localPosition,
+                onDoubleTap: () {
+                  final at = _doubleTapAt;
+                  if (at == null) return;
+                  _skip(at.dx > box.maxWidth / 2 ? 10 : -10);
+                },
+                onVerticalDragStart: (d) => _dragStart(d, box.maxWidth),
+                onVerticalDragUpdate: (d) => _dragUpdate(d, box.maxHeight),
+                onVerticalDragEnd: (_) => _dragEnd(),
+                onVerticalDragCancel: _dragEnd,
               ),
-            ),
-          if (initialized && !playing && !ended && !failed && !buffering)
-            Center(
-              child: IconButton(
-                key: const ValueKey('video-center-play'),
-                tooltip: '再生',
-                iconSize: 72,
-                icon: Icon(Icons.play_arrow,
-                    color: Colors.white.withValues(alpha: 0.9)),
-                onPressed: _togglePlay,
-              ),
-            ),
-          if (failed)
-            _Overlay(
-              text: '再生できませんでした',
-              icon: Icons.replay,
-              label: 'リトライ',
-              onTap: _retry,
-            ),
-          if (ended && !failed)
-            _Overlay(
-              text: '再生が終了しました',
-              icon: Icons.replay,
-              label: 'リプレイ',
-              onTap: _replay,
-            ),
-          if (_brightPct != null)
-            Align(
-              alignment: Alignment.topCenter,
-              child: Padding(
-                padding: const EdgeInsets.only(top: 96),
-                child: LevelBadge(
-                  key: const ValueKey('brightness-indicator'),
-                  icon: Icons.wb_sunny,
-                  label: '明るさ',
-                  percent: _brightPct!,
+            if (buffering)
+              const Center(
+                child: SizedBox(
+                  width: 50,
+                  height: 50,
+                  child: CircularProgressIndicator(
+                    key: ValueKey('video-buffering'),
+                    color: Colors.white,
+                  ),
                 ),
               ),
-            ),
-          if (_volumePct != null)
-            Align(
-              alignment: Alignment.topCenter,
-              child: Padding(
-                padding: const EdgeInsets.only(top: 96),
-                child: LevelBadge(
-                  key: const ValueKey('volume-indicator'),
-                  icon: Icons.volume_up,
-                  label: '音量',
-                  percent: _volumePct!,
+            if (initialized && !playing && !ended && !failed && !buffering)
+              Center(
+                child: IconButton(
+                  key: const ValueKey('video-center-play'),
+                  tooltip: '再生',
+                  iconSize: 72,
+                  icon: Icon(
+                    Icons.play_arrow,
+                    color: Colors.white.withValues(alpha: 0.9),
+                  ),
+                  onPressed: _togglePlay,
                 ),
               ),
-            ),
-          if (_controls && initialized && !ended && !failed && !_locked) ...[
-            const Positioned(
-              left: 8,
-              top: 0,
-              bottom: 0,
-              child: Center(
-                child: LevelEdgeHint(
+            if (failed)
+              _Overlay(
+                text: '再生できませんでした',
+                icon: Icons.replay,
+                label: 'リトライ',
+                onTap: _retry,
+              ),
+            if (ended && !failed)
+              _Overlay(
+                text: '再生が終了しました',
+                icon: Icons.replay,
+                label: 'リプレイ',
+                onTap: _replay,
+              ),
+            if (_brightPct != null)
+              Align(
+                alignment: Alignment.topCenter,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 96),
+                  child: LevelBadge(
+                    key: const ValueKey('brightness-indicator'),
+                    icon: Icons.wb_sunny,
+                    label: '明るさ',
+                    percent: _brightPct!,
+                  ),
+                ),
+              ),
+            if (_volumePct != null)
+              Align(
+                alignment: Alignment.topCenter,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 96),
+                  child: LevelBadge(
+                    key: const ValueKey('volume-indicator'),
+                    icon: Icons.volume_up,
+                    label: '音量',
+                    percent: _volumePct!,
+                  ),
+                ),
+              ),
+            if (_controls && initialized && !ended && !failed && !_locked) ...[
+              const Positioned(
+                left: 8,
+                top: 0,
+                bottom: 0,
+                child: Center(
+                  child: LevelEdgeHint(
                     key: ValueKey('edge-hint-brightness'),
                     icon: Icons.wb_sunny,
-                    label: '明るさ'),
-              ),
-            ),
-            const Positioned(
-              right: 8,
-              top: 0,
-              bottom: 0,
-              child: Center(
-                child: LevelEdgeHint(
-                    key: ValueKey('edge-hint-volume'),
-                    icon: Icons.volume_up,
-                    label: '音量'),
-              ),
-            ),
-          ],
-          if (_notice != null)
-            Align(
-              alignment: Alignment.topCenter,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 96, 24, 0),
-                child: Container(
-                  key: const ValueKey('level-notice'),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xCC000000),
-                    borderRadius: BorderRadius.circular(12),
+                    label: '明るさ',
                   ),
-                  child: Text(_notice!,
-                      style:
-                          const TextStyle(color: Colors.white, fontSize: 13)),
                 ),
               ),
-            ),
-          if (_controls && initialized && !ended && !failed && !_locked)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: widget.bottomInset,
-              child: _controlBar(v),
-            ),
-          if (_locked)
-            Positioned(
-              left: 10,
-              bottom: widget.bottomInset + 10,
-              child: IconButton(
-                tooltip: '解除',
-                icon: const Icon(Icons.lock, color: Colors.white),
-                onPressed: _unlockControls,
+              const Positioned(
+                right: 8,
+                top: 0,
+                bottom: 0,
+                child: Center(
+                  child: LevelEdgeHint(
+                    key: ValueKey('edge-hint-volume'),
+                    icon: Icons.volume_up,
+                    label: '音量',
+                  ),
+                ),
               ),
-            ),
-        ],
-      );
-    });
+            ],
+            if (_notice != null)
+              Align(
+                alignment: Alignment.topCenter,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 96, 24, 0),
+                  child: Container(
+                    key: const ValueKey('level-notice'),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xCC000000),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      _notice!,
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                    ),
+                  ),
+                ),
+              ),
+            if (_controls &&
+                initialized &&
+                (!ended || _seeking) &&
+                !failed &&
+                !_locked)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: widget.bottomInset,
+                child: _controlBar(v),
+              ),
+            if (_locked)
+              Positioned(
+                left: 10,
+                bottom: widget.bottomInset + 10,
+                child: IconButton(
+                  tooltip: '解除',
+                  icon: const Icon(Icons.lock, color: Colors.white),
+                  onPressed: _unlockControls,
+                ),
+              ),
+          ],
+        );
+      },
+    );
   }
 
   Widget _controlBar(VideoPlayerValue v) {
     final pos = v.position;
     final dur = v.duration;
-    final shown = _seeking ? Duration(milliseconds: _seekTarget.round()) : pos;
-    final max = dur.inMilliseconds.toDouble();
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -680,78 +707,71 @@ class _VideoViewState extends State<VideoView>
         ),
       ),
       padding: const EdgeInsets.only(bottom: 6),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        if (_panelOpen)
-          LevelPanel(
-            brightness: _brightness,
-            brightnessReadable: _brightnessReadable,
-            brightnessAuto: _brightnessAuto,
-            volume: _volume,
-            volumeReadable: _volumeReadable,
-            onBrightness: _slideBrightness,
-            onVolume: _slideVolume,
-            onSliding: (v) => _sliding = v,
-          ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 13),
-          child: Row(children: [
-            Text(fmtDuration(shown),
-                style: const TextStyle(color: Colors.white, fontSize: 12)),
-            Expanded(
-              child: Slider(
-                value: (_seeking ? _seekTarget : pos.inMilliseconds.toDouble())
-                    .clamp(0, max < 1 ? 1 : max),
-                max: max < 1 ? 1 : max,
-                activeColor: Colors.white,
-                inactiveColor: Colors.white30,
-                onChanged: (x) => setState(() {
-                  _seeking = true;
-                  _seekTarget = x;
-                }),
-                onChangeEnd: (x) {
-                  _seekTo(Duration(milliseconds: x.round()));
-                  setState(() => _seeking = false);
-                },
-              ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_panelOpen)
+            LevelPanel(
+              brightness: _brightness,
+              brightnessReadable: _brightnessReadable,
+              brightnessAuto: _brightnessAuto,
+              volume: _volume,
+              volumeReadable: _volumeReadable,
+              onBrightness: _slideBrightness,
+              onVolume: _slideVolume,
+              onSliding: (v) => _sliding = v,
             ),
-            Text(fmtDuration(dur),
-                style: const TextStyle(color: Colors.white, fontSize: 12)),
-          ]),
-        ),
-        Row(children: [
-          IconButton(
-            tooltip: 'ロック',
-            icon: const Icon(Icons.lock_open, color: Colors.white),
-            onPressed: _lockControls,
+          VideoSeekBar(
+            position: pos,
+            duration: dur,
+            format: fmtDuration,
+            onSeek: _seekTo,
+            onScrubbing: (value) {
+              setState(() => _seeking = value);
+              _scheduleHide(restart: true);
+            },
           ),
-          const Spacer(),
-          IconButton(
-            tooltip: '-10秒',
-            icon: const Icon(Icons.replay_10, color: Colors.white),
-            onPressed: () => _skip(-10),
+          Row(
+            children: [
+              IconButton(
+                tooltip: 'ロック',
+                icon: const Icon(Icons.lock_open, color: Colors.white),
+                onPressed: _lockControls,
+              ),
+              const Spacer(),
+              IconButton(
+                tooltip: '-10秒',
+                icon: const Icon(Icons.replay_10, color: Colors.white),
+                onPressed: () => _skip(-10),
+              ),
+              IconButton(
+                tooltip: v.isPlaying ? '一時停止' : '再生',
+                iconSize: 40,
+                icon: Icon(
+                  v.isPlaying ? Icons.pause : Icons.play_arrow,
+                  color: Colors.white,
+                ),
+                onPressed: _togglePlay,
+              ),
+              IconButton(
+                tooltip: '+10秒',
+                icon: const Icon(Icons.forward_10, color: Colors.white),
+                onPressed: () => _skip(10),
+              ),
+              const Spacer(),
+              IconButton(
+                key: const ValueKey('level-toggle'),
+                tooltip: '明るさ・音量',
+                icon: Icon(
+                  Icons.tune,
+                  color: _panelOpen ? const Color(0xFFFFAE00) : Colors.white,
+                ),
+                onPressed: _togglePanel,
+              ),
+            ],
           ),
-          IconButton(
-            tooltip: v.isPlaying ? '一時停止' : '再生',
-            iconSize: 40,
-            icon: Icon(v.isPlaying ? Icons.pause : Icons.play_arrow,
-                color: Colors.white),
-            onPressed: _togglePlay,
-          ),
-          IconButton(
-            tooltip: '+10秒',
-            icon: const Icon(Icons.forward_10, color: Colors.white),
-            onPressed: () => _skip(10),
-          ),
-          const Spacer(),
-          IconButton(
-            key: const ValueKey('level-toggle'),
-            tooltip: '明るさ・音量',
-            icon: Icon(Icons.tune,
-                color: _panelOpen ? const Color(0xFFFFAE00) : Colors.white),
-            onPressed: _togglePanel,
-          ),
-        ]),
-      ]),
+        ],
+      ),
     );
   }
 }
@@ -769,11 +789,12 @@ class _Overlay extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  const _Overlay(
-      {required this.text,
-      required this.icon,
-      required this.label,
-      required this.onTap});
+  const _Overlay({
+    required this.text,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {

@@ -110,10 +110,12 @@ class _MediaGridState extends State<MediaGrid> {
       onLongPress: () => widget.onLongPress(item),
     );
     if (!(widget.isOffline?.call(item) ?? false)) return tile;
-    return Stack(children: [
-      Positioned.fill(child: tile),
-      const Positioned(left: 6, top: 6, child: OfflineBadge()),
-    ]);
+    return Stack(
+      children: [
+        Positioned.fill(child: tile),
+        const Positioned(left: 6, top: 6, child: OfflineBadge()),
+      ],
+    );
   }
 
   SliverGrid _gridOf(int columns, int count, Widget Function(int) build) =>
@@ -215,21 +217,68 @@ class _MediaGridState extends State<MediaGrid> {
         final columns = gridColumnsFor(c.maxWidth);
         final slivers = <Widget>[];
         if (widget.dateHeaders) {
+          final rows =
+              <
+                ({
+                  String? label,
+                  List<MediaItem> day,
+                  int start,
+                  int count,
+                  bool gapAfter,
+                })
+              >[];
           var offset = 0;
           for (final day in groupByDay(items, now)) {
-            final start = offset;
-            slivers.add(
-              SliverToBoxAdapter(child: _header(day.label, day.items)),
-            );
-            slivers.add(
-              _gridOf(
-                columns,
-                day.items.length,
-                (i) => _tile(day.items[i], start + i),
-              ),
-            );
+            rows.add((
+              label: day.label,
+              day: day.items,
+              start: offset,
+              count: 0,
+              gapAfter: false,
+            ));
+            for (var i = 0; i < day.items.length; i += columns) {
+              final remaining = day.items.length - i;
+              rows.add((
+                label: null,
+                day: day.items,
+                start: offset + i,
+                count: remaining < columns ? remaining : columns,
+                gapAfter: remaining > columns,
+              ));
+            }
             offset += day.items.length;
           }
+          final cell = (c.maxWidth - gridGap * (columns - 1)) / columns;
+          // 複数の SliverGrid は画面外でも各日先頭を構築するため、日付も行も一つの遅延リストにする。
+          slivers.add(
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (_, i) {
+                  final row = rows[i];
+                  if (row.label != null) return _header(row.label!, row.day);
+                  return Padding(
+                    padding: EdgeInsets.only(
+                      bottom: row.gapAfter ? gridGap : 0,
+                    ),
+                    child: Row(
+                      children: [
+                        for (var j = 0; j < row.count; j++) ...[
+                          if (j > 0) const SizedBox(width: gridGap),
+                          SizedBox(
+                            width: cell,
+                            height: cell,
+                            child: _tile(items[row.start + j], row.start + j),
+                          ),
+                        ],
+                      ],
+                    ),
+                  );
+                },
+                childCount: rows.length,
+                addAutomaticKeepAlives: false,
+              ),
+            ),
+          );
         } else {
           slivers.add(
             _gridOf(columns, items.length, (i) => _tile(items[i], i)),

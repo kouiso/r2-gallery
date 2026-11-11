@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart' as hash;
 import 'package:flutter/foundation.dart';
 
 import '../api/client.dart';
@@ -41,7 +43,7 @@ class AppState extends ChangeNotifier {
     TransferPlatform? transferPlatform,
     OfflineStore? offline,
   })  : api = api ?? ApiClient(),
-        offline = offline ?? OfflineStore(),
+        _offlineRoot = offline ?? OfflineStore(),
         transferPlatform = transferPlatform ?? PlatformTransferBridge(),
         deviceAuth = deviceAuth ?? LocalDeviceAuth(),
         _clock = clock ?? PlatformLockClock(),
@@ -99,6 +101,7 @@ class AppState extends ChangeNotifier {
   /// 認証ダイアログ表示中。ダイアログが出す一時停止/復帰を「バックグラウンドに行った」と数えないための印。
   bool authenticating = false;
   Future<ClockReading>? _backgroundedAt;
+  Future<void>? _foregroundRun;
   bool _backgroundedDuringExternal = false;
   bool _screenDetached = false;
   int _externalActivities = 0;
@@ -129,12 +132,81 @@ class AppState extends ChangeNotifier {
   final TransferPlatform transferPlatform;
 
   /// 端末に暗号化して置くオフライン保存。
-  final OfflineStore offline;
+  final OfflineStore _offlineRoot;
+
+  /// API に安定した利用者 ID が無いため、同じ接続資格だけを同じ保存先とみなす。
+  /// 資格情報そのものはファイル名・目録・ログへ残さない。
+  String? get offlineAccountId {
+    final c = api.conn;
+    if (c == null) return null;
+    return hash.sha256.convert(utf8.encode('${c.endpoint}\u0000${c.token}')).toString();
+  }
+
+  OfflineStore get offline =>
+      _offlineRoot.forAccount(offlineAccountId ?? 'signed-out');
+
+  bool get offlineAccessible => connected && !locked && api.conn != null;
+  bool _offlineLibrariesKnown = false;
+  int _libraryGeneration = 0;
+  int _connectionIntent = 0;
+  Future<void> _connectionWrites = Future<void>.value();
+
+  // 旧保存の画面と取得中の認可一覧を、資格情報の永続化より先に閉じる。
+  void _revokeConnection() {
+    if (_transfersWired) transfers.pauseOfflineDownloads();
+    ++_libraryGeneration;
+    api.setConnection(null);
+    _offlineLibrariesKnown = false;
+    connected = false;
+    browseOnly = false;
+    librariesLoading = false;
+    libraries = [];
+    activeLib = null;
+    startupError = null;
+    notifyListeners();
+  }
+
+  // 切替とログアウトが重なっても、古い資格の書込みが最後に残らないよう直列化する。
+  Future<void> _persistConnection(Connection? next, {int? intent}) {
+    final write = _connectionWrites.then((_) async {
+      if (intent != null && intent != _connectionIntent) return;
+      if (next == null) {
+        try {
+          await Kv.remove(Keys.endpoint);
+        } finally {
+          await Kv.remove(Keys.token);
+        }
+      } else {
+        try {
+          // 保存が途中で失敗しても、新endpointと古tokenの組合せを次回起動へ残さない。
+          await Kv.remove(Keys.token);
+          await Kv.set(Keys.endpoint, next.endpoint);
+          await Kv.set(Keys.token, next.token);
+        } finally {
+          if (intent != null && intent != _connectionIntent) {
+            await Kv.remove(Keys.endpoint);
+            await Kv.remove(Keys.token);
+          }
+        }
+      }
+    });
+    _connectionWrites = write.then<void>((_) {}, onError: (Object _) {});
+    return write;
+  }
+
+  // 回線が無く一覧を確認できない起動では、同じ資格で以前保存した内容をローカル認証後に読む。
+  // 一覧取得に成功した後は、その一覧から外れたライブラリを見せない。
+  bool canReadOffline(String lib) => offlineAccessible &&
+      (!_offlineLibrariesKnown || libraries.any((l) => l.id == lib));
 
   /// アップロードとオフライン保存のキュー。画面ではなくここが持ち、ロック中も裏で続ける。
   late final TransferQueue transfers = TransferQueue(
     api: ApiClientTransferApi(api),
-    offline: offline,
+    offline: _offlineRoot,
+    requireDownloadAccount: true,
+    canUseOfflineAccount: (id, lib) =>
+        id != null && id == offlineAccountId && connected && api.conn != null &&
+        (!_offlineLibrariesKnown || libraries.any((l) => l.id == lib)),
     makeThumb: thumbFromFile,
     configured: () => api.conn != null,
   );
@@ -164,7 +236,7 @@ class AppState extends ChangeNotifier {
     unawaited(webQueue.restore());
     // 目録を先に読み、一覧で「保存済み」を同期で引けるようにする
     unawaited(offline.count().then((_) => notifyListeners(),
-        onError: (Object e) => debugPrint('offline manifest not loaded: $e')));
+        onError: (Object _) => debugPrint('offline manifest unavailable')));
   }
 
   void _syncKeepAlive() {
@@ -191,16 +263,36 @@ class AppState extends ChangeNotifier {
   /// 選んだ写真・動画をオフライン保存に積む。積んだ件数を返す（保存済み・積み済みは数えない）。
   Future<int> saveOffline(String fallbackLib, List<MediaItem> items) async {
     if (!offlineSupported) return 0;
+    if (!offlineAccessible ||
+        items.any((it) => !canReadOffline(it.lib ?? fallbackLib))) {
+      throw const ApiError(403, '接続とロック解除を確認してください');
+    }
     _wireTransfers();
-    return (await transfers.enqueueDownloads(fallbackLib, items)).length;
+    return (await transfers.enqueueDownloads(fallbackLib, items,
+        targetStore: offline)).length;
   }
 
   /// 端末にオフライン保存済みか。目録を読む前は false。
-  bool isOffline(String lib, String key) => offline.hasCached(lib, key);
+  bool isOffline(String lib, String key) =>
+      canReadOffline(lib) && offline.hasCached(lib, key);
+
+  bool isOfflinePending(String lib, String key) => canReadOffline(lib) &&
+      transfers.tasks.any((t) => t.kind == 'down' && t.lib == lib &&
+          t.itemKey == key && !t.finished && t.offlineAccountId == offlineAccountId);
 
   /// オフライン保存した中身を復号して返す（回線なしで見る用）。無ければ null。
-  Future<Uint8List?> offlineBytes(String lib, String key) =>
-      offline.readBytes(lib, key);
+  Future<Uint8List?> offlineBytes(String lib, String key) async {
+    if (!canReadOffline(lib)) return null;
+    final store = offline;
+    final bytes = await store.readBytes(lib, key);
+    if (!canReadOffline(lib) || store.accountId != offlineAccountId) return null;
+    return bytes;
+  }
+
+  Future<void> removeOffline(String lib, String key) async {
+    if (!canReadOffline(lib)) throw const ApiError(403, '接続とロック解除を確認してください');
+    await offline.remove(lib, key);
+  }
 
   /// アップロードしてよい保存先か。読み取り専用や見つからないライブラリには積まない。
   /// 判定は #145 の書き込みガードと同じもの（未接続・一覧に無い・読み取り専用を止める）。
@@ -229,10 +321,12 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _initOnce() async {
+    final intent = _connectionIntent;
     final ep = await Kv.get(Keys.endpoint);
     final tk = await Kv.get(Keys.token);
     hasPin = await PinLock.hasPin();
     await _loadLockSettings();
+    if (intent != _connectionIntent) return;
     if (ep != null && tk != null) {
       api.setConnection(Connection(ep, tk));
       connected = true;
@@ -285,36 +379,45 @@ class AppState extends ChangeNotifier {
           ? 'エンドポイントは https:// で始めてください'
           : connectFailedMessage;
     }
+    final intent = ++_connectionIntent;
     final ok = await api
         .probe(input.endpoint, input.token)
         .timeout(_bakedProbeBudget, onTimeout: () => false);
-    if (!ok) return connectFailedMessage;
-    api.setConnection(Connection(input.endpoint, input.token));
-    await Kv.set(Keys.endpoint, input.endpoint);
-    await Kv.set(Keys.token, input.token);
+    if (!ok || intent != _connectionIntent) return connectFailedMessage;
+    _revokeConnection();
+    if (intent != _connectionIntent) return connectFailedMessage;
+    final next = Connection(input.endpoint, input.token);
+    try {
+      await _persistConnection(next, intent: intent);
+    } on Object {
+      return connectFailedMessage;
+    }
+    if (intent != _connectionIntent) return connectFailedMessage;
+    api.setConnection(next);
     connected = true;
-    browseOnly = false;
     bakedProbeFailed = false;
-    startupError = null;
     notifyListeners();
     await _loadLibraries();
-    return null;
+    return intent == _connectionIntent && identical(api.conn, next) && connected
+        ? null : connectFailedMessage;
   }
 
   Future<void> _connectBaked() async {
+    final intent = _connectionIntent;
     final ok = await api
         .probe(bakedEndpoint, bakedToken)
         .timeout(_bakedProbeBudget, onTimeout: () => false);
     // 確かめている間にペアリングリンクや手入力で繋いだなら、そちらを優先して上書きしない
-    if (connected) return;
+    if (connected || intent != _connectionIntent) return;
     if (!ok) {
       // 失敗時は保存せず接続画面へ。次回起動でまた埋め込み値を試せるようにしておく
       bakedProbeFailed = true;
       return;
     }
-    api.setConnection(Connection(bakedEndpoint, bakedToken));
-    await Kv.set(Keys.endpoint, bakedEndpoint);
-    await Kv.set(Keys.token, bakedToken);
+    final next = Connection(bakedEndpoint, bakedToken);
+    await _persistConnection(next, intent: intent);
+    if (connected || intent != _connectionIntent) return;
+    api.setConnection(next);
     connected = true;
     locked = _gateAtStart;
     _loadLibraries();
@@ -366,41 +469,42 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> disconnect() async {
-    await Kv.remove(Keys.endpoint);
-    await Kv.remove(Keys.token);
-    api.setConnection(null);
-    connected = false;
-    browseOnly = false;
-    startupError = null;
-    libraries = [];
-    activeLib = null;
-    notifyListeners();
+    ++_connectionIntent;
+    _revokeConnection();
+    await _persistConnection(null);
   }
 
   Future<void> _loadLibraries() async {
-    // 未接続（取り込みだけ使う時など）で取りに行くと、設定が無いという失敗をバナーに出してしまう
-    if (api.conn == null) return;
+    final connection = api.conn;
+    if (connection == null) return;
+    final generation = ++_libraryGeneration;
+    bool current() => generation == _libraryGeneration &&
+        identical(connection, api.conn) && connected;
     librariesLoading = true;
     notifyListeners();
     try {
-      libraries = await api.libraries();
-      // KMP 版と同じく最後に開いたライブラリで起動する。毎回切り替え直しになるのを防ぐ
+      final loaded = await api.libraries();
+      if (!current()) return;
       final saved = activeLib ?? await Kv.get(Keys.library);
-      activeLib = libraries.any((l) => l.id == saved)
+      if (!current()) return;
+      libraries = loaded;
+      _offlineLibrariesKnown = true;
+      activeLib = loaded.any((l) => l.id == saved)
           ? saved
-          : (libraries.isNotEmpty ? libraries.first.id : null);
+          : (loaded.isNotEmpty ? loaded.first.id : null);
       startupError = null;
     } on Object catch (e) {
-      // 一覧を持っていれば失敗は出さずに手元の一覧で続ける（KMP 版 refreshLibs と同じ）。
-      // 一度も取れていない時だけ、空の画面で固まって見えないよう理由を出す
-      debugPrint('libraries failed: $e');
+      if (!current()) return;
       if (libraries.isEmpty) {
         startupError = 'ライブラリを取得できませんでした（${describeStartupError(e)}）';
       }
+    } finally {
+      if (current()) {
+        librariesLoading = false;
+        _kickTransfers();
+        notifyListeners();
+      }
     }
-    librariesLoading = false;
-    _kickTransfers();
-    notifyListeners();
   }
 
   void setLib(String id) {
@@ -481,9 +585,13 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  int _backgroundGeneration = 0;
+  int _foregroundRequestedGeneration = 0;
+
   /// アプリがバックグラウンドへ。認証ダイアログ由来の一時停止は数えない。
   void onBackground() {
-    if (authenticating || locked) return;
+    if (authenticating || locked || _backgroundedAt != null) return;
+    _backgroundGeneration++;
     // 戻った時には外部画面の結果が先に返って数が減っていることがあるので、裏へ回った時点で覚える
     _backgroundedDuringExternal = _externalActivities > 0;
     _backgroundedAt = _clock.read();
@@ -493,14 +601,60 @@ class AppState extends ChangeNotifier {
   /// 次に開いた画面が同じ状態につながる。消す前は毎回起動し直しでロックが出ていたので、
   /// 猶予に関係なく、次に前面へ戻った時に起動時と同じロックをかける。
   void onDetached() {
+    _backgroundGeneration++;
     _screenDetached = true;
   }
 
   /// 前面に戻った。猶予を超えていたら再ロックする。
   /// 先にロックしてから端末の画面ロックを問い合わせる。問い合わせの遅れや失敗で
   /// ロックが抜けると、その間ずっと中身が見えてしまう。
-  Future<void> onForeground() async {
+  /// 再生側も再ロック判定の完了を待ち、復帰直後だけ音が漏れるのを防ぐ。
+  Future<void> get foregroundSettled => _foregroundRun ?? Future<void>.value();
+
+  /// OS の音声操作でも、復帰まで再ロック判定を先送りして認証猶予を超えないようにする。
+  Future<Duration?> backgroundPlaybackBudget() async {
+    if (!sessionOpen || locked) return Duration.zero;
+    if (!canLock) return null;
     final at = _backgroundedAt;
+    if (at == null) return Duration.zero;
+    final elapsed = elapsedBetween(await at, await _clock.read());
+    if (!identical(at, _backgroundedAt)) return Duration.zero;
+    final grace = effectiveGraceMs(
+        graceMs: relockGraceMs, duringExternal: _backgroundedDuringExternal);
+    return Duration(milliseconds: grace - elapsed + 1);
+  }
+
+  Future<void> onForeground() {
+    _foregroundRequestedGeneration = _backgroundGeneration;
+    final pending = _foregroundRun;
+    if (pending != null) return pending;
+    final done = Completer<void>();
+    // 通知から復帰処理を再入されても、同じ判定を待てるよう先に公開する。
+    _foregroundRun = done.future;
+    unawaited(_settleForeground(done));
+    return done.future;
+  }
+
+  Future<void> _settleForeground(Completer<void> done) async {
+    try {
+      while (true) {
+        final generation = _foregroundRequestedGeneration;
+        await _checkForeground();
+        // 端末への問い合わせ中に再び裏へ回って戻った場合も、最新の猶予を判定し終えるまで
+        // 再生側へ完了を返さない。まだ裏にいるだけなら、その時間は次の復帰まで残す。
+        if (generation == _foregroundRequestedGeneration) break;
+      }
+      done.complete();
+    } catch (error, stack) {
+      done.completeError(error, stack);
+    } finally {
+      _foregroundRun = null;
+    }
+  }
+
+  Future<void> _checkForeground() async {
+    final at = _backgroundedAt;
+    final duringExternal = _backgroundedDuringExternal;
     _backgroundedAt = null;
     final detached = _screenDetached;
     _screenDetached = false;
@@ -517,7 +671,7 @@ class AppState extends ChangeNotifier {
     if (shouldRelock(
       elapsedMs: elapsed,
       graceMs: effectiveGraceMs(
-          graceMs: relockGraceMs, duringExternal: _backgroundedDuringExternal),
+          graceMs: relockGraceMs, duringExternal: duringExternal),
       locked: locked,
       canLock: canLock,
     )) {
@@ -533,19 +687,15 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 端末のギャラリーへの書き出し口。ビューワー・一覧の長押しのどちらからも使う。
+  /// 旧呼び出しとの型互換用。既定bridgeは共有領域への書き出しを拒否する。
   late DeviceExporter deviceExporter = DeviceExporter(api: api);
 
-  bool get deviceExportSupported => deviceExporter.supported;
+  bool get deviceExportSupported => false;
 
-  /// 「端末に保存」。古い Android では保存許可のダイアログが出て裏へ回るので、登録の所だけ外部画面として包む。
-  /// 失敗は DeviceExportError / ApiError で返し、呼び出し側が文言を出す。
+  /// 旧保存導線からも、本人が廃止した外部への書き出しを再開しない。
   Future<void> exportToDevice(MediaItem item, {String? lib}) {
-    final l = item.lib ?? lib ?? activeLib;
-    if (l == null) {
-      return Future.error(const DeviceExportError('ライブラリが未選択です'));
-    }
-    return deviceExporter.export(item, l, guardSave: runExternal);
+    return Future.error(const DeviceExportError(
+        '外部への書き出しは利用できません。オフライン保存を使ってください'));
   }
 
   @override

@@ -1,0 +1,12 @@
+{
+  "name": "diff-check-final",
+  "cwd": "/workspace/r2-validation-0738bee",
+  "argv": [
+    "git",
+    "diff",
+    "--check"
+  ],
+  "utc": "2026-10-22T16:19:58.892800+00:00",
+  "exit": 0,
+  "seconds": 0.01
+}

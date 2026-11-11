@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:r2_gallery/src/api/client.dart';
@@ -111,16 +113,19 @@ class _TestApp extends AppState {
   _TestApp(ApiClient api) : super(api: api, bakedEndpoint: '', bakedToken: '');
   bool offlineOn = false;
   final saved = <(String, List<String>)>[];
+  Completer<void>? saveGate;
   @override
   bool get offlineSupported => offlineOn;
   @override
   Future<int> saveOffline(String fallbackLib, List<MediaItem> items) async {
     saved.add((fallbackLib, [for (final i in items) i.key]));
+    await saveGate?.future;
     return items.length;
   }
 }
 
 _TestApp _app(_Api api, {bool readOnly = false}) {
+  api.setConnection(const Connection('https://fixture.invalid', 'fixture-only'));
   final app = _TestApp(api);
   // #145 以降、未接続のシェルは接続画面を出すので、接続済みの状態から始める
   app.connected = true;
@@ -343,6 +348,50 @@ void main() {
       expect(find.text('1件をオフライン保存に追加しました'), findsOneWidget);
     });
 
+    for (final changeAccount in [true, false]) {
+      testWidgets(
+          'ライブラリ間の保存待ち中に${changeAccount ? 'アカウントを切り替えた' : 'ロックした'}ら後続を保存しない',
+          (tester) async {
+        final api = _Api({
+          '': FolderPage(items: [
+            _img('first.jpg', lib: 'a'),
+            _img('second.jpg', lib: 'b'),
+          ]),
+        });
+        final gate = Completer<void>();
+        final app = _app(api)
+          ..offlineOn = true
+          ..saveGate = gate;
+        final originalAccount = app.offlineAccountId;
+        await _pumpShell(tester, app);
+        await tester.longPress(_tile('first.jpg'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('すべて選択'));
+        await tester.pumpAndSettle();
+        expect(app.photosChrome.surface?.selectedCount, 2);
+        await tester.tap(find.text('オフライン'));
+        await tester.pump();
+        expect(app.saved, hasLength(1));
+
+        if (changeAccount) {
+          api.setConnection(
+              const Connection('https://fixture.invalid', 'other-fixture'));
+          expect(app.offlineAccountId, isNot(originalAccount));
+        } else {
+          app.locked = true;
+          expect(app.offlineAccessible, isFalse);
+        }
+        gate.complete();
+        await tester.pumpAndSettle();
+
+        expect(app.saved, hasLength(1));
+        expect(app.saved.single.$1, 'a');
+        expect(app.saved.single.$2, ['first.jpg']);
+        expect(find.text('2件をオフライン保存に追加しました'), findsNothing);
+        expect(find.text('1件をオフライン保存に追加しました'), findsNothing);
+      });
+    }
+
     testWidgets('ゴミ箱へ送ると「元に戻す」が出て、押すと trashKey で戻す', (tester) async {
       final api = _threeDays();
       await _pumpShell(tester, _app(api));
@@ -490,11 +539,11 @@ void main() {
       expect(find.text('1件をゴミ箱に移しました'), findsOneWidget);
     });
 
-    testWidgets('読み取り専用では書き換える項目を出さず、端末に保存だけ出す', (tester) async {
+    testWidgets('読み取り専用でもアプリ内オフラインだけ保存でき、外部へ書き出さない', (tester) async {
       final api = _threeDays();
       final exported = <String>[];
       final app = _app(api, readOnly: true)..offlineOn = true;
-      // 長押しの「端末に保存」は、ビューワーと同じ AppState.exportToDevice（#147）を通る
+      // 外部書き出し口が注入されても、個別メニューはアプリ内保存だけにする
       app.deviceExporter = _FakeExporter(api, exported);
       await _pumpShell(tester, app);
       await tester.longPress(_tile('t1.jpg'));
@@ -508,10 +557,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('このライブラリは読み取り専用です'), findsOneWidget);
       expect(find.text('アルバムに追加'), findsNothing);
-      await tester.tap(find.text('端末に保存'));
+      expect(find.text('端末に保存'), findsNothing);
+      await tester.tap(find.text('オフライン保存'));
       await tester.pumpAndSettle();
-      expect(exported, ['t2.jpg']);
-      expect(find.text('端末に保存しました'), findsOneWidget);
+      expect(app.saved, hasLength(1));
+      expect(app.saved.single.$1, 'a');
+      expect(app.saved.single.$2, ['t2.jpg']);
+      expect(exported, isEmpty);
+      expect(find.text('オフライン保存に追加しました'), findsOneWidget);
     });
   });
 

@@ -1,0 +1,12 @@
+{
+  "name": "analyze-crypto",
+  "cwd": "/workspace/r2-validation-0738bee/flutter",
+  "argv": [
+    "flutter",
+    "analyze",
+    "--no-pub"
+  ],
+  "utc": "2026-10-22T18:31:39.828660+00:00",
+  "exit": 1,
+  "seconds": 3.77
+}

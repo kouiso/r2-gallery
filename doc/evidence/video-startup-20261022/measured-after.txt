@@ -1,0 +1,12 @@
+UTC: 2026-10-22T18:33:25.776093+00:00
+CWD: /workspace/r2-validation-0738bee/flutter
+ARGV: ["flutter", "test", "--no-pub", "--concurrency=1", "--reporter", "expanded", "--dart-define=STARTUP_EVIDENCE_DIR=/workspace/r2-video-startup-evidence/probes", "--dart-define=STARTUP_EVIDENCE_VARIANT=after", "test/video_startup_probe_test.dart", "test/offline_video_startup_probe_test.dart"]
+
+00:00 +0: loading /workspace/r2-validation-0738bee/flutter/test/video_startup_probe_test.dart
+00:00 +0: /workspace/r2-validation-0738bee/flutter/test/video_startup_probe_test.dart: 同じ遅延注入で初回playまでの経路を記録 resourceContended=false
+00:02 +1: /workspace/r2-validation-0738bee/flutter/test/video_startup_probe_test.dart: 同じ遅延注入で初回playまでの経路を記録 resourceContended=true
+00:03 +2: loading /workspace/r2-validation-0738bee/flutter/test/offline_video_startup_probe_test.dart
+00:04 +2: /workspace/r2-validation-0738bee/flutter/test/offline_video_startup_probe_test.dart: 合成データで保存動画の認証復号と再生cache準備を測る（native decodeは含めない）
+00:11 +3: All tests passed!
+
+EXIT: 0

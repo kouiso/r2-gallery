@@ -2,7 +2,7 @@ name: r2_gallery
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+publish_to: "none" # Remove this line if you wish to publish to pub.dev
 
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
@@ -35,6 +35,8 @@ dependencies:
   shared_preferences: ^2.3.0
   flutter_secure_storage: ^11.2.0
   video_player: ^2.9.2
+  audio_session: 0.2.2
+  video_player_platform_interface: 6.9.0
   file_picker: ^13.1.0
   image: ^4.3.0
   crypto: ^3.0.5
@@ -46,6 +48,10 @@ dependencies:
   local_auth: ^3.0.1
   cryptography: ^2.9.0
   path_provider: ^2.1.6
+
+dependency_overrides:
+  video_player_avfoundation:
+    path: ../native_plugins/video_player_avfoundation
 
 dev_dependencies:
   flutter_test:
@@ -63,11 +69,20 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
-
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/fonts/OFL.txt
+  fonts:
+    - family: R2GalleryJP
+      fonts:
+        - asset: assets/fonts/R2GalleryJP-Regular.otf
+          weight: 400
+        - asset: assets/fonts/R2GalleryJP-Bold.otf
+          weight: 700
 
   # To add assets to your application, add an assets section, like this:
   # assets:
@@ -99,4 +114,3 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
-

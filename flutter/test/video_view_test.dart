@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -43,19 +44,37 @@ class _System implements PlayerSystem {
   Future<void> resetBrightness() async => resets++;
 }
 
+class _Video extends FakeVideo {
+  _Video({super.failInit});
+  bool failPlay = false;
+
+  @override
+  Future<void> play() async {
+    if (failPlay) throw StateError('synthetic playback start failure');
+    await super.play();
+  }
+}
+
+class _ForegroundApp extends AppState {
+  _ForegroundApp() : super(bakedEndpoint: '', bakedToken: '');
+  Completer<void>? gate;
+  @override
+  Future<void> get foregroundSettled => gate?.future ?? Future<void>.value();
+}
+
 class _Rig {
-  final videos = <FakeVideo>[];
+  final videos = <_Video>[];
   final system = _System();
   final controls = <bool>[];
   bool failFirst = false;
 
   VideoPlayerController make(String url) {
-    final v = FakeVideo(failInit: failFirst && videos.isEmpty);
+    final v = _Video(failInit: failFirst && videos.isEmpty);
     videos.add(v);
     return v;
   }
 
-  FakeVideo get video => videos.last;
+  _Video get video => videos.last;
 }
 
 Future<_Rig> _pump(
@@ -331,6 +350,114 @@ void main() {
     await _dispose(tester);
     expect(rig.system.resets, 1);
   });
+  for (final stop in ['lock', 'detached']) {
+    testWidgets('#196: 復帰判定を待っている間に$stopになったら自動再生しない', (tester) async {
+      final app = _ForegroundApp()..hasPin = true;
+      final rig = await _pump(tester, app: app);
+      final gate = Completer<void>();
+      app.gate = gate;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      expect(rig.video.value.isPlaying, isFalse);
+      if (stop == 'lock') {
+        expect(app.lockNow(), isTrue);
+      } else {
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.detached);
+      }
+      gate.complete();
+      await tester.pump();
+      expect(rig.video.value.isPlaying, isFalse);
+      expect(rig.video.plays, 1);
+      await _dispose(tester);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      app.dispose();
+    });
+  }
+
+  testWidgets('#196: 復帰判定が完了しロックされなかった時だけ自動再生する', (tester) async {
+    final app = _ForegroundApp();
+    final rig = await _pump(tester, app: app);
+    final gate = Completer<void>();
+    app.gate = gate;
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    expect(rig.video.value.isPlaying, isFalse);
+    gate.complete();
+    await tester.pump();
+    expect(rig.video.value.isPlaying, isTrue);
+    expect(rig.video.plays, 2);
+    await _dispose(tester);
+    app.dispose();
+  });
+
+  for (final replay in [false, true]) {
+    testWidgets('#196: 復帰判定中の手動${replay ? 'リプレイ' : '再生'}もロックを追い越さない',
+        (tester) async {
+      final app = _ForegroundApp()..hasPin = true;
+      final rig = await _pump(tester, app: app);
+      await rig.video.pause();
+      if (replay) {
+        rig.video.value = rig.video.value.copyWith(
+            isCompleted: true, position: const Duration(seconds: 60));
+      }
+      final before = rig.video.plays;
+      final gate = Completer<void>();
+      app.gate = gate;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      if (replay) {
+        await tester.tap(find.text('再生が終了しました'));
+      } else {
+        await tester.tap(find.byTooltip('再生').first);
+      }
+      await tester.pump();
+      expect(rig.video.plays, before);
+      expect(rig.video.seeks, isEmpty);
+      expect(app.lockNow(), isTrue);
+      gate.complete();
+      await tester.pump();
+      expect(rig.video.plays, before);
+      expect(rig.video.value.isPlaying, isFalse);
+      expect(rig.video.seeks, isEmpty);
+      expect(tester.takeException(), isNull);
+      await _dispose(tester);
+      app.dispose();
+    });
+  }
+
+  testWidgets('#196: 手動再生は復帰判定を通過すると一度だけ開始する', (tester) async {
+    final app = _ForegroundApp();
+    final rig = await _pump(tester, app: app);
+    await rig.video.pause();
+    final before = rig.video.plays;
+    final gate = Completer<void>();
+    app.gate = gate;
+    await tester.pump();
+    await tester.tap(find.byTooltip('再生').first);
+    await tester.pump();
+    expect(rig.video.plays, before);
+    gate.complete();
+    await tester.pump();
+    expect(rig.video.plays, before + 1);
+    expect(rig.video.value.isPlaying, isTrue);
+    await _dispose(tester);
+    app.dispose();
+  });
+
+  testWidgets('再生開始の非同期失敗は再試行に戻し、未処理のFutureにしない', (tester) async {
+    final rig = await _pump(tester);
+    await rig.video.pause();
+    rig.video.failPlay = true;
+    await tester.pump();
+    await tester.tap(find.byTooltip('再生').first);
+    await tester.pump();
+    expect(find.text('再生できませんでした'), findsOneWidget);
+    expect(rig.video.value.isPlaying, isFalse);
+    expect(tester.takeException(), isNull);
+    await _dispose(tester);
+  });
+
   testWidgets('#141: アプリがロックされたら再生を止める（PauseOnLock）', (tester) async {
     final app = AppState(bakedEndpoint: '', bakedToken: '')..hasPin = true;
     final rig = await _pump(tester, app: app);

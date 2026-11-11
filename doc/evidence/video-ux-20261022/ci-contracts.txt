@@ -1,0 +1,16 @@
+✔ full executes lint, worker typecheck, tests and security checks exactly once (207.088945ms)
+✔ fast runs the same command families as full (181.648593ms)
+✔ each command failure propagates its exit code and stops later phases (568.682512ms)
+✔ incremental secret scan preserves exact original base-parent to head scope (84.847517ms)
+✔ initial push uses full history and scan findings retain exit 2 (56.275828ms)
+✔ hygiene keeps environment input without putting secret values in commands (249.51622ms)
+✔ unknown phase fails closed (56.678276ms)
+✔ worker typecheck and test failures still stop full checks (382.272755ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1851.891643

@@ -7,7 +7,6 @@ import '../ui/write_guard_notice.dart';
 import '../ui/album_picker.dart';
 import '../ui/theme.dart';
 import '../ui/trash_undo.dart';
-import '../viewer/device_export.dart';
 import 'photos_chrome.dart';
 import 'selection_widgets.dart';
 
@@ -134,7 +133,12 @@ class MediaController extends ChangeNotifier implements SelectionSurface {
 
   Future<void> saveSelectedOffline(BuildContext context) async {
     // オフライン保存は #149 の転送キューに積む（暗号化して端末に置く）
-    if (!app.offlineSupported) return;
+    if (!app.offlineSupported || !app.offlineAccessible) return;
+    final account = app.offlineAccountId;
+    bool stillAuthorized() =>
+        account != null &&
+        app.offlineAccessible &&
+        app.offlineAccountId == account;
     final items = _selectedItems();
     final messenger = ScaffoldMessenger.of(context);
     g.clearSelection();
@@ -146,7 +150,10 @@ class MediaController extends ChangeNotifier implements SelectionSurface {
     try {
       var queued = 0;
       for (final e in byLib.entries) {
+        // 前の保存を待つ間の切替・ロック後に、別の資格で続きを積まない。
+        if (!stillAuthorized()) return;
         queued += await app.saveOffline(e.key, e.value);
+        if (!stillAuthorized()) return;
       }
       // 保存済み・積み済みは数えないので、0 件ならその旨を出す（#149 と同じ文言）
       messenger.showSnackBar(SnackBar(
@@ -164,8 +171,10 @@ class MediaController extends ChangeNotifier implements SelectionSurface {
   /// 1枚の個別メニュー。読み取り専用では書き換える項目を一切出さず、その旨を書く。
   Future<void> showItemMenu(BuildContext context, MediaItem item) async {
     final readOnly = this.readOnly;
-    // 端末への書き出しが無い環境（web 等）では項目ごと出さない
-    final export = app.deviceExportSupported;
+    final account = app.offlineAccountId;
+    final offline = app.offlineSupported;
+    final itemLib = item.lib ?? _lib;
+    final saved = app.isOffline(itemLib, item.key);
     final choice = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -179,10 +188,10 @@ class MediaController extends ChangeNotifier implements SelectionSurface {
                 'このライブラリは読み取り専用です',
                 style: TextStyle(color: AppColors.textDim),
               ),
-            if (export)
+            if (offline)
               TextButton(
-                onPressed: () => Navigator.of(ctx).pop('export'),
-                child: const Text('端末に保存'),
+                onPressed: () => Navigator.of(ctx).pop(saved ? 'offline-remove' : 'offline-save'),
+                child: Text(saved ? '保存済みを削除' : 'オフライン保存'),
               ),
             if (!readOnly) ...[
               TextButton(
@@ -207,21 +216,37 @@ class MediaController extends ChangeNotifier implements SelectionSurface {
         ],
       ),
     );
-    if (choice == null || !context.mounted) return;
-    final itemLib = item.lib ?? _lib;
+    if (choice == null || !context.mounted || account != app.offlineAccountId) return;
     switch (choice) {
-      case 'export':
-        String msg;
+      case 'offline-save':
         try {
-          await app.exportToDevice(item, lib: itemLib);
-          msg = '端末に保存しました';
-        } on DeviceExportError catch (e) {
-          msg = e.message;
-        } on ApiError catch (e) {
-          debugPrint('export failed: $e');
-          msg = '端末への保存に失敗しました';
+          final queued = await app.saveOffline(itemLib, [item]);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(
+                queued > 0 ? 'オフライン保存に追加しました' : '保存済み、または保存待ちです')));
+          }
+        } on Exception {
+          if (context.mounted) await _alert(context, 'オフライン保存に追加できませんでした');
         }
-        if (context.mounted) await _alert(context, msg);
+      case 'offline-remove':
+        final remove = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('このオフライン保存を削除しますか？'),
+            content: const Text('このアプリ内の保存だけを削除します。サーバー上の作品は消えません。'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('キャンセル')),
+              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('削除')),
+            ],
+          ),
+        );
+        if (remove == true && account == app.offlineAccountId) {
+          try {
+            await app.removeOffline(itemLib, item.key);
+          } on Exception {
+            if (context.mounted) await _alert(context, 'オフライン保存を削除できませんでした');
+          }
+        }
       case 'album':
         final outcome = await pickAlbumAndAdd(context, app,
             lib: itemLib, targets: [(itemLib, item.key)]);

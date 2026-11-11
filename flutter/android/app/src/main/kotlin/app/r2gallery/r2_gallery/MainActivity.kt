@@ -1,38 +1,25 @@
 package app.r2gallery.r2_gallery
 
-import android.Manifest
-import android.content.ContentValues
-import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.media.AudioManager
-import android.media.MediaScannerConnection
-import android.os.Build
 import android.os.Bundle
-import android.os.Environment
-import android.os.Handler
-import android.os.Looper
 import android.os.SystemClock
+<<<<<<< HEAD
 import android.provider.MediaStore
+=======
+>>>>>>> archive/integration/video-ux-main-20261022
 import android.provider.Settings
 import android.view.WindowManager
 import android.webkit.CookieManager
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterFragmentActivity
-import java.io.File
 import kotlin.math.roundToInt
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 // local_auth の BiometricPrompt は FragmentActivity にしか載せられない
 class MainActivity : FlutterFragmentActivity() {
-    // Android 9 以下で「端末に保存」の書き込み許可を尋ねた結果の受け口
-    private var pendingWritePermission: ((Boolean) -> Unit)? = null
-    private val writePermission =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            pendingWritePermission?.invoke(granted)
-            pendingWritePermission = null
-        }
-
+    private var playerBrightnessBefore: Float? = null
+    private var playerForeground = false
     // 転送中に最近使ったアプリの一覧から消されても Dart 側の取り込み・アップロードを続けるため、
     // エンジンは画面より長く生かす。次に開いた画面は同じエンジンにつなぎ直す
     // （新しいエンジンで2つ目の Dart を起こすと、台帳から同じ転送を二重に走らせてしまう）
@@ -53,43 +40,25 @@ class MainActivity : FlutterFragmentActivity() {
         if (SharedEngine.secureWindow) {
             window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
+        // 古いDartコードから呼ばれても、アプリ専用の保存を共有領域へ書き出さない。
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app.r2gallery/export")
-            .setMethodCallHandler { call, result ->
-                val path = call.argument<String>("path")
-                val name = call.argument<String>("name")
-                val mime = call.argument<String>("mime")
-                if (call.method != "save" || path == null || name == null || mime == null) {
-                    result.notImplemented()
-                    return@setMethodCallHandler
-                }
-                withWritePermission { granted ->
-                    if (!granted) {
-                        result.error("denied", "ストレージへのアクセスが許可されていません", null)
-                        return@withWritePermission
-                    }
-                    // 大きい動画のコピーで画面を固めないよう、書き込みは裏のスレッドで行う
-                    Thread {
-                        val err = try {
-                            saveToMediaStore(File(path), name, mime)
-                            null
-                        } catch (e: Exception) {
-                            e
-                        }
-                        Handler(Looper.getMainLooper()).post {
-                            if (err == null) {
-                                result.success(null)
-                            } else {
-                                result.error("failed", "端末への保存に失敗しました", err.toString())
-                            }
-                        }
-                    }.start()
-                }
+            .setMethodCallHandler { _, result ->
+                result.error("private_storage_only", "外部への書き出しは利用できません", null)
             }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app.r2gallery/player")
             .setMethodCallHandler { call, result ->
                 val audio = getSystemService(AudioManager::class.java)
                 val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
                 when (call.method) {
+                    "setKeepScreenOn" -> {
+                        val keep = call.arguments == true && playerForeground
+                        if (keep) {
+                            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                        } else {
+                            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                        }
+                        result.success(keep)
+                    }
                     "getVolume" -> result.success(
                         if (max > 0) audio.getStreamVolume(AudioManager.STREAM_MUSIC).toDouble() / max else null,
                     )
@@ -108,12 +77,35 @@ class MainActivity : FlutterFragmentActivity() {
                             }
                         }
                     }
+<<<<<<< HEAD
                     // この窓で上書き中ならその値、端末任せ（-1）なら端末がいま出している明るさを返す。
                     // 未設定を固定値に見立てると、ドラッグの最初の一動きで急に明るさが飛ぶ（#198）。
                     // 実際の値を読めない時（端末が自動調整中）は null を返し、実値のように見せない
                     "getBrightness" -> {
                         val b = window.attributes.screenBrightness
                         result.success(if (b >= 0f) b.toDouble() else deviceBrightness())
+=======
+                    "getBrightness" -> {
+                        val b = window.attributes.screenBrightness
+                        if (b >= 0f) {
+                            result.success(b.toDouble())
+                        } else {
+                            // 自動調整中は保存値と現在の明るさが違うため、推測して上書きしない。
+                            val value = try {
+                                val mode = Settings.System.getInt(contentResolver,
+                                    Settings.System.SCREEN_BRIGHTNESS_MODE)
+                                val raw = Settings.System.getInt(contentResolver,
+                                    Settings.System.SCREEN_BRIGHTNESS)
+                                if (mode == Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL && raw in 1..255)
+                                    raw.toDouble() / 255 else null
+                            } catch (_: Settings.SettingNotFoundException) {
+                                null
+                            } catch (_: SecurityException) {
+                                null
+                            }
+                            result.success(value)
+                        }
+>>>>>>> archive/integration/video-ux-main-20261022
                     }
                     // 端末が明るさを自動調整している間か。読めない理由を利用者へ伝えるために使う
                     "isAutoBrightness" -> result.success(isAutoBrightness())
@@ -123,6 +115,7 @@ class MainActivity : FlutterFragmentActivity() {
                             result.success(null)
                         } else {
                             val lp = window.attributes
+                            if (playerBrightnessBefore == null) playerBrightnessBefore = lp.screenBrightness
                             lp.screenBrightness = v.toFloat()
                             window.attributes = lp
                             result.success(v)
@@ -130,8 +123,10 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                     "resetBrightness" -> {
                         val lp = window.attributes
-                        lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                        lp.screenBrightness = playerBrightnessBefore
+                            ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
                         window.attributes = lp
+                        playerBrightnessBefore = null
                         result.success(null)
                     }
                     else -> result.notImplemented()
@@ -173,12 +168,35 @@ class MainActivity : FlutterFragmentActivity() {
         TransferBridge.register(this, flutterEngine.dartExecutor.binaryMessenger)
     }
 
+    override fun onResume() {
+        super.onResume()
+        playerForeground = true
+    }
+
+    override fun onPause() {
+        playerForeground = false
+        // 電源ボタン・他アプリへの移動を妨げず、Dart の通知が遅れても窓の保持を外す。
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        super.onPause()
+    }
+
+    override fun onPictureInPictureModeChanged(inPip: Boolean, configuration: Configuration) {
+        super.onPictureInPictureModeChanged(inPip, configuration)
+        PlaybackBridge.pipChanged(inPip)
+    }
+
+    override fun onStop() {
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        super.onStop()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         // 回転などで作り直すだけの時はエンジンをそのまま次の画面へ渡す
         if (!isChangingConfigurations) SharedEngine.detach(this)
     }
 
+<<<<<<< HEAD
     // 端末がいま画面に出している明るさ（0.0〜1.0）。実際の値を読めなければ null。
     // 設定値（SCREEN_BRIGHTNESS）は手動で決めた明るさで、自動調整中に画面が出している値とは別物。
     // 自動調整中の実際の値を読む公開 API は無いので、その間は読めないものとして返す（#198）
@@ -270,4 +288,6 @@ class MainActivity : FlutterFragmentActivity() {
             throw e
         }
     }
+=======
+>>>>>>> archive/integration/video-ux-main-20261022
 }

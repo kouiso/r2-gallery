@@ -1,0 +1,15 @@
+{
+  "name": "full",
+  "cwd": "/workspace/r2-validation-0738bee/flutter",
+  "argv": [
+    "flutter",
+    "test",
+    "--no-pub",
+    "--concurrency=1",
+    "--reporter",
+    "expanded"
+  ],
+  "utc": "2026-10-22T18:58:20.805491+00:00",
+  "exit": 0,
+  "seconds": 292.62
+}

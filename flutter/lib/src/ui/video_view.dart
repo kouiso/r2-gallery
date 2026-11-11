@@ -5,20 +5,27 @@ import 'package:video_player/video_player.dart';
 
 import '../viewer/level_gesture.dart';
 import '../viewer/player_system.dart';
+import '../viewer/screen_awake.dart';
 import 'app_lock_layer.dart';
+<<<<<<< HEAD
 import 'video_levels.dart';
 import 'video_seek_bar.dart';
+=======
+import '../playback/mobile_playback.dart';
+import '../playback/playback_session.dart';
+import '../playback/playback_menu.dart';
+>>>>>>> archive/integration/video-ux-main-20261022
 
 typedef VideoControllerFactory = VideoPlayerController Function(String url);
 
 VideoPlayerController _networkController(String url) =>
-    VideoPlayerController.networkUrl(Uri.parse(url));
+    VideoPlayerController.networkUrl(Uri.parse(url), videoPlayerOptions: MobilePlayback.options());
 
 /// 何も触らなければ操作バーを隠すまでの時間（KMP版と同じ 3.5 秒）。
 const controlsAutoHide = Duration(milliseconds: 3500);
 
 /// ビューワー内の動画。KMP版 VideoSurface（Android）と同じ作法:
-/// タップで操作バーの開閉、左右ダブルタップで±10秒、左半分の縦ドラッグで明るさ・右半分で音量、
+/// タップで操作バーの開閉、左右ダブルタップで±10秒、明示したパネルから明るさ・動画の音量、
 /// 操作ロック、読み込み中の表示、一時停止中の中央アイコン、終了時のリプレイ、失敗時のリトライ。
 /// 明るさ・音量は隠れたジェスチャーだけに頼らず、操作バーの「明るさ・音量」からスライダーでも変えられる（#198）。
 class VideoView extends StatefulWidget {
@@ -35,6 +42,9 @@ class VideoView extends StatefulWidget {
 
   final VideoControllerFactory controllerFactory;
   final PlayerSystem system;
+  final ScreenAwakeCoordinator? screenAwake;
+  final PlaybackCoordinator? playbackCoordinator;
+  final String? playbackLibrary;
 
   VideoView({
     super.key,
@@ -44,20 +54,32 @@ class VideoView extends StatefulWidget {
     this.onControlsVisibleChange,
     VideoControllerFactory? controllerFactory,
     PlayerSystem? system,
+<<<<<<< HEAD
   }) : controllerFactory = controllerFactory ?? _networkController,
        system = system ?? PlatformPlayerSystem();
+=======
+    this.screenAwake,
+    this.playbackCoordinator,
+    this.playbackLibrary,
+  })  : controllerFactory = controllerFactory ?? _networkController,
+        system = system ?? PlatformPlayerSystem();
+>>>>>>> archive/integration/video-ux-main-20261022
 
   @override
   State<VideoView> createState() => _VideoViewState();
 }
 
-enum _DragTarget { volume, brightness }
-
 class _VideoViewState extends State<VideoView>
     with WidgetsBindingObserver, PauseOnLock {
   late VideoPlayerController _c;
+  PlaybackBinding? _playback;
+  final _surfaceKey = GlobalKey();
+  PlaybackSession? get _session => _playback?.session;
+  bool get _pipMode => (_session?.pip ?? false) || (_session?.pipPending ?? false);
   bool _initFailed = false;
   bool _started = false;
+  bool _initializing = false;
+  Duration _resumePosition = Duration.zero;
   bool _controls = true;
   bool _locked = false;
   Timer? _hideTimer;
@@ -65,12 +87,21 @@ class _VideoViewState extends State<VideoView>
 
   bool _seeking = false;
 
+<<<<<<< HEAD
   _DragTarget? _drag;
   LevelGesture? _gesture;
   double _dragDy = 0;
   double _lastDragSet = -1;
   int? _volumePct;
   int? _brightPct;
+=======
+  bool _adjustments = false;
+  bool _brightnessLoading = false;
+  bool _brightnessBusy = false;
+  double? _brightness;
+  String? _brightnessError;
+  int _brightnessRead = 0;
+>>>>>>> archive/integration/video-ux-main-20261022
   bool _touchedBrightness = false;
   // 画面に出す明るさ・音量。端末から読めた実値だけを入れる（読めなければ null）
   double? _volume;
@@ -94,6 +125,7 @@ class _VideoViewState extends State<VideoView>
   bool _wasPlaying = false;
   // 初期化が終わる前に背面へ回ることがあるので、コントローラの状態と別に覚えておく
   bool _background = false;
+  int _resumeGeneration = 0;
 
   @override
   void initState() {
@@ -110,7 +142,7 @@ class _VideoViewState extends State<VideoView>
   void _reportControlsAfterFrame() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && widget.active) {
-        widget.onControlsVisibleChange?.call(_controls);
+        widget.onControlsVisibleChange?.call(_controls && !_pipMode && !(_session?.closed ?? false));
       }
     });
   }
@@ -119,9 +151,15 @@ class _VideoViewState extends State<VideoView>
     _seeking = false;
     final c = widget.controllerFactory(widget.url);
     _c = c;
+    _playback = PlaybackBinding.attach(controller: c,
+      app: AppLockScope.maybeOf(context), library: widget.playbackLibrary,
+      coordinator: widget.playbackCoordinator);
+    _session?.addListener(_onPlaybackChanged);
     _initFailed = false;
     _started = false;
+    _initializing = false;
     c.addListener(_onTick);
+<<<<<<< HEAD
     c
         .initialize()
         .then((_) {
@@ -135,6 +173,38 @@ class _VideoViewState extends State<VideoView>
           setState(() => _initFailed = true);
           _setControls(true);
         });
+=======
+    // PageViewの隣ページは準備だけに留め、可視動画のdecoder所有権を奪わない。
+    if (_session == null || widget.active) _initializeController(c);
+  }
+
+  void _initializeController(VideoPlayerController c) {
+    if (_initializing) return;
+    _initializing = true;
+    (_session?.initialize() ?? c.initialize()).then<void>((_) async {
+      if (!mounted || c != _c) return;
+      if (_resumePosition > Duration.zero) {
+        await c.seekTo(_resumePosition);
+      }
+    }).then((_) {
+      if (!mounted || c != _c) return;
+      setState(() {});
+      _maybeStart();
+    }).catchError((Object _) {
+      debugPrint('video initialization failed');
+      if (!mounted || c != _c) return;
+      setState(() => _initFailed = true);
+      _setControls(true);
+    });
+>>>>>>> archive/integration/video-ux-main-20261022
+  }
+
+  void _onPlaybackChanged() {
+    if (!mounted) return;
+    setState(() {});
+    if (widget.active) {
+      widget.onControlsVisibleChange?.call(_controls && !_pipMode && !(_session?.closed ?? false));
+    }
   }
 
   // ロック中や裏のページで読み込みが終わった時は、見えない所で音だけ流さないよう始めない
@@ -147,14 +217,66 @@ class _VideoViewState extends State<VideoView>
       _wasPlaying = true;
       return;
     }
-    _c.play();
+    unawaited(_resumeAfterForeground(_c, ++_resumeGeneration));
+  }
+
+  Future<void> _resumeAfterForeground(VideoPlayerController controller, int generation,
+      {bool replay = false}) async {
+    bool mayPlay() {
+      if (!mounted || controller != _c || generation != _resumeGeneration ||
+          !widget.active || _background || isAppLocked ||
+          !controller.value.isInitialized) {
+        return false;
+      }
+      final life = WidgetsBinding.instance.lifecycleState;
+      return life == null || life == AppLifecycleState.resumed;
+    }
+
+    if (!mayPlay()) return;
+    final app = AppLockScope.maybeOf(context);
+    try {
+      if (app != null) {
+        // 同じ復帰通知を受ける外側の監視役が、ロック判定を始めるまで待つ。
+        await Future<void>.value();
+        await app.foregroundSettled;
+      }
+      // 手動の再生・リプレイも、復帰時の認証判定を追い越さない。
+      if (!mayPlay()) return;
+      if (replay) {
+        await controller.seekTo(Duration.zero);
+        if (!mayPlay()) return;
+      }
+      final session = _session;
+      if (session != null) {
+        await session.play();
+      } else {
+        await controller.play();
+      }
+    } catch (_) {
+      // 再生開始の非同期失敗を外へ漏らさず、現在のプレイヤーにだけ再試行を出す。
+      if (mayPlay()) {
+        try {
+          await controller.pause();
+        } catch (_) {
+          // 再生器自身が壊れている場合も、再試行の表示へ戻す。
+        }
+        if (!mayPlay()) return;
+        setState(() => _initFailed = true);
+        _setControls(true);
+      }
+    }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.detached) {
+    final session = _session;
+    if (session != null) {
       _background = state != AppLifecycleState.resumed;
+      _resumeGeneration++;
+      unawaited(session.lifecycle(state));
+      return;
     }
+<<<<<<< HEAD
     switch (state) {
       case AppLifecycleState.inactive:
       case AppLifecycleState.hidden:
@@ -166,6 +288,10 @@ class _VideoViewState extends State<VideoView>
       case AppLifecycleState.detached:
         break;
     }
+=======
+    _background = state != AppLifecycleState.resumed;
+    if (_background) _resumeGeneration++;
+>>>>>>> archive/integration/video-ux-main-20261022
     if (!_c.value.isInitialized) return;
     switch (state) {
       case AppLifecycleState.inactive:
@@ -178,10 +304,13 @@ class _VideoViewState extends State<VideoView>
         }
       case AppLifecycleState.resumed:
         // ロック中に戻った時は鳴らさない（解除後に自分で再生する）
-        if (_wasPlaying && mounted && widget.active && !isAppLocked) _c.play();
+        if (_wasPlaying && mounted && widget.active && !isAppLocked) {
+          unawaited(_resumeAfterForeground(_c, ++_resumeGeneration));
+        }
         _wasPlaying = false;
       case AppLifecycleState.detached:
-        break;
+        _wasPlaying = false;
+        _c.pause();
     }
   }
 
@@ -209,6 +338,7 @@ class _VideoViewState extends State<VideoView>
     if (_controls != v) {
       setState(() {
         _controls = v;
+<<<<<<< HEAD
         if (!v) {
           _seeking = false;
           _closePanel();
@@ -216,12 +346,19 @@ class _VideoViewState extends State<VideoView>
       });
     }
     if (widget.active) widget.onControlsVisibleChange?.call(v);
+=======
+        if (!v) _adjustments = false;
+      });
+    }
+    if (widget.active) widget.onControlsVisibleChange?.call(v && !_pipMode);
+>>>>>>> archive/integration/video-ux-main-20261022
     _scheduleHide();
   }
 
   /// 再生中に操作バーを出したままにしない。条件が変わった時だけ数え直す（位置更新のたびには延ばさない）。
   void _scheduleHide({bool restart = false}) {
     final playing = _c.value.isPlaying;
+<<<<<<< HEAD
     final key = (_controls, playing, _ended, _locked, _panelOpen, _seeking);
     if (!restart && key == _hideKey) return;
     _hideKey = key;
@@ -232,6 +369,13 @@ class _VideoViewState extends State<VideoView>
         !_locked &&
         !_panelOpen &&
         !_seeking) {
+=======
+    final key = (_controls, playing, _ended, _locked, _adjustments, _seeking);
+    if (!restart && key == _hideKey) return;
+    _hideKey = key;
+    _hideTimer?.cancel();
+    if (_controls && playing && !_ended && !_locked && !_adjustments && !_seeking) {
+>>>>>>> archive/integration/video-ux-main-20261022
       _hideTimer = Timer(controlsAutoHide, () {
         if (mounted) _setControls(false);
       });
@@ -240,7 +384,12 @@ class _VideoViewState extends State<VideoView>
 
   @override
   void onLocked() {
-    _c.pause();
+    _resumeGeneration++;
+    if (_session != null) {
+      unawaited(_session!.stop());
+    } else {
+      _c.pause();
+    }
     // 解除後に勝手に鳴り出さんよう、背面から戻った時の再開の印も消す
     _wasPlaying = false;
   }
@@ -249,11 +398,35 @@ class _VideoViewState extends State<VideoView>
   void didUpdateWidget(VideoView old) {
     super.didUpdateWidget(old);
     if (old.url != widget.url) {
+      _resumeGeneration++;
+      _resumePosition = Duration.zero;
       _disposeController();
       _create();
       return;
     }
-    if (!widget.active && _c.value.isPlaying) _c.pause();
+    if (_session != null && old.active != widget.active) {
+      _resumeGeneration++;
+      if (!widget.active) {
+        _resumePosition = _c.value.position;
+        _disposeController();
+        _create();
+      } else {
+        if (_session!.closed) {
+          _disposeController();
+          _create();
+        } else {
+          _initializeController(_c);
+        }
+        _reportControlsAfterFrame();
+      }
+      return;
+    }
+    if (!widget.active) {
+      _resumeGeneration++;
+      if (_c.value.isPlaying) {
+        if (_session != null) { unawaited(_session!.pause()); } else { _c.pause(); }
+      }
+    }
     if (widget.active && !old.active) {
       _maybeStart();
       _reportControlsAfterFrame();
@@ -262,11 +435,19 @@ class _VideoViewState extends State<VideoView>
 
   void _disposeController() {
     _c.removeListener(_onTick);
-    _c.dispose();
+    final playback = _playback;
+    _playback = null;
+    if (playback != null) {
+      playback.session.removeListener(_onPlaybackChanged);
+      unawaited(playback.close());
+    } else {
+      _c.dispose();
+    }
   }
 
   @override
   void dispose() {
+    _resumeGeneration++;
     WidgetsBinding.instance.removeObserver(this);
     _hideTimer?.cancel();
     _syncTimer?.cancel();
@@ -280,7 +461,7 @@ class _VideoViewState extends State<VideoView>
     if (!_c.value.isInitialized) return;
     final dur = _c.value.duration;
     final t = d < Duration.zero ? Duration.zero : (d > dur ? dur : d);
-    _c.seekTo(t);
+    if (_session != null) { unawaited(_session!.seek(t)); } else { _c.seekTo(t); }
     _scheduleHide(restart: true);
   }
 
@@ -288,18 +469,22 @@ class _VideoViewState extends State<VideoView>
       _seekTo(_c.value.position + Duration(seconds: seconds));
 
   void _togglePlay() {
-    if (_c.value.isPlaying) {
-      _c.pause();
+    final generation = ++_resumeGeneration;
+    _wasPlaying = false;
+    if (_c.value.isPlaying || (_session?.hasPlayIntent ?? false)) {
+      if (_session != null) { unawaited(_session!.pause()); } else { _c.pause(); }
     } else {
       _started = true;
-      _c.play();
+      unawaited(_resumeAfterForeground(_c, generation));
     }
     _scheduleHide(restart: true);
   }
 
   void _replay() {
-    _c.seekTo(Duration.zero);
-    _c.play();
+    final generation = ++_resumeGeneration;
+    _wasPlaying = false;
+    _started = true;
+    unawaited(_resumeAfterForeground(_c, generation, replay: true));
   }
 
   void _retry() {
@@ -308,6 +493,8 @@ class _VideoViewState extends State<VideoView>
   }
 
   void _lockControls() {
+    _resumeGeneration++;
+    _wasPlaying = false;
     setState(() => _locked = true);
     _setControls(false);
   }
@@ -317,6 +504,7 @@ class _VideoViewState extends State<VideoView>
     _setControls(true);
   }
 
+<<<<<<< HEAD
   // ---- 明るさ・音量（ドラッグとスライダー） ----
 
   /// 端末の値を読む。音量が端末から読めない環境ではこの動画の音量を使う。
@@ -509,14 +697,74 @@ class _VideoViewState extends State<VideoView>
   void _dragEnd() {
     _drag = null;
     _gesture = null;
+=======
+  // ---- 明示したパネルからだけ明るさ・音量を調整する ----
+
+  void _toggleAdjustments() {
+    setState(() => _adjustments = !_adjustments);
+    _scheduleHide(restart: true);
+    if (_adjustments) unawaited(_readBrightness());
+  }
+
+  Future<void> _readBrightness() async {
+    // 設定の確定前に取り直すと、遅い旧値で表示と次の変更の起点が戻る。
+    if (_brightnessBusy) return;
+    final request = ++_brightnessRead;
     setState(() {
-      _volumePct = null;
-      _brightPct = null;
+      _brightnessLoading = true;
+      _brightnessError = null;
+    });
+    double? value;
+    try {
+      value = await widget.system.brightness();
+    } catch (_) {
+      // 読めない明るさを推測して上書きすると、操作前より突然明るくなる。
+    }
+    if (!mounted || request != _brightnessRead) return;
+    final current = value;
+    setState(() {
+      _brightnessLoading = false;
+      _brightness = current != null && current.isFinite && current >= 0 && current <= 1
+          ? current : null;
+      if (_brightness == null) {
+        _brightnessError = '現在の明るさを確認できません。端末側で調整してください（自動調整中など）。';
+      }
+    });
+  }
+
+  Future<void> _setBrightness(double target) async {
+    final base = _brightness;
+    if (base == null || _brightnessLoading || _brightnessBusy) return;
+    // トラックの遠い所を押しても一度に跳ね上げず、確認済みの値から5ポイントずつ動かす。
+    final next = target.clamp(base - 0.05, base + 0.05).clamp(0.02, 1.0).toDouble();
+    setState(() => _brightnessBusy = true);
+    _touchedBrightness = true;
+    double? actual;
+    try {
+      actual = await widget.system.setBrightness(next);
+    } catch (_) {
+      // 設定できなかった値を、設定済みとして画面に出さない。
+    }
+    if (!mounted) return;
+    final current = actual;
+>>>>>>> archive/integration/video-ux-main-20261022
+    setState(() {
+      _brightnessBusy = false;
+      if (current != null && current.isFinite && current >= 0 && current <= 1) {
+        _brightness = current;
+      } else {
+        _brightness = null;
+        _brightnessError = '明るさを変更できませんでした。端末側で調整してください。';
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_session?.closed ?? false) {
+      return const ColoredBox(color: Colors.black,
+        child: Center(child: Text('再生を終了しました。接続を確認して一覧から開き直してください。')));
+    }
     final v = _c.value;
     final initialized = v.isInitialized;
     final playing = v.isPlaying;
@@ -524,6 +772,7 @@ class _VideoViewState extends State<VideoView>
     final ended = _ended;
     final buffering = _buffering;
 
+<<<<<<< HEAD
     return LayoutBuilder(
       builder: (context, box) {
         return Stack(
@@ -692,6 +941,182 @@ class _VideoViewState extends State<VideoView>
           ],
         );
       },
+=======
+    final content = LayoutBuilder(builder: (context, box) {
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          ColoredBox(
+            color: Colors.black,
+            child: initialized
+                ? Center(
+                    child: AspectRatio(
+                      aspectRatio: v.aspectRatio,
+                      child: VideoPlayer(_c),
+                    ),
+                  )
+                : const SizedBox.expand(),
+          ),
+          if (!_locked && !_pipMode)
+            GestureDetector(
+              key: const ValueKey('video-gestures'),
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _setControls(!_controls),
+              onDoubleTapDown: (d) => _doubleTapAt = d.localPosition,
+              onDoubleTap: () {
+                final at = _doubleTapAt;
+                if (at == null) return;
+                _skip(at.dx > box.maxWidth / 2 ? 10 : -10);
+              },
+            ),
+          if (buffering)
+            const Center(
+              child: SizedBox(
+                width: 50,
+                height: 50,
+                child: CircularProgressIndicator(
+                    key: ValueKey('video-buffering'), color: Colors.white),
+              ),
+            ),
+          if (initialized && !playing && !ended && !failed && !buffering && !_pipMode && !(_session?.hasPlayIntent ?? false))
+            Center(
+              child: IconButton(
+                key: const ValueKey('video-center-play'),
+                tooltip: '再生',
+                iconSize: 72,
+                icon: Icon(Icons.play_arrow,
+                    color: Colors.white.withValues(alpha: 0.9)),
+                onPressed: _togglePlay,
+              ),
+            ),
+          if (failed)
+            _Overlay(
+              text: '再生できませんでした',
+              icon: Icons.replay,
+              label: 'リトライ',
+              onTap: _retry,
+            ),
+          if (ended && !failed)
+            _Overlay(
+              text: '再生が終了しました',
+              icon: Icons.replay,
+              label: 'リプレイ',
+              onTap: _replay,
+            ),
+          if (_controls && initialized && !ended && !failed && !_locked && !_pipMode)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: widget.bottomInset,
+              child: SafeArea(
+                top: false,
+                // 親の作品操作バーがある時は、その高さに下端の安全領域も含まれる。
+                bottom: widget.bottomInset == 0,
+                child: _controlBar(v),
+              ),
+            ),
+          if (_locked && !_pipMode)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: widget.bottomInset,
+              child: SafeArea(
+                top: false,
+                bottom: widget.bottomInset == 0,
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: IconButton(
+                      tooltip: '解除',
+                      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                      icon: const Icon(Icons.lock, color: Colors.white),
+                      onPressed: _unlockControls,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      );
+    });
+    return PlaybackScreenAwake(
+      key: _surfaceKey,
+      controller: _c,
+      active: widget.active && !_background && !isAppLocked,
+      coordinator: widget.screenAwake,
+      child: content,
+    );
+  }
+
+  Widget _controlButton(String label, IconData icon, VoidCallback onPressed,
+      {double iconSize = 24}) => SizedBox.square(
+        dimension: 48,
+        child: IconButton(
+          tooltip: label,
+          iconSize: iconSize,
+          padding: const EdgeInsets.all(4),
+          icon: Icon(icon, color: Colors.white),
+          onPressed: onPressed,
+        ),
+      );
+
+  Widget _adjustmentPanel(VideoPlayerValue v) {
+    final media = MediaQuery.of(context);
+    final height = (media.size.height - widget.bottomInset - media.padding.top - 300)
+        .clamp(64.0, 240.0).toDouble();
+    final brightness = _brightness;
+    final volume = v.volume.clamp(0.0, 1.0).toDouble();
+    const text = TextStyle(color: Colors.white, fontSize: 12);
+    return Container(
+      key: const ValueKey('video-adjustments'),
+      color: const Color(0xE6000000),
+      constraints: BoxConstraints(maxHeight: height),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(children: [
+              const Expanded(child: Text('明るさ・音量', style: text)),
+              _controlButton('調整を閉じる', Icons.close, _toggleAdjustments),
+            ]),
+            Text('この動画の音量 ${(volume * 100).round()}%', style: text),
+            Semantics(
+              label: 'この動画の音量',
+              child: Slider(
+                key: const ValueKey('video-volume-slider'),
+                value: volume,
+                divisions: 100,
+                semanticFormatterCallback: (x) => '${(x * 100).round()}%',
+                onChanged: (x) => unawaited(_c.setVolume(x)),
+              ),
+            ),
+            Text(_brightnessLoading
+                ? 'この画面の明るさを確認中…'
+                : 'この画面の明るさ ${brightness == null ? '不明' : '${(brightness * 100).round()}%'}',
+                style: text),
+            Semantics(
+              label: 'この画面の明るさ',
+              child: Slider(
+                key: const ValueKey('video-brightness-slider'),
+                value: brightness?.clamp(0.02, 1.0).toDouble() ?? 0.02,
+                min: 0.02,
+                divisions: 98,
+                semanticFormatterCallback: (x) => _brightnessLoading
+                    ? '確認中'
+                    : brightness == null ? '現在値不明' : '${(x * 100).round()}%',
+                onChanged: brightness == null || _brightnessLoading || _brightnessBusy
+                    ? null : (x) => unawaited(_setBrightness(x)),
+              ),
+            ),
+            Text(_brightnessError ?? '明るさは少しずつ変更します。動画を閉じると元に戻ります。',
+                style: text),
+          ],
+        ),
+      ),
+>>>>>>> archive/integration/video-ux-main-20261022
     );
   }
 
@@ -699,6 +1124,7 @@ class _VideoViewState extends State<VideoView>
     final pos = v.position;
     final dur = v.duration;
     return Container(
+      key: const ValueKey('video-controls'),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.bottomCenter,
@@ -707,6 +1133,7 @@ class _VideoViewState extends State<VideoView>
         ),
       ),
       padding: const EdgeInsets.only(bottom: 6),
+<<<<<<< HEAD
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -772,6 +1199,86 @@ class _VideoViewState extends State<VideoView>
           ),
         ],
       ),
+=======
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        if (_session?.message != null)
+          Padding(padding: const EdgeInsets.all(8), child: Text(_session!.message!,
+            style: const TextStyle(color: Colors.white, fontSize: 12))),
+        if (_adjustments) _adjustmentPanel(v),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 13),
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            spacing: 8,
+            children: [
+              Text(fmtDuration(shown),
+                  style: const TextStyle(color: Colors.white, fontSize: 12)),
+              Text(fmtDuration(dur),
+                  style: const TextStyle(color: Colors.white, fontSize: 12)),
+            ],
+          ),
+        ),
+        Slider(
+          value: (_seeking ? _seekTarget : pos.inMilliseconds.toDouble())
+              .clamp(0, max < 1 ? 1 : max),
+          max: max < 1 ? 1 : max,
+          activeColor: Colors.white,
+          inactiveColor: Colors.white30,
+          onChanged: (x) {
+            setState(() {
+              _seeking = true;
+              _seekTarget = x;
+            });
+            _scheduleHide();
+          },
+          onChangeEnd: (x) {
+            _seekTo(Duration(milliseconds: x.round()));
+            setState(() => _seeking = false);
+            _scheduleHide(restart: true);
+          },
+        ),
+        LayoutBuilder(builder: (context, box) {
+          final adjustmentWidth = box.maxWidth < 272
+              ? (box.maxWidth - 48).clamp(80.0, 180.0).toDouble() : 80.0;
+          final buttons = <Widget>[
+            _controlButton('ロック', Icons.lock_open, _lockControls),
+            _controlButton('-10秒', Icons.replay_10, () => _skip(-10)),
+            _controlButton(v.isPlaying || (_session?.hasPlayIntent ?? false) ? '一時停止' : '再生',
+                v.isPlaying || (_session?.hasPlayIntent ?? false) ? Icons.pause : Icons.play_arrow, _togglePlay,
+                iconSize: 40),
+            _controlButton('+10秒', Icons.forward_10, () => _skip(10)),
+            SizedBox(
+              width: adjustmentWidth,
+              child: TextButton(
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(48, 48),
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                ),
+                onPressed: _toggleAdjustments,
+                child: const Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.tune, size: 18),
+                    Text('明るさ・音量', textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 12)),
+                  ],
+                ),
+              ),
+            ),
+            if (_session != null) SizedBox.square(dimension: 48,
+              child: PlaybackMenu(session: _session!, surfaceKey: _surfaceKey)),
+          ];
+          if (box.maxWidth < (_session == null ? 272 : 320)) {
+            return Wrap(alignment: WrapAlignment.center, children: buttons);
+          }
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: buttons,
+          );
+        }),
+      ]),
+>>>>>>> archive/integration/video-ux-main-20261022
     );
   }
 }

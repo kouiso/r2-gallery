@@ -2,13 +2,13 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 import '../api/models.dart';
 import '../api/review_meta.dart';
 import '../state/app_state.dart';
 import '../state/write_guard.dart';
-import '../viewer/device_export.dart';
 import '../grid/day_label.dart';
 import '../viewer/viewer_format.dart';
 import 'media_tile.dart';
@@ -18,24 +18,48 @@ import 'video_view.dart';
 import 'write_guard_notice.dart';
 import 'viewer_pages.dart';
 import 'album_picker.dart';
+import 'viewer_footer.dart';
 
 /// オフライン保存（暗号化したアプリ内の保存）の口。持っている画面だけが渡す。
-/// 渡されなければビューワーの「オフライン」ボタンは出さない。
+/// 渡されなければビューワーの「オフライン保存」ボタンは出さない。
 class OfflineHooks {
   final bool Function(String lib, MediaItem item) isSaved;
   final Future<void> Function(String lib, MediaItem item) save;
-  const OfflineHooks({required this.isSaved, required this.save});
+  final Future<void> Function(String lib, MediaItem item)? remove;
+  final bool Function(String lib, MediaItem item)? isPending;
+  final bool Function()? canUse;
+  final Listenable? changes;
+  const OfflineHooks({
+    required this.isSaved,
+    required this.save,
+    this.remove,
+    this.isPending,
+    this.canUse,
+    this.changes,
+  });
 }
 
 /// #149 のオフライン保存につなぐ口。暗号化して端末に置けない環境（web）では出さない。
-OfflineHooks? offlineHooksFor(AppState app) => app.offlineSupported
-    ? OfflineHooks(
-        isSaved: (lib, item) => app.isOffline(lib, item.key),
+OfflineHooks? offlineHooksFor(AppState app) {
+  if (!app.offlineSupported) return null;
+  final account = app.offlineAccountId;
+  bool sameAccount() => app.offlineAccountId == account;
+  return OfflineHooks(
+        canUse: () => sameAccount() && app.offlineAccessible,
+        changes: Listenable.merge([app, app.offline, app.transfers]),
+        isSaved: (lib, item) => sameAccount() && app.isOffline(lib, item.key),
+        isPending: (lib, item) =>
+            sameAccount() && app.isOfflinePending(lib, item.key),
         save: (lib, item) async {
+          if (!sameAccount()) throw StateError('保存先のアカウントが変わりました');
           await app.saveOffline(lib, [item]);
         },
-      )
-    : null;
+        remove: (lib, item) async {
+          if (!sameAccount()) throw StateError('保存先のアカウントが変わりました');
+          await app.removeOffline(lib, item.key);
+        },
+      );
+}
 
 /// 一覧からビューワーを開く。閉じた時にゴミ箱へ送っていたら「元に戻す」を出して [onChanged] を呼ぶ。
 Future<void> openViewer(
@@ -78,7 +102,7 @@ Future<void> openViewer(
 }
 
 /// 全画面ビューワー（KMP版 ViewerOverlay と同じ構成）。スワイプで前後、タップで上下バーの開閉、
-/// 上バーに日時と「N件目」、写真のメモ、下の操作バー（情報／オフライン／端末に保存／アルバムへ／ゴミ箱へ）。
+/// 上バーに日時と「N件目」、写真のメモ、下の作品操作（情報／オフライン保存／アルバムへ／ゴミ箱へ）。
 class ViewerScreen extends StatefulWidget {
   final AppState app;
   final String lib;
@@ -117,9 +141,6 @@ class ViewerScreen extends StatefulWidget {
   State<ViewerScreen> createState() => _ViewerScreenState();
 }
 
-/// 下の操作バーの高さ。動画の再生バーをこの上に出す。
-const viewerActionBarHeight = 76.0;
-
 class _ViewerScreenState extends State<ViewerScreen>
     with ZoomEdgePaging<ViewerScreen> {
   late final PageController _pager;
@@ -127,11 +148,12 @@ class _ViewerScreenState extends State<ViewerScreen>
   late int _index;
   bool _chrome = true;
   bool _busy = false;
-  bool _exporting = false;
+  bool _saveRequested = false;
   bool _saved = false;
   // 情報シートは開いた後に講評が届いても描き直せるよう、通知で渡す（#113）
   final _review = ValueNotifier<ReviewLoad>(const ReviewLoad.loading());
   int _metaRequest = 0;
+  bool _reviewRequested = false;
   final DateTime _now = DateTime.now();
 
   @override
@@ -147,15 +169,39 @@ class _ViewerScreenState extends State<ViewerScreen>
     _pager = PageController(initialPage: _index);
     _enterPage(_index);
     widget.source?.addListener(_appendLoaded);
+    widget.offline?.changes?.addListener(_offlineChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) => _askMoreIfNearEnd());
   }
 
   @override
   void dispose() {
     widget.source?.removeListener(_appendLoaded);
+    widget.offline?.changes?.removeListener(_offlineChanged);
     _pager.dispose();
     _review.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(ViewerScreen old) {
+    super.didUpdateWidget(old);
+    if (old.offline != widget.offline) {
+      old.offline?.changes?.removeListener(_offlineChanged);
+      widget.offline?.changes?.addListener(_offlineChanged);
+      _saved = widget.offline?.isSaved(_libOf(_item), _item) ?? false;
+    }
+  }
+
+  void _offlineChanged() {
+    void refresh() {
+      if (!mounted) return;
+      setState(() => _saved = widget.offline?.isSaved(_libOf(_item), _item) ?? false);
+    }
+    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => refresh());
+    } else {
+      refresh();
+    }
   }
 
   @override
@@ -206,12 +252,20 @@ class _ViewerScreenState extends State<ViewerScreen>
     final it = _items[i];
     final off = widget.offline;
     _saved = off != null && off.isSaved(_libOf(it), it);
-    _loadReview();
+    if (it.isVideo) {
+      // 講評は情報シートだけで使う。初回の動画通信と競合する取得を先行させない。
+      ++_metaRequest;
+      _reviewRequested = false;
+      _review.value = const ReviewLoad.loading();
+    } else {
+      _loadReview();
+    }
   }
 
   // 講評が無い（null）と取れなかった（例外）を分ける。KMP 版は失敗を黙って流していて、
   // 「審査メモが出ない」の原因が講評なしなのか取得失敗なのか画面から分からなかった（#113）
   void _loadReview() {
+    _reviewRequested = true;
     final it = _item;
     // A→B→A と戻っても、前の A の応答で新しい取得結果を上書きしない
     final request = ++_metaRequest;
@@ -226,14 +280,15 @@ class _ViewerScreenState extends State<ViewerScreen>
 
   // 操作バーに被せると2秒間ボタンが押せなくなるので、バーの上に浮かせる
   void _flash(String msg) {
-    final bottom = MediaQuery.of(context).padding.bottom;
+    final media = MediaQuery.of(context);
+    final height = _footerLayout(media, _footerActions()).height;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
         content: Text(msg),
         duration: const Duration(seconds: 2),
         behavior: SnackBarBehavior.floating,
-        margin: EdgeInsets.fromLTRB(16, 0, 16, viewerActionBarHeight + bottom + 28),
+        margin: EdgeInsets.fromLTRB(16, 0, 16, height + media.padding.bottom + 28),
       ));
   }
 
@@ -281,38 +336,59 @@ class _ViewerScreenState extends State<ViewerScreen>
     }
   }
 
-  Future<void> _export() async {
-    if (_exporting) return;
-    setState(() => _exporting = true);
-    String msg;
-    try {
-      await widget.app.exportToDevice(_item, lib: widget.lib);
-      msg = '端末に保存しました';
-    } on DeviceExportError catch (e) {
-      msg = e.message;
-    } on ApiError catch (e) {
-      debugPrint('export failed: $e');
-      msg = '端末への保存に失敗しました';
-    }
-    if (!mounted) return;
-    setState(() => _exporting = false);
-    await _alert(msg);
-  }
-
   Future<void> _saveOffline() async {
     final off = widget.offline;
-    if (off == null) return;
-    if (_saved) {
-      _flash('オフライン保存済みです');
+    if (off == null || _saveRequested || !(off.canUse?.call() ?? true)) return;
+    final item = _item;
+    final lib = _libOf(item);
+    if (off.isSaved(lib, item)) {
+      final remove = off.remove;
+      if (remove == null) {
+        _flash('オフライン保存済みです');
+        return;
+      }
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('このオフライン保存を削除しますか？'),
+          content: const Text('このアプリ内の保存だけを削除します。サーバー上の作品は消えません。'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('キャンセル')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('削除')),
+          ],
+        ),
+      );
+      if (ok != true || !mounted || !(off.canUse?.call() ?? true)) return;
+      setState(() => _saveRequested = true);
+      try {
+        await remove(lib, item);
+        if (!mounted) return;
+        _offlineChanged();
+        _flash('このアプリ内の保存を削除しました');
+      } on Exception {
+        if (mounted) await _alert('オフライン保存を削除できませんでした');
+      } finally {
+        if (mounted) setState(() => _saveRequested = false);
+      }
       return;
     }
-    await off.save(_libOf(_item), _item);
-    if (!mounted) return;
-    setState(() => _saved = true);
-    _flash('オフライン保存に追加しました');
+    if (off.isPending?.call(lib, item) ?? false) return;
+    setState(() => _saveRequested = true);
+    try {
+      await off.save(lib, item);
+      if (!mounted || !sameMediaItem(_item, item)) return;
+      // 台帳へ積んだだけでは保存済みではない。暗号化保存が終わった通知でだけ確定する。
+      setState(() => _saved = off.isSaved(lib, item));
+      _flash(_saved ? 'このアプリ内に保存しました' : 'オフライン保存に追加しました');
+    } on Exception {
+      if (mounted) await _alert('オフライン保存に追加できませんでした');
+    } finally {
+      if (mounted) setState(() => _saveRequested = false);
+    }
   }
 
   void _showInfo() {
+    if (!_reviewRequested) _loadReview();
     final it = _item;
     final l = _libOf(it);
     var libTitle = l;
@@ -348,7 +424,10 @@ class _ViewerScreenState extends State<ViewerScreen>
   Widget build(BuildContext context) {
     final items = _items;
     final it = _item;
-    final bottomSafe = MediaQuery.of(context).padding.bottom;
+    final media = MediaQuery.of(context);
+    final actions = _footerActions();
+    final layout = _footerLayout(media, actions);
+    final bottomInset = layout.height + media.padding.bottom;
     return PopScope(
       // ゴミ箱への移動中に閉じると、移動済みでも「元に戻す」が出せなくなる
       canPop: !_busy,
@@ -371,9 +450,9 @@ class _ViewerScreenState extends State<ViewerScreen>
                   return VideoView(
                     key: ValueKey('video-${x.lib}:${x.key}'),
                     url: x.url,
+                    playbackLibrary: _libOf(x),
                     active: true,
-                    bottomInset:
-                        _chrome ? viewerActionBarHeight + bottomSafe : 0,
+                    bottomInset: _chrome ? bottomInset : 0,
                     controllerFactory: widget.videoFactory,
                     onControlsVisibleChange: (v) {
                       if (mounted && _chrome != v) setState(() => _chrome = v);
@@ -412,7 +491,7 @@ class _ViewerScreenState extends State<ViewerScreen>
                   // 動画ではメモを出さない（再生バーと重なるため。全文は情報シート）
                   if (!it.isVideo && (it.note ?? '').trim().isNotEmpty)
                     _memo(it.note!),
-                  _actionBar(bottomSafe),
+                  ViewerFooter(actions: actions, layout: layout),
                 ]),
               ),
             ],
@@ -431,7 +510,7 @@ class _ViewerScreenState extends State<ViewerScreen>
         bottom: false,
         child: Row(children: [
           IconButton(
-            tooltip: '閉じる',
+            tooltip: '一覧に戻る',
             icon: const Icon(Icons.arrow_back, color: Colors.white),
             onPressed: _busy ? null : () => Navigator.of(context).maybePop(),
           ),
@@ -474,89 +553,49 @@ class _ViewerScreenState extends State<ViewerScreen>
             style: const TextStyle(color: Color(0xEBFFFFFF), fontSize: 14)),
       );
 
-  Widget _actionBar(double bottomSafe) {
-    final actions = <Widget>[
-      _ViewerAction(icon: Icons.info_outline, label: '情報', onTap: _showInfo),
+  ViewerFooterLayout _footerLayout(
+      MediaQueryData media, List<ViewerFooterAction> actions) =>
+      ViewerFooterLayout.measure(
+        actions: actions,
+        width: media.size.width - media.padding.horizontal,
+        textScaler: media.textScaler,
+        textDirection: Directionality.of(context),
+        // この context は Scaffold の外側なので、MaterialApp のエラー用文字を継承しない。
+        textStyle: Theme.of(context).textTheme.bodyMedium!
+            .merge(ViewerFooterLayout.labelStyle),
+      );
+
+  bool get _offlinePending => _saveRequested ||
+      (widget.offline?.isPending?.call(_libOf(_item), _item) ?? false);
+
+  List<ViewerFooterAction> _footerActions() => [
+      ViewerFooterAction(icon: Icons.info_outline, label: '情報', onTap: _showInfo),
       if (widget.offline != null)
         _saved
-            ? _ViewerAction(
+            ? ViewerFooterAction(
                 icon: Icons.download_done,
                 label: '保存済み',
                 accent: true,
-                onTap: _saveOffline)
-            : _ViewerAction(
-                icon: Icons.download, label: 'オフライン', onTap: _saveOffline),
-      if (widget.app.deviceExportSupported)
-        _ViewerAction(
-            icon: Icons.save_alt,
-            label: _exporting ? '保存中…' : '端末に保存',
-            onTap: _exporting ? null : _export),
+                onTap: _saveRequested || !(widget.offline?.canUse?.call() ?? true)
+                    ? null : _saveOffline)
+            : ViewerFooterAction(
+                icon: Icons.download_outlined,
+                label: _offlinePending ? '保存待ち' : 'オフライン保存',
+                onTap: _offlinePending || !(widget.offline?.canUse?.call() ?? true)
+                    ? null : _saveOffline),
       // 読み取り専用のライブラリでは書き換える操作を出さない
       if (!_readOnly) ...[
-        _ViewerAction(
+        ViewerFooterAction(
             icon: Icons.add_to_photos_outlined,
             label: 'アルバムへ',
             onTap: _addToAlbum),
-        _ViewerAction(
+        ViewerFooterAction(
             icon: Icons.delete_outline,
             label: 'ゴミ箱へ',
             danger: true,
             onTap: _busy ? null : _trash),
       ],
     ];
-    return Container(
-      color: const Color(0x8C000000),
-      padding: EdgeInsets.only(bottom: bottomSafe),
-      child: SizedBox(
-        height: viewerActionBarHeight,
-        child: Row(children: [for (final a in actions) Expanded(child: a)]),
-      ),
-    );
-  }
-}
-
-class _ViewerAction extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
-  final bool danger;
-  final bool accent;
-  const _ViewerAction({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.danger = false,
-    this.accent = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color = onTap == null
-        ? Colors.white38
-        : danger
-            ? AppColors.danger
-            : accent
-                ? AppColors.accent
-                : Colors.white;
-    return InkWell(
-      onTap: onTap,
-      child: Semantics(
-        button: true,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: color),
-            const SizedBox(height: 4),
-            Text(label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: color, fontSize: 12)),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 /// 講評の取得状態。取得中・届いた（講評なしの null を含む）・取れなかった、の3つ。

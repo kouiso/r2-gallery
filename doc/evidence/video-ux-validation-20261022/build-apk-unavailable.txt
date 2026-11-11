@@ -1,0 +1,7 @@
+UTC: 2026-10-22T15:57:22.117181+00:00
+CWD: /workspace/r2-validation-0738bee/flutter
+ARGV: ["flutter", "build", "apk", "--release", "--no-pub"]
+
+[!] No Android SDK found. Try setting the ANDROID_HOME environment variable.
+
+EXIT: 1

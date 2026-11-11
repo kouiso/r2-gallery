@@ -1,0 +1,22 @@
+[
+  {
+    "file": "R2GalleryJP-Regular.otf",
+    "bytes": 4306852,
+    "sha256": "63563be433f3f9be61a826a7acd3155a4998e60bf9c956e763c527d9cc86c110",
+    "source": "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "source_sha256": "b76b0433203017ca80401b2ee0dd69350349871c4b19d504c34dbdd80541690a",
+    "source_version": "Version 2.004;hotconv 1.0.118;makeotfexe 2.5.65603",
+    "unicode_count": 14392,
+    "glyph_count": 16044
+  },
+  {
+    "file": "R2GalleryJP-Bold.otf",
+    "bytes": 4419896,
+    "sha256": "7a33dd400cd6ea38f9ee836ee8573a03d78ec25a71b08ebd23967683bc5976bd",
+    "source": "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+    "source_sha256": "faa5f3656a78b2e2d450d27fe8382c778bc2b6bb5ea29c986664a6a435056ceb",
+    "source_version": "Version 2.004;hotconv 1.0.118;makeotfexe 2.5.65603",
+    "unicode_count": 14392,
+    "glyph_count": 16044
+  }
+]

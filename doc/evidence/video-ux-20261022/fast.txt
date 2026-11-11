@@ -1,0 +1,88 @@
+
+> r2-gallery@0.4.0 lint /workspace/r2-gallery
+> eslint .
+
+
+> r2-gallery@0.4.0 worker:typecheck /workspace/r2-gallery
+> tsc -p worker --noEmit
+
+
+> r2-gallery@0.4.0 test /workspace/r2-gallery
+> vitest run && pnpm test:worker
+
+
+ RUN  v3.2.7 /workspace/r2-gallery
+
+missing env: FIREBASE_APP_ID
+refused: tester not in allow list: someone@example.com
+refused: QN_GROUPS is not supported; list testers in QN_TESTERS
+ ✓ tools/app-distribute.test.mjs (9 tests) 89ms
+ ✓ tools/leak-check.test.mjs (13 tests) 1095ms
+ ✓ tools/index-upload.test.mjs (29 tests) 2122ms
+   ✓ index-upload > renders a WebP poster for clips/long.mkv via ffmpeg  348ms
+   ✓ index-upload > renders a WebP poster for clips/short.mp4 via ffmpeg  386ms
+
+ Test Files  3 passed (3)
+      Tests  51 passed (51)
+   Start at  15:40:32
+   Duration  2.54s (transform 77ms, setup 0ms, collect 247ms, tests 3.31s, environment 0ms, prepare 215ms)
+
+
+> r2-gallery@0.4.0 test:worker /workspace/r2-gallery
+> cd worker && vitest run
+
+
+ RUN  v3.2.7 /workspace/r2-gallery/worker
+
+Proxy environment variables detected. We'll use your proxy for fetch requests.
+[vpw:debug] Adding `enable_nodejs_tty_module` compatibility flag during tests as this feature is needed to support the Vitest runner.
+[vpw:debug] Adding `enable_nodejs_fs_module` compatibility flag during tests as this feature is needed to support the Vitest runner.
+[vpw:debug] Adding `enable_nodejs_http_modules` compatibility flag during tests as this feature is needed to support the Vitest runner.
+[vpw:debug] Adding `enable_nodejs_perf_hooks_module` compatibility flag during tests as this feature is needed to support the Vitest runner.
+[vpw:info] Starting single runtime for vitest.config.ts...
+[mf:warn] The latest compatibility date supported by the installed Cloudflare Workers Runtime is "2026-03-10",
+but you've requested "2026-09-01". Falling back to "2026-03-10"...
+[mf:warn] The latest compatibility date supported by the installed Cloudflare Workers Runtime is "2026-03-10",
+but you've requested "2026-09-01". Falling back to "2026-03-10"...
+stdout | src/media_startup.test.ts > signed video startup HTTP probes > returns only the requested suffix with one ranged R2 read
+{"probe":"suffix-4","status":206,"bytes":4,"original":[{"method":"get","key":"startup-probe/clip.mp4","options":{"range":{"suffix":4}}}],"meta":[]}
+
+stdout | src/media_startup.test.ts > signed video startup HTTP probes > answers HEAD from metadata without creating an R2 body stream
+{"probe":"head","status":200,"original":[{"method":"head","key":"startup-probe/clip.mp4"}],"meta":[]}
+
+workerd/api/r2-rpc.c++:130: warning: R2 error response does not contain the CF-R2-Error header.; response.statusCode = 500
+[mf:error] AssertionError: false == true
+    at new AssertionError (node-internal:internal_assertionerror:427:15)
+    at assert (node-internal:internal_assert:49:15)
+    at fetchSingleRange (file:///workspace/r2-gallery/node_modules/.pnpm/miniflare@4.20260310.0/node_modules/miniflare/src/workers/shared/blob.worker.ts:48:2)
+    at async #get (file:///workspace/r2-gallery/node_modules/.pnpm/miniflare@4.20260310.0/node_modules/miniflare/src/workers/r2/bucket.worker.ts:764:12)
+    at async R2BucketObject.get (file:///workspace/r2-gallery/node_modules/.pnpm/miniflare@4.20260310.0/node_modules/miniflare/src/workers/r2/bucket.worker.ts:1025:13)
+    at async R2BucketObject.fetch (file:///workspace/r2-gallery/node_modules/.pnpm/miniflare@4.20260310.0/node_modules/miniflare/src/workers/shared/router.worker.ts:45:32)
+    at async R2BucketObject.fetch (file:///workspace/r2-gallery/node_modules/.pnpm/miniflare@4.20260310.0/node_modules/miniflare/src/workers/shared/object.worker.ts:148:11)
+ ✓ src/media_startup.test.ts (15 tests) 1246ms
+   ✓ signed video startup HTTP probes > clamps valid range bytes=-262244 to actual returned bytes  617ms
+   ✓ signed video startup HTTP probes > keeps unsupported multi-range requests as a full streamed response  578ms
+workerd/io/worker.c++:1150: info: console warning; message = Called .text() on an HTTP body which does not appear to be text. The body's Content-Type is "image/webp". The result will probably be corrupted. Consider checking the Content-Type header before interpreting entities as text.
+stdout | src/index.test.ts > trash > scheduled purge removes trash older than the retention period
+trash purge 2
+
+ ✓ src/index.test.ts (53 tests) 15708ms
+   ✓ auth > rejects a wrong token  1253ms
+   ✓ writes > copies large objects via multipart upload  13951ms
+
+ Test Files  2 passed (2)
+      Tests  68 passed (68)
+   Start at  15:40:35
+   Duration  17.48s (transform 188ms, setup 0ms, collect 810ms, tests 16.95s, environment 1ms, prepare 422ms)
+
+[vpw:debug] Shutting down runtimes...
+[vpw:debug] Disposing remote proxy sessions...
+
+    ○
+    │╲
+    │ ○
+    ○ ░
+    ░    gitleaks
+
+no forbidden-word list supplied (QN_FORBIDDEN_WORDS[_FILE]); word scan skipped
+leak-check clean: 500 files, 6 author email(s)

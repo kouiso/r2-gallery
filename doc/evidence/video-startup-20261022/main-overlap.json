@@ -1,0 +1,56 @@
+{
+  "main_sha": "75e8fe4017e2a6cc6830fe650a469c85a664cca6",
+  "released_sha_from_parent": "75e8fe4017e2a6cc6830fe650a469c85a664cca6",
+  "merge_base": "3e82f57bcf9e3ac8d0d8c983ef662ef18f643258",
+  "scope": "Read-only per-file 3-way merge-file --stdout on temporary copies; no repository merge/rebase/index/worktree edits",
+  "main_changed_files": [
+    "doc/evidence/cloud-upload-20261022/README.md",
+    "doc/evidence/cloud-upload-20261022/ai-rules.txt",
+    "doc/evidence/cloud-upload-20261022/ci-contracts.txt",
+    "doc/evidence/cloud-upload-20261022/fast.txt",
+    "flutter/lib/src/ui/gallery_tab.dart",
+    "flutter/test/import_gallery_test.dart",
+    "flutter/test/transfer_queue_test.dart",
+    "flutter/test/transfers_ui_test.dart",
+    "worker/src/index.test.ts"
+  ],
+  "series_overlap_files": [
+    "flutter/test/transfers_ui_test.dart"
+  ],
+  "three_way_checks": [
+    {
+      "path": "flutter/test/transfers_ui_test.dart",
+      "text_three_way_conflicts": false,
+      "merge_file_exit": 0
+    }
+  ],
+  "startup_production_delta_files": [
+    "flutter/lib/src/offline/offline_store.dart",
+    "flutter/lib/src/ui/viewer_screen.dart"
+  ],
+  "startup_production_overlap_with_main": [],
+  "series_commit_patch_equivalents_in_main": [
+    "+ c90bf7c215855cb26098e5a4d66bf14e49d8df6b fix(viewer): keep action labels readable with adaptive footer layout",
+    "+ ac287ad493d0e55bc0d8e91ff18ebc7e322839ca fix(player): expose safe brightness and volume controls",
+    "+ 717378b37c974e3e389fa19c0c5feddbe22cf760 fix(media): honor suffix ranges and avoid HEAD body reads",
+    "+ f18fe7ae1c2efbbabdb61fb69a5f97d65d203127 feat(offline): unify private saves and isolate authenticated connections",
+    "+ 0bd173ff6ca124e76e693ec77e345340f71d5fa4 fix(player): bind screen wake locks to authorized foreground playback",
+    "+ d9f0364d9f3476ed20c1b12b12d7871194af22f1 fix(privacy): omit private media details from playback diagnostics",
+    "+ 0fa54ae54047611c882ceb0a3c5de337fd86235e fix(typography): bundle licensed Japanese glyphs for Android and Web",
+    "+ 7cfe804c46e3f528399df950c060d5b21d04423a test(viewer): add screen evidence harness and track verification gaps",
+    "+ 7acde4aa5614026e9e370967bb19a2f2395816e5 docs(evidence): record fixture scan fix and published-host SDK failure",
+    "+ 0738bee990d4ff80b24dd17bec8e75a3065c125d docs(evidence): attach passing cloud checks and remaining blockers",
+    "+ 4a77fd628f7713ca382b7cec32c371c1b088f0fb fix(viewer): preserve Japanese footer typography and complete regressions",
+    "+ a7c3e83456f3de9d9b3935a16303bdcdd999be84 feat(player): unify mobile background playback and media controls",
+    "+ b93fa74c61c92c58604feef4c7e52a2ba2205c11 docs(player): record verified implementation push and secret scan",
+    "+ 3e93d7ca4b37fe1ef8127658085d7728621e0ceb fix(storage): isolate private saves and exclude backups"
+  ],
+  "rechecked_utc": "2026-10-22T18:51:42.953895+00:00",
+  "pending_startup_delta": "Uncommitted production delta compared against 3e93d7c; no overlap with main delta",
+  "ancestor_checks": {
+    "0738bee990d4ff80b24dd17bec8e75a3065c125d": false,
+    "4a77fd628f7713ca382b7cec32c371c1b088f0fb": false,
+    "b93fa74c61c92c58604feef4c7e52a2ba2205c11": false,
+    "3e93d7ca4b37fe1ef8127658085d7728621e0ceb": false
+  }
+}

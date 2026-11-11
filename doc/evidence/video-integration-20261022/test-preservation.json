@@ -1,0 +1,18 @@
+{
+  "baseline_series_test_files": 47,
+  "unchanged_files": 45,
+  "changed_existing_files": [
+    {
+      "path": "flutter/test/transfer_queue_test.dart",
+      "added_lines": 52,
+      "deleted_lines": 0
+    },
+    {
+      "path": "flutter/test/transfers_ui_test.dart",
+      "added_lines": 120,
+      "deleted_lines": 0
+    }
+  ],
+  "no_existing_flutter_test_lines_removed": true,
+  "note": "Main adds import_gallery_test.dart and adds cases to two existing files. All previous test source retained; full suite executed separately."
+}

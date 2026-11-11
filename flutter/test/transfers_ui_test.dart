@@ -555,11 +555,13 @@ void main() {
     testWidgets('選択して「オフライン保存」を押すとキューに積み、保存済みには印が付く', (tester) async {
       final kv = MemKv();
       // 選択バーは写真タブではなくシェルが描く（#146）ので、接続済みのシェルごと出す
-      final app = makeApp(kv: kv)
+      final app = makeApp(kv: kv, api: _Api()..setConnection(
+          const Connection('https://fixture.invalid', 'fixture-only')))
         ..connected = true
         ..libraries = const [Library(id: 'lib', title: 'L')]
         ..activeLib = 'lib';
       await tester.runAsync(app.transfers.restore);
+      app.transfers.setOnline(false);
       // b.mp4 は前に保存済み
       await tester.runAsync(() => app.offline.saveBytes(
           lib: 'lib', key: 'b.mp4', type: 'video', name: 'b.mp4', plain: Uint8List(4)));
@@ -584,7 +586,8 @@ void main() {
     });
 
     testWidgets('設定に件数を出し、すべて削除できる', (tester) async {
-      final app = makeApp();
+      final app = makeApp(api: _Api()..setConnection(
+          const Connection('https://fixture.invalid', 'fixture-only')));
       await tester.runAsync(() async {
         for (final k in ['a.jpg', 'b.jpg']) {
           await app.offline.saveBytes(
@@ -594,21 +597,24 @@ void main() {
       await tester.pumpWidget(_wrap(SettingsTab(app: app)));
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
       await tester.pump();
-      expect(find.text('2件'), findsOneWidget);
+      expect(find.text('2件 · 8 B · このアプリ内のみ'), findsOneWidget);
 
       await tester.tap(find.text('オフライン保存をすべて削除'));
       await tester.pumpAndSettle();
-      expect(find.text('端末に保存した 2 件を削除します。サーバー上の写真・動画は消えません。'),
+      expect(find.text('この接続のアプリ内保存 2 件を削除します。サーバー上や外部ギャラリーのファイルは消えません。'),
           findsOneWidget);
       await tester.tap(find.text('削除'));
-      await _io(tester, () => find.text('0件').evaluate().isNotEmpty);
+      // 認可を先に閉じる通知と、実I/Oの削除完了の両方を確かめる。
+      await _io(tester, () => find.text('0件 · 0 B · このアプリ内のみ').evaluate().isNotEmpty &&
+          Directory('${tmp.path}/off').listSync().isEmpty);
       await tester.pumpAndSettle();
-      expect(find.text('0件'), findsOneWidget);
+      expect(find.text('0件 · 0 B · このアプリ内のみ'), findsOneWidget);
       expect(Directory('${tmp.path}/off').listSync(), isEmpty);
     });
 
     testWidgets('保存した写真は回線なしで一覧から開ける', (tester) async {
-      final app = makeApp(api: ApiClient());
+      final app = makeApp(api: ApiClient()..setConnection(
+          const Connection('https://fixture.invalid', 'fixture-only')));
       final png = Uint8List.fromList([
         0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d, 0x49,
         0x48, 0x44, 0x52, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 0x1f, 0x15,

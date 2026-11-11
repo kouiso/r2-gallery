@@ -1,0 +1,343 @@
+{
+  "scope": "Synthetic local Miniflare Worker; not Flutter, browser playback, production, or CDN cold-start latency",
+  "baseline_media_ref": "3e82f57",
+  "synthetic_object_bytes": 262144,
+  "cache": "No CDN Cache API or browser/native media cache; warm samples reuse local R2/D1 and HMAC CryptoKey in one isolate",
+  "clock": "Worker performance.now; local scheduler and I/O quantization apply. Runtime startup and fixture seeding excluded.",
+  "results": [
+    {
+      "variant": "before",
+      "sample": "first_in_fresh_local_isolate",
+      "sign_url_ms": 0,
+      "media_headers_ms": 3,
+      "media_first_chunk_ms": 4,
+      "media_body_complete_ms": 5,
+      "response_bytes": 262144,
+      "status": 200,
+      "content_range": null,
+      "r2_calls": [
+        {
+          "method": "get",
+          "elapsed_ms": 2,
+          "range": null
+        }
+      ],
+      "meta": {
+        "status": 200,
+        "review_present": true,
+        "elapsed_ms": 8
+      }
+    },
+    {
+      "variant": "before",
+      "sample": "repeat_1",
+      "sign_url_ms": 0,
+      "media_headers_ms": 1,
+      "media_first_chunk_ms": 2,
+      "media_body_complete_ms": 3,
+      "response_bytes": 262144,
+      "status": 200,
+      "content_range": null,
+      "r2_calls": [
+        {
+          "method": "get",
+          "elapsed_ms": 1,
+          "range": null
+        }
+      ],
+      "meta": {
+        "status": 200,
+        "review_present": true,
+        "elapsed_ms": 3
+      }
+    },
+    {
+      "variant": "before",
+      "sample": "repeat_2",
+      "sign_url_ms": 0,
+      "media_headers_ms": 1,
+      "media_first_chunk_ms": 1,
+      "media_body_complete_ms": 3,
+      "response_bytes": 262144,
+      "status": 200,
+      "content_range": null,
+      "r2_calls": [
+        {
+          "method": "get",
+          "elapsed_ms": 1,
+          "range": null
+        }
+      ],
+      "meta": {
+        "status": 200,
+        "review_present": true,
+        "elapsed_ms": 3
+      }
+    },
+    {
+      "variant": "before",
+      "sample": "repeat_3",
+      "sign_url_ms": 1,
+      "media_headers_ms": 1,
+      "media_first_chunk_ms": 1,
+      "media_body_complete_ms": 2,
+      "response_bytes": 262144,
+      "status": 200,
+      "content_range": null,
+      "r2_calls": [
+        {
+          "method": "get",
+          "elapsed_ms": 1,
+          "range": null
+        }
+      ],
+      "meta": {
+        "status": 200,
+        "review_present": true,
+        "elapsed_ms": 2
+      }
+    },
+    {
+      "variant": "before",
+      "sample": "repeat_4",
+      "sign_url_ms": 0,
+      "media_headers_ms": 2,
+      "media_first_chunk_ms": 2,
+      "media_body_complete_ms": 3,
+      "response_bytes": 262144,
+      "status": 200,
+      "content_range": null,
+      "r2_calls": [
+        {
+          "method": "get",
+          "elapsed_ms": 0,
+          "range": null
+        }
+      ],
+      "meta": {
+        "status": 200,
+        "review_present": true,
+        "elapsed_ms": 2
+      }
+    },
+    {
+      "variant": "before",
+      "sample": "repeat_5",
+      "sign_url_ms": 0,
+      "media_headers_ms": 1,
+      "media_first_chunk_ms": 1,
+      "media_body_complete_ms": 3,
+      "response_bytes": 262144,
+      "status": 200,
+      "content_range": null,
+      "r2_calls": [
+        {
+          "method": "get",
+          "elapsed_ms": 1,
+          "range": null
+        }
+      ],
+      "meta": {
+        "status": 200,
+        "review_present": true,
+        "elapsed_ms": 3
+      }
+    },
+    {
+      "variant": "before",
+      "sample": "head_after_repeats",
+      "sign_url_ms": 0,
+      "media_headers_ms": 1,
+      "media_first_chunk_ms": null,
+      "media_body_complete_ms": 1,
+      "response_bytes": 0,
+      "status": 200,
+      "content_range": null,
+      "r2_calls": [
+        {
+          "method": "get",
+          "elapsed_ms": 1,
+          "range": null
+        }
+      ],
+      "meta": {
+        "status": 200,
+        "review_present": true,
+        "elapsed_ms": 3
+      }
+    },
+    {
+      "variant": "after",
+      "sample": "first_in_fresh_local_isolate",
+      "sign_url_ms": 0,
+      "media_headers_ms": 4,
+      "media_first_chunk_ms": 4,
+      "media_body_complete_ms": 5,
+      "response_bytes": 65536,
+      "status": 206,
+      "content_range": "bytes 196608-262143/262144",
+      "r2_calls": [
+        {
+          "method": "get",
+          "elapsed_ms": 3,
+          "range": {
+            "suffix": 65536
+          }
+        }
+      ],
+      "meta": {
+        "status": 200,
+        "review_present": true,
+        "elapsed_ms": 9
+      }
+    },
+    {
+      "variant": "after",
+      "sample": "repeat_1",
+      "sign_url_ms": 0,
+      "media_headers_ms": 2,
+      "media_first_chunk_ms": 2,
+      "media_body_complete_ms": 4,
+      "response_bytes": 65536,
+      "status": 206,
+      "content_range": "bytes 196608-262143/262144",
+      "r2_calls": [
+        {
+          "method": "get",
+          "elapsed_ms": 1,
+          "range": {
+            "suffix": 65536
+          }
+        }
+      ],
+      "meta": {
+        "status": 200,
+        "review_present": true,
+        "elapsed_ms": 3
+      }
+    },
+    {
+      "variant": "after",
+      "sample": "repeat_2",
+      "sign_url_ms": 0,
+      "media_headers_ms": 2,
+      "media_first_chunk_ms": 2,
+      "media_body_complete_ms": 3,
+      "response_bytes": 65536,
+      "status": 206,
+      "content_range": "bytes 196608-262143/262144",
+      "r2_calls": [
+        {
+          "method": "get",
+          "elapsed_ms": 2,
+          "range": {
+            "suffix": 65536
+          }
+        }
+      ],
+      "meta": {
+        "status": 200,
+        "review_present": true,
+        "elapsed_ms": 3
+      }
+    },
+    {
+      "variant": "after",
+      "sample": "repeat_3",
+      "sign_url_ms": 0,
+      "media_headers_ms": 2,
+      "media_first_chunk_ms": 2,
+      "media_body_complete_ms": 2,
+      "response_bytes": 65536,
+      "status": 206,
+      "content_range": "bytes 196608-262143/262144",
+      "r2_calls": [
+        {
+          "method": "get",
+          "elapsed_ms": 1,
+          "range": {
+            "suffix": 65536
+          }
+        }
+      ],
+      "meta": {
+        "status": 200,
+        "review_present": true,
+        "elapsed_ms": 2
+      }
+    },
+    {
+      "variant": "after",
+      "sample": "repeat_4",
+      "sign_url_ms": 0,
+      "media_headers_ms": 1,
+      "media_first_chunk_ms": 1,
+      "media_body_complete_ms": 2,
+      "response_bytes": 65536,
+      "status": 206,
+      "content_range": "bytes 196608-262143/262144",
+      "r2_calls": [
+        {
+          "method": "get",
+          "elapsed_ms": 1,
+          "range": {
+            "suffix": 65536
+          }
+        }
+      ],
+      "meta": {
+        "status": 200,
+        "review_present": true,
+        "elapsed_ms": 2
+      }
+    },
+    {
+      "variant": "after",
+      "sample": "repeat_5",
+      "sign_url_ms": 0,
+      "media_headers_ms": 1,
+      "media_first_chunk_ms": 2,
+      "media_body_complete_ms": 2,
+      "response_bytes": 65536,
+      "status": 206,
+      "content_range": "bytes 196608-262143/262144",
+      "r2_calls": [
+        {
+          "method": "get",
+          "elapsed_ms": 1,
+          "range": {
+            "suffix": 65536
+          }
+        }
+      ],
+      "meta": {
+        "status": 200,
+        "review_present": true,
+        "elapsed_ms": 2
+      }
+    },
+    {
+      "variant": "after",
+      "sample": "head_after_repeats",
+      "sign_url_ms": 0,
+      "media_headers_ms": 1,
+      "media_first_chunk_ms": null,
+      "media_body_complete_ms": 1,
+      "response_bytes": 0,
+      "status": 200,
+      "content_range": null,
+      "r2_calls": [
+        {
+          "method": "head",
+          "elapsed_ms": 1,
+          "range": null
+        }
+      ],
+      "meta": {
+        "status": 200,
+        "review_present": true,
+        "elapsed_ms": 2
+      }
+    }
+  ]
+}

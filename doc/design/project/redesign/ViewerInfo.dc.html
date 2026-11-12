@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>ビューア 情報シート</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0}
+.ph svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.row{display:flex;align-items:flex-start;gap:16px;padding:12px 0;border-bottom:1px solid #2A2E33}
+.row svg{color:#C2C7D0;flex-shrink:0;margin-top:2px}
+.k{font-size:12px;line-height:16px;color:#C2C7D0}
+.v{font-size:15px;line-height:22px;color:#E2E2E9;word-break:break-all}
+.chip{height:32px;padding:0 12px;border-radius:8px;border:1px solid #2A2E33;display:inline-flex;align-items:center;font-size:13px;color:#E2E2E9;background:#1D2127}
+</style>
+</helmet>
+<div class="ph" style="width: 390px; height: 844px; background: #000000; color: #E2E2E9; font-family: 'Noto Sans JP', sans-serif; position: relative; overflow: hidden">
+  <div aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 64px; height: 220px; background: #3A5258"></div>
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(0,0,0,.5)"></div>
+  <section role="dialog" aria-label="写真の情報" style="position: absolute; left: 0; right: 0; bottom: 0; max-height: 760px; background: #171B20; border-radius: 24px 24px 0 0; padding: 8px 24px 24px; box-sizing: border-box; display: flex; flex-direction: column">
+    <div aria-hidden="true" style="width: 32px; height: 4px; border-radius: 2px; background: #4A4F57; align-self: center; margin-bottom: 16px"></div>
+    <div style="display: flex; align-items: center; gap: 8px">
+      <h2 style="margin: 0; flex: 1; font-size: 17px; line-height: 24px; font-weight: 700">情報</h2>
+      <a href="Viewer.dc.html" aria-label="情報を閉じる" style="width: 48px; height: 48px; display: grid; place-items: center; color: #E2E2E9; margin-right: -12px"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></a>
+    </div>
+    <div class="row">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg>
+      <div style="flex: 1; min-width: 0"><div class="v">IMG_2041.jpg</div><div class="k">3.8 MB</div></div>
+    </div>
+    <div class="row">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+      <div><div class="v">2026年10月8日 18:42</div><div class="k">追加日時</div></div>
+    </div>
+    <div class="row">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      <div style="min-width: 0"><div class="v">Personal / 2026 / 10</div><div class="k">保存場所（ライブラリ / フォルダ）</div></div>
+    </div>
+    <div class="row">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>
+      <div><div class="v">夕方の練習。右手前の踏み込みが良くなってきた回。</div><div class="k">メモ</div></div>
+    </div>
+    <div class="row" style="border-bottom: 0">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>
+      <div style="min-width: 0"><div class="v">OK · 2回目 · フォーム確認</div><div class="k" style="margin-bottom: 6px">レビュー（記録がある項目だけ表示）</div><div class="k" style="color: #E2E2E9; font-size: 13px; line-height: 20px">意図: [intentComment]</div><div class="k" style="font-size: 13px; line-height: 20px">・[基準名]: [点数]（veto）<br>・[基準名]: [点数]</div></div>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

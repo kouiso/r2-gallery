@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>実装仕様</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0}
+.card{background:#FFFFFF;border:1px solid #D9DCE1;border-radius:16px;padding:28px;display:flex;flex-direction:column;gap:12px}
+.card h2{margin:0;font-size:22px;line-height:30px;font-weight:700;color:#14171C}
+.card p,.card li{margin:0;font-size:15px;line-height:24px;color:#2B3038}
+.card ul,.card ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.t{display:grid;border-top:1px solid #D9DCE1}
+.t>span{padding:8px 10px 8px 0;border-bottom:1px solid #E6E8EC;font-size:14px;line-height:21px;color:#2B3038}
+.t>.h{font-weight:700;color:#14171C;font-size:13px}
+.sw{display:inline-block;width:14px;height:14px;border-radius:4px;vertical-align:-2px;margin-right:6px;border:1px solid #9AA0A8}
+code{font-family:ui-monospace,Menlo,monospace;font-size:13px;background:#F0F2F5;padding:1px 5px;border-radius:4px}
+.tag{display:inline-block;font-size:12px;font-weight:700;padding:1px 8px;border-radius:10px;margin-right:6px}
+</style>
+</helmet>
+<div style="width: 1800px; min-height: 1900px; box-sizing: border-box; padding: 56px; background: #F5F6F8; font-family: 'Noto Sans JP', sans-serif; display: flex; flex-direction: column; gap: 24px">
+  <div role="note" style="background: #FFF4D6; border: 1px solid #C99A1E; border-radius: 16px; padding: 20px 28px; display: flex; flex-direction: column; gap: 6px">
+    <p style="margin: 0; font-size: 20px; line-height: 30px; font-weight: 700; color: #3D2C00">2026-11-11 追記: この仕様は KMP 版に向けた記録。今の正ではない</p>
+    <p style="margin: 0; font-size: 16px; line-height: 26px; color: #3D2C00">KMP 版は 2026-10-19 に廃止し、配っているのは Flutter 版（<code>flutter/</code>）。下の「触るのは KMP版だけ」「Theme.kt」「src/（Ionic版）」と、青い配色（#9ECAFF）は今の実装に当てはまらない。今の色は黒地に金（<code>flutter/lib/src/ui/theme.dart</code>）。ロックは取り込みタブも含めて全画面にかかる。今の画面は「現行画面」ページ、直す案は「レビュー提案（11/11）」ページを見る。</p>
+  </div>
+  <div style="display: flex; flex-direction: column; gap: 8px">
+    <h1 style="margin: 0; font-size: 40px; line-height: 52px; font-weight: 700; color: #14171C">R2 Gallery リデザイン 実装仕様</h1>
+    <p style="margin: 0; font-size: 18px; line-height: 28px; color: #2B3038">結論: 「どこに何があるか」を見える場所に出す。隠れ操作・重複アイコン・浮いた転送パネルをやめ、4タブ＋ラベル付き操作バーに揃える。色は今の <code>Theme.kt</code> を土台にして、文字・形・余白のルールを足す。</p>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+    <section class="card">
+      <h2>1. 対象と範囲</h2>
+      <ul>
+        <li>触るのは <b>KMP版だけ</b>: <code>kmp/composeApp/src/commonMain/kotlin/app/r2gallery/</code> の <code>App.kt</code> / <code>ui/*</code> / <code>theme/Theme.kt</code>。iOS もビルドが通ること</li>
+        <li>触らない: <code>src/</code>（Ionic版）と <code>worker/</code></li>
+        <li>今ある機能は1つも消さない（下の「引っ越し先」で全部の行き先を決めてある）</li>
+        <li>画面に出す値は、今のモデルにある値だけ。無い値は出さない（「表示する値」参照）</li>
+      </ul>
+      <h2 style="margin-top: 8px">今回やらないこと</h2>
+      <ul>
+        <li>ファイルの移動・コピー・名前変更のUI（フォルダ選択の設計が別に要る。アルバム名の変更はやる）</li>
+        <li>アップロード時のアルバム同時追加（転送キューに完了後処理が無い）</li>
+        <li>ゴミ箱の完全削除（APIが無い）・一括一時停止・完了履歴</li>
+        <li>撮影日・解像度・動画の長さ・総件数の表示（値が無い）</li><li>指を滑らせる範囲選択・ゴミ箱の一括復元</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>2. ナビゲーション</h2>
+      <ul>
+        <li>下タブを4つに: <b>写真 / アルバム / 取り込み / 設定</b>（今は3つ）</li>
+        <li><b>起動画面は今のまま「取り込み」</b>。<code>startDestination</code> は変えない</li>
+        <li>ロック対象: 写真・アルバム・設定（今と同じ <code>GatedGallery</code>）。取り込みはロックしない。ロック画面は入った瞬間に生体認証を自動で出す</li>
+        <li>ライブラリ切替はタイトルのプルダウン（写真・アルバム共通の状態）。ライブラリが1つならプルダウンを出さない</li>
+        <li>戻る操作: 選択中→選択を解除 / シート→閉じる / ビューア→一覧へ</li>
+        <li>写真タブ右上は「並び替え」「今すぐロック」の2つだけ。ゴミ箱・取り込み・設定のアイコンは置かない（タブにある）</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>3. 色（Theme.kt の役割に対応）</h2>
+      <div class="t" style="grid-template-columns: 1.3fr 1fr 1.4fr">
+        <span class="h">役割</span><span class="h">値</span><span class="h">使う場所</span>
+        <span>background / surface</span><span><i class="sw" style="background:#0F1114"></i>#0F1114</span><span>画面の地</span>
+        <span>surfaceContainer</span><span><i class="sw" style="background:#171B20"></i>#171B20</span><span>下タブ・シート・グループ</span>
+        <span>surfaceContainerHigh</span><span><i class="sw" style="background:#1D2127"></i>#1D2127</span><span>選択中のバー・入力欄</span>
+        <span>outlineVariant（追加）</span><span><i class="sw" style="background:#2A2E33"></i>#2A2E33</span><span>区切り線（飾り）</span>
+        <span>outline</span><span><i class="sw" style="background:#6B717B"></i>#6B717B</span><span>枠線ボタン・入力枠（3:1以上）</span>
+        <span>onSurface</span><span><i class="sw" style="background:#E2E2E9"></i>#E2E2E9</span><span>本文</span>
+        <span>onSurfaceVariant</span><span><i class="sw" style="background:#C2C7D0"></i>#C2C7D0</span><span>補足・タブの非選択</span>
+        <span>primary / onPrimary</span><span><i class="sw" style="background:#9ECAFF"></i>#9ECAFF / #003258</span><span>主ボタン・追加FAB・リンク</span>
+        <span>secondaryContainer</span><span><i class="sw" style="background:#3B4858"></i>#3B4858</span><span>選択中タブの丸</span>
+        <span>error</span><span><i class="sw" style="background:#FFB4AB"></i>#FFB4AB</span><span>ゴミ箱へ・失敗表示</span>
+        <span>成功（追加）</span><span><i class="sw" style="background:#7FD1A8"></i>#7FD1A8</span><span>接続中の点のみ</span>
+      </div>
+      <p>ビューアだけは地を黒（#000）、上下バーは黒55%。</p>
+    </section>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+    <section class="card">
+      <h2>4. 文字・形・寸法</h2>
+      <div class="t" style="grid-template-columns: 1.1fr 1fr 1.5fr">
+        <span class="h">名前</span><span class="h">サイズ/行高/太さ</span><span class="h">用途</span>
+        <span>titleLarge</span><span>22/28 Bold</span><span>タブ画面のタイトル</span>
+        <span>titleMedium</span><span>17/24 Bold</span><span>シート見出し・空状態</span>
+        <span>bodyLarge</span><span>15/22</span><span>本文・行の主表示</span>
+        <span>labelLarge</span><span>14/20 Bold</span><span>ボタン・日付見出し</span>
+        <span>bodySmall</span><span>12/16</span><span>補足・タブ名・操作バー名</span>
+      </div>
+      <ul>
+        <li>書体は端末標準（日本語は Noto Sans JP 相当）。<code>Typography</code> と <code>Shapes</code> を <code>Theme.kt</code> に定義して、画面ごとの直書きをやめる</li>
+        <li>角丸: タイル 0 / 選択中タイル 8 / アルバム表紙・ボタン・グループ 12〜16 / シート上端 24</li>
+        <li>余白は 4 の倍数（4・8・12・16・24）。グリッドの隙間 2dp・4列</li>
+        <li>押せる所は全部 48dp 以上（<code>minimumInteractiveComponentSize</code>）。主ボタン高さ 52dp</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>5. 何が変わるか</h2>
+      <div class="t" style="grid-template-columns: 1fr 1fr">
+        <span class="h">今</span><span class="h">これから</span>
+        <span>上部にラベル無しアイコン5個</span><span>2個だけ。他はタブへ</span>
+        <span>ライブラリはチップの横並び</span><span>タイトルのプルダウン</span>
+        <span>アルバムはホームの横スクロール</span><span>「アルバム」タブ（アルバム／フォルダ切替）</span>
+        <span>ゴミ箱アイコン＝一括削除アイコン</span><span>ゴミ箱はアルバム＞その他。削除は「ゴミ箱へ」と文字付き</span>
+        <span>項目メニューは選択中に再長押し</span><span>選択すると下に文字付き操作バー</span>
+        <span>削除の確認ダイアログ</span><span>すぐゴミ箱へ＋「元に戻す」（6秒）</span>
+        <span>＋→1択のシート→ピッカー</span><span>＋（追加）→すぐピッカー→確認シート</span>
+        <span>左下の浮いた転送ボタン（最初から開く）</span><span>下タブの上に細い転送バー。タップでシート</span>
+        <span>ビューア上部に操作</span><span>下に文字付き操作バー＋情報シート</span>
+        <span>空・エラーは赤文字だけ</span><span>説明＋次の一手ボタン（12番）</span>
+        <span>復元失敗が無言</span><span>理由を出す（下記）</span>
+        <span>設定にラジオ8個・戻る矢印</span><span>値の行→選択ダイアログ。戻る矢印なし</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>6. 今ある機能の引っ越し先</h2>
+      <ul>
+        <li>並び替え（新しい順など）→ 写真タブ右上</li>
+        <li>フォルダ閲覧（BrowseScreen）→ アルバムタブの「フォルダ」</li>
+        <li>アルバム作成 → アルバムタブ右上＋ / 名前変更・削除 → アルバムの長押しメニューとアルバム詳細の…メニュー</li>
+        <li>アルバム内の前へ・後ろへ・外す → アルバム詳細で1件選択時の操作バー（05b）。読み取り専用なら出さない</li>
+        <li>レビュー情報（ReviewMeta）→ 情報シートの「レビュー」行（ある時だけ）。intentComment と基準ごとの点数・veto まで今と同じ量を出す</li>
+        <li>オフライン保存 → 操作バー「オフライン」/ 全削除 → 設定</li>
+        <li>引っ張って更新・起動失敗バナー・接続画面・画面ロック無し画面・取り込み履歴 → そのまま（色と寸法だけ新ルール）</li>
+        <li>ロック中は転送バーにも過去の行を出さない（今の <code>fromLedger</code> の隠し方を流用）</li>
+      </ul>
+    </section>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+    <section class="card">
+      <h2>7. 表示する値（出典）</h2>
+      <div class="t" style="grid-template-columns: 1fr 1.4fr">
+        <span class="h">表示</span><span class="h">出典</span>
+        <span>ファイル名</span><span><code>MediaItem.key</code> の末尾</span>
+        <span>サイズ</span><span><code>MediaItem.size</code></span>
+        <span>追加日時・日付見出し</span><span><code>MediaItem.createdAt</code>（端末のタイムゾーン、曜日つき）</span>
+        <span>保存場所</span><span>ライブラリ名＋key のフォルダ部分</span>
+        <span>メモ</span><span><code>MediaItem.note</code>（無ければ行ごと出さない）</span>
+        <span>動画マーク</span><span><code>type</code>。長さは出さない</span>
+        <span>ゴミ箱の日付</span><span><code>TrashItem.deletedAt</code>。サムネは無いので種類アイコン</span>
+        <span>転送の進み</span><span><code>TransferTask</code> の進捗。行のボタン（一時停止/再開/再試行/取り消し）は今の <code>TransferRow</code> の出し分けを流用。完了行は今どおり4秒で消える</span><span>ビューアの位置</span><span>「N件目」だけ（ページ読み込みなので総数は出さない）</span><span>ゴミ箱の保持日数</span><span>表示用の定数 <code>TRASH_RETENTION_DAYS_DISPLAY = 30</code> 1か所（Worker の既定値に合わせる）</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>8. 動きの決まり</h2>
+      <ul>
+        <li>長押しで選択開始、以後はタップで追加/解除。日付見出しの丸で日ごと選択（指を滑らせる範囲選択は今回やらない）</li>
+        <li>選択中は下タブと転送バーを操作バーに置き換える</li>
+        <li>「ゴミ箱へ」の後は「N件をゴミ箱に移しました［元に戻す］」を6秒。元に戻す＝返ってきた trashKey を restore（<code>bulkTrash()</code> を失敗件数だけでなく trashKey も返す形に変える）。アップロード完了の通知より優先し、転送バー・操作バーより上に出す。ビューアから消した時はビューアを閉じてから出す（ビューアは Dialog なので下に隠れる）</li>
+        <li>復元が 409 なら「同じ名前の項目が元の場所にあるため戻せませんでした」。一部失敗なら「N件中M件を戻せませんでした」</li>
+        <li>追加ボタンは転送バーがある時はその上、無い時は下タブの16dp上</li>
+        <li>ビューア: タップで上下バーを隠す/出す。動画の時はメモを隠し、再生バーを操作バーの上に出す</li>
+        <li>取り込みの検出リストは普段たたんだ1行（「3件見つかりました」）。タップで09のシートに開く</li>
+        <li>読み取り専用ライブラリでは「ゴミ箱へ」「外す」「前へ/後ろへ」を出さず、アップロード先にも出さない（その時だけ確認シートに「読み取り専用は選べません」と添える）</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>9. 完成の定義・進め方</h2>
+      <ol>
+        <li>PR1 色・文字・形の定義＋4タブ化（機能は動かさない）</li>
+        <li>PR2 写真タブ・アルバムタブ・アルバム詳細・選択と元に戻す</li>
+        <li>PR3 ビューアと情報シート</li>
+        <li>PR4 アップロード確認・転送バー/シート・ゴミ箱</li>
+        <li>PR5 設定・ロック・空/エラー/未接続</li>
+      </ol>
+      <ul>
+        <li>どのPRも機能を減らさない。PR本文に「この画面＝キャンバスの何番」と対応を書く</li>
+        <li>各PRでエミュレータか実機のスクショを、キャンバスの同じ番号と並べて添付。幅 320 / 390 / 412dp、文字サイズ 1.0 / 1.3 で崩れないこと（文字は1行で省略、ラベルは消さない）</li>
+        <li>空・エラー・ロック中・読み取り専用の4状態のスクショも付ける</li>
+        <li>既存の <code>commonTest</code> と Android のテストが通ること</li>
+      </ul>
+      <p><span class="tag" style="background:#E3EEFF;color:#0B3B7A">迷ったら</span>このキャンバスとこの仕様が正。書いていない判断はスレッドで聞く。</p>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1800,"height":2060}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>転送シート</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0}
+.ph svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ibtn{width:48px;height:48px;border:0;background:none;color:#E2E2E9;display:grid;place-items:center;border-radius:24px;padding:0;cursor:pointer;flex-shrink:0}
+.sh{margin:16px 0 4px;font-size:13px;line-height:20px;font-weight:700;color:#C2C7D0}
+.tr{display:flex;align-items:center;gap:12px;min-height:72px}
+.th{width:48px;height:48px;border-radius:8px;flex-shrink:0}
+.nm{font-size:14px;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st{font-size:12px;line-height:16px;color:#C2C7D0}
+.bar{height:4px;border-radius:2px;background:#2A2E33;margin-top:6px;overflow:hidden}
+</style>
+</helmet>
+<div class="ph" style="width: 390px; height: 844px; background: #0F1114; color: #E2E2E9; font-family: 'Noto Sans JP', sans-serif; position: relative; overflow: hidden">
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: #2A2E33"></div>
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(0,0,0,.6)"></div>
+  <section role="dialog" aria-labelledby="tr-title" style="position: absolute; left: 0; right: 0; bottom: 0; max-height: 760px; background: #171B20; border-radius: 24px 24px 0 0; padding: 8px 16px 16px; box-sizing: border-box; display: flex; flex-direction: column">
+    <div aria-hidden="true" style="width: 32px; height: 4px; border-radius: 2px; background: #4A4F57; align-self: center; margin-bottom: 8px"></div>
+    <div style="display: flex; align-items: center; gap: 4px">
+      <div style="flex: 1">
+        <h2 id="tr-title" style="margin: 0; font-size: 17px; line-height: 24px; font-weight: 700">転送</h2>
+        <p style="margin: 0; font-size: 12px; line-height: 16px; color: #C2C7D0">アップロード 2/5 · 残り 310 MB</p>
+      </div>
+      <a href="Main.dc.html" class="ibtn" aria-label="転送を閉じる"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></a>
+    </div>
+
+    <h3 class="sh">要対応 1</h3>
+    <div class="tr">
+      <span class="th" style="background: #4A3A52"></span>
+      <div style="flex: 1; min-width: 0">
+        <div class="nm">VID_0918.mp4</div>
+        <div class="st" style="color: #FFB4AB; display: flex; align-items: center; gap: 4px"><svg viewBox="0 0 24 24" aria-hidden="true" style="width: 14px; height: 14px"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16v.01"/></svg>失敗: 通信が切れました（64%で停止）</div>
+      </div>
+      <button style="height: 44px; padding: 0 16px; border-radius: 22px; border: 1px solid #6B717B; background: none; color: #E2E2E9; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; flex-shrink: 0">再試行</button>
+    </div>
+
+    <h3 class="sh">進行中 2</h3>
+    <div class="tr">
+      <span class="th" style="background: #2F4A43"></span>
+      <div style="flex: 1; min-width: 0">
+        <div class="nm">VID_0921.mp4</div>
+        <div class="st">アップロード中 · 182 / 410 MB</div>
+        <div class="bar"><span style="display: block; width: 44%; height: 4px; background: #9ECAFF"></span></div>
+      </div>
+      <button class="ibtn" aria-label="一時停止"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14M15 5v14"/></svg></button>
+    </div>
+    <div class="tr">
+      <span class="th" style="background: #56503A"></span>
+      <div style="flex: 1; min-width: 0">
+        <div class="nm">IMG_2050.jpg</div>
+        <div class="st">アップロード中 · 2.1 / 3.4 MB</div>
+        <div class="bar"><span style="display: block; width: 62%; height: 4px; background: #9ECAFF"></span></div>
+      </div>
+      <button class="ibtn" aria-label="一時停止"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14M15 5v14"/></svg></button>
+    </div>
+
+    <h3 class="sh">待機中 2</h3>
+    <div class="tr">
+      <span class="th" style="background: #3A5258"></span>
+      <div style="flex: 1; min-width: 0"><div class="nm">IMG_2051.jpg</div><div class="st">待機中</div></div>
+      <button class="ibtn" aria-label="取り消し"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div class="tr">
+      <span class="th" style="background: #5C4B3A"></span>
+      <div style="flex: 1; min-width: 0"><div class="nm">hls_1080p.m3u8 → 練習.mp4</div><div class="st">待機中 · 取り込み</div></div>
+      <button class="ibtn" aria-label="取り消し"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

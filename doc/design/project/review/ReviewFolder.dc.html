@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>フォルダ（提案）</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#E4B95B}a:hover{color:#F2F0EA}
+.rf svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.rf .ibtn{width:48px;height:48px;border:0;background:transparent;color:#F2F0EA;display:grid;place-items:center;padding:0}
+.rf .fold{width:112px;height:88px;flex-shrink:0;border-radius:12px;background:#1E1E2B;border:0;color:#F2F0EA;font-family:inherit;display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;padding:12px;box-sizing:border-box;text-align:left}
+.rf .fold svg{color:#E4B95B}
+.rf .fold span{font-size:13px;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.rf .tile{aspect-ratio:1/1;position:relative}
+.rf .navi{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:12px;line-height:16px;color:#9C9AA8;text-decoration:none;font-weight:500}
+.rf .pill{width:56px;height:30px;border-radius:15px;display:grid;place-items:center}
+</style>
+</helmet>
+<div class="rf" style="width: 390px; height: 844px; box-sizing: border-box; background: #0A0A0F; color: #F2F0EA; font-family: 'Noto Sans JP', system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden">
+  <header style="height: 64px; display: flex; align-items: center; gap: 4px; padding: 0 4px; flex-shrink: 0">
+    <a class="ibtn" href="../Albums.dc.html" aria-label="戻る"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg></a>
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+      <h1 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">[フォルダ名]</h1>
+      <span style="font-size: 12px; line-height: 16px; color: #9C9AA8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">[ライブラリ名] › [親フォルダ] › [フォルダ名]</span>
+    </div>
+    <button class="ibtn" aria-label="並び替え"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M6 12h12M10 18h4"/></svg></button>
+  </header>
+  <main style="flex-grow: 1; min-height: 0; overflow: hidden">
+    <section aria-label="このフォルダの中のフォルダ">
+      <div style="display: flex; align-items: center; padding: 8px 4px 8px 16px">
+        <h2 style="margin: 0; flex: 1; font-size: 14px; line-height: 20px; font-weight: 700">フォルダ <span style="color: #9C9AA8; font-weight: 500">5</span></h2>
+        <button style="height: 48px; padding: 0 12px; border: 0; background: transparent; color: #E4B95B; font-family: inherit; font-size: 14px; font-weight: 700">すべて見る</button>
+      </div>
+      <div style="display: flex; gap: 8px; padding: 0 16px 8px; overflow: hidden">
+        <button class="fold"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>[フォルダ1]</span></button>
+        <button class="fold"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>[フォルダ2]</span></button>
+        <button class="fold"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>[フォルダ3]</span></button>
+        <button class="fold"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>[フォルダ4]</span></button>
+      </div>
+    </section>
+    <sc-for list="{{days}}" as="d" hint-placeholder-count="2">
+      <section>
+        <h2 style="margin: 0; padding: 16px 16px 8px; font-size: 14px; line-height: 20px; font-weight: 700">{{d.label}}</h2>
+        <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px">
+          <sc-for list="{{d.tiles}}" as="t" hint-placeholder-count="8">
+            <div class="tile" style="background: {{t}}"></div>
+          </sc-for>
+        </div>
+      </section>
+    </sc-for>
+  </main>
+  <nav aria-label="メイン" style="height: 80px; flex-shrink: 0; background: #14141D; border-top: 1px solid #2A2A3A; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr))">
+    <a class="navi" href="../Main.dc.html"><span class="pill"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM4 15l5-5 4 4 3-3 4 4"/></svg></span>写真</a>
+    <a class="navi" href="../Albums.dc.html" aria-current="page" style="color: #F2F0EA; font-weight: 700"><span class="pill" style="background: rgba(228,185,91,0.2)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18H6zM9 7h6M9 11h6"/></svg></span>アルバム</a>
+    <a class="navi" href="../Import.dc.html"><span class="pill"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg></span>取り込み</a>
+    <a class="navi" href="ReviewSettings.dc.html"><span class="pill"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg></span>設定</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var tones = ['#2b2f3d','#3a3226','#24333a','#3b2a2f','#2e3a2a','#33293d','#3d3a2a','#262a33'];
+    function mk(n, off) { var o = []; for (var i = 0; i < n; i++) o.push(tones[(i + off) % tones.length]); return o; }
+    return { days: [{ label: '今日', tiles: mk(8, 0) }, { label: '昨日', tiles: mk(12, 3) }] };
+  }
+}
+</script>
+</body>
+</html>

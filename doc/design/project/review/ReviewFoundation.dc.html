@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>見た目の土台（現行と提案）</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0}
+.fd{--bg:#F5F5F2;--card:#FFFFFF;--line:#D8D7D0;--tx:#17171C;--tx2:#55545F;--ac:#7A5A12;--tag:#EFE6CF;--code:#ECEBE6}
+@media (prefers-color-scheme: dark){.fd{--bg:#0A0A0F;--card:#14141D;--line:#2A2A3A;--tx:#F2F0EA;--tx2:#A9A7B5;--ac:#E4B95B;--tag:#3A3020;--code:#1E1E2B}}
+.fd a{color:var(--ac)}.fd a:hover{color:var(--tx)}
+.fd .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.fd h2{margin:0;font-size:20px;line-height:28px;font-weight:700;color:var(--tx)}
+.fd p,.fd li{margin:0;font-size:15px;line-height:24px;color:var(--tx)}
+.fd ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.fd .sub{font-size:13px;line-height:20px;color:var(--tx2)}
+.fd .tbl{overflow-x:auto}
+.fd table{border-collapse:collapse;width:100%;min-width:420px;font-size:14px;line-height:21px;color:var(--tx)}
+.fd th,.fd td{text-align:left;padding:8px 12px 8px 0;border-bottom:1px solid var(--line);vertical-align:top}
+.fd th{font-size:12px;font-weight:700;color:var(--tx2)}
+.fd code{font-family:ui-monospace,Menlo,monospace;font-size:13px;background:var(--code);padding:1px 5px;border-radius:4px}
+.fd .sw{display:inline-block;width:14px;height:14px;border-radius:4px;vertical-align:-2px;margin-right:6px;border:1px solid var(--tx2)}
+.fd .tag{display:inline-block;font-size:12px;font-weight:700;padding:1px 8px;border-radius:10px;background:var(--tag);color:var(--ac);margin-right:6px;white-space:nowrap}
+</style>
+</helmet>
+<div class="fd" style="box-sizing: border-box; min-height: 1500px; padding: 48px 24px 64px; background: var(--bg); color: var(--tx); font-family: 'Noto Sans JP', system-ui, sans-serif">
+  <div style="max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px">
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <h1 style="margin: 0; font-size: 32px; line-height: 44px; font-weight: 700">R2 Gallery 見た目の土台（2026-11-11 レビュー）</h1>
+      <p style="max-width: 46em">結論: いま配っているのは Flutter 版で、色は「黒地に金」。このキャンバスの正は「現行画面」ページと、この「レビュー提案」ページ。「リデザイン（10/11）」ページは廃止済みの KMP 版に向けた記録で、色（青）とファイルの場所は今の実装と違う。</p>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px">
+      <section class="card">
+        <h2>1. このキャンバスの読み方</h2>
+        <div class="tbl"><table>
+          <tr><th>ページ</th><th>中身</th><th>扱い</th></tr>
+          <tr><td>現行画面・新規機能</td><td>Flutter 版のコードから描き起こした今の画面と、#103・#196・#197 の案</td><td>今の正</td></tr>
+          <tr><td>レビュー提案（11/11）</td><td>今回のレビューで直す案（設定・接続先の変更・フォルダ・ロック・この土台）</td><td>承認待ちの案</td></tr>
+          <tr><td>リデザイン（10/11）</td><td>KMP 版に向けた 01〜13。構成（4タブ・文字付き操作バー・転送バー・元に戻す）は Flutter 版に引き継ぎ済み</td><td>記録。色と場所は古い</td></tr>
+        </table></div>
+        <p class="sub">リデザインのうち Flutter 版に入っていないもの: ライブラリのプルダウン（今はチップの横並び）、設定のグループ分けと「変更」、文字と形のテーマ定義。</p>
+      </section>
+
+      <section class="card">
+        <h2>2. 色（現行。<code>flutter/lib/src/ui/theme.dart</code>）</h2>
+        <div class="tbl"><table>
+          <tr><th>名前</th><th>値</th><th>使う場所</th></tr>
+          <tr><td>bg</td><td><i class="sw" style="background:#0A0A0F"></i>#0A0A0F</td><td>画面の地</td></tr>
+          <tr><td>surface</td><td><i class="sw" style="background:#14141D"></i>#14141D</td><td>カード・下タブ</td></tr>
+          <tr><td>surfaceHigh</td><td><i class="sw" style="background:#1E1E2B"></i>#1E1E2B</td><td>入力欄・ダイアログ・通知</td></tr>
+          <tr><td>border</td><td><i class="sw" style="background:#2A2A3A"></i>#2A2A3A</td><td>区切り線（飾り）</td></tr>
+          <tr><td>accent</td><td><i class="sw" style="background:#E4B95B"></i>#E4B95B</td><td>主ボタン・選択中・リンク</td></tr>
+          <tr><td>textPrimary</td><td><i class="sw" style="background:#F2F0EA"></i>#F2F0EA</td><td>本文</td></tr>
+          <tr><td>textDim</td><td><i class="sw" style="background:#9C9AA8"></i>#9C9AA8</td><td>補足・非選択のタブ</td></tr>
+          <tr><td>danger</td><td><i class="sw" style="background:#E0605E"></i>#E0605E</td><td>ゴミ箱へ・切断・失敗</td></tr>
+        </table></div>
+      </section>
+
+      <section class="card">
+        <h2>3. 色の直し（提案）</h2>
+        <div class="tbl"><table>
+          <tr><th>今</th><th>直し</th></tr>
+          <tr><td><i class="sw" style="background:#FFAE00"></i>#FFAE00（動画の明るさ・音量パネルの強調。テーマ外）</td><td><i class="sw" style="background:#E4B95B"></i>accent に揃える</td></tr>
+          <tr><td><i class="sw" style="background:#7FD1A8"></i>#7FD1A8（接続中の点。設定画面に直書き）</td><td>テーマに <code>success</code> として置く</td></tr>
+          <tr><td><i class="sw" style="background:#1A1408"></i>#1A1408（金の上の文字。3か所に直書き）</td><td>テーマに <code>onAccent</code> として置く</td></tr>
+          <tr><td>黒の重ね 20%・55%・60%・75%・80%（ビューア・動画）</td><td>55%（バー）と 80%（パネル）の2段に</td></tr>
+          <tr><td><i class="sw" style="background:#2A2A3A"></i>#2A2A3A を入力欄・枠線ボタンの枠にも使う（地との差が小さい）</td><td><i class="sw" style="background:#6E6C7C"></i>押せる物の枠は #6E6C7C（地との差 3:1 以上）。#2A2A3A は飾りの線だけ</td></tr>
+        </table></div>
+      </section>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px">
+      <section class="card">
+        <h2>4. 文字（提案）</h2>
+        <p class="sub">今: テーマに文字の定義が無く、画面に 10 種類の大きさ（11・12・13・14・15・16・18・20・24・28）が 71 か所直書き。</p>
+        <div class="tbl"><table>
+          <tr><th>名前</th><th>大きさ／行の高さ／太さ</th><th>使う場所</th><th>今の値をまとめる先</th></tr>
+          <tr><td>title</td><td>20／28 Bold</td><td>画面の見出し</td><td>18・20・28</td></tr>
+          <tr><td>heading</td><td>16／24 Bold</td><td>シート見出し・空の状態</td><td>16</td></tr>
+          <tr><td>body</td><td>15／22</td><td>本文・行の主表示</td><td>14・15・16</td></tr>
+          <tr><td>label</td><td>14／20 Bold</td><td>ボタン・日付見出し</td><td>13・14</td></tr>
+          <tr><td>caption</td><td>12／16</td><td>補足・タブ名・操作バー名</td><td>11・12・13</td></tr>
+        </table></div>
+        <p class="sub">PIN の入力（24）だけは例外として残す。</p>
+      </section>
+
+      <section class="card">
+        <h2>5. 形と寸法（提案）</h2>
+        <ul>
+          <li>角丸は 3 段: 8（タイルの選択・小さい部品）／ 14（ボタン・入力欄）／ 16（カード・シート）。今は 4・8・12・14・16・20 の 6 種類</li>
+          <li>押せる所は 48dp 以上。主ボタンの高さは 52dp</li>
+          <li>余白は 4 の倍数。グリッドは 4 列・すき間 2dp（今のまま）</li>
+          <li>設定は「接続／ロック／オフライン保存／このアプリについて」の見出しで区切る（今は見出しなしでカードが 7 枚並ぶ）</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <h2>6. 名前・言語（提案）</h2>
+        <div class="tbl"><table>
+          <tr><th>場所</th><th>今</th><th>直し</th></tr>
+          <tr><td>Web のタブ名・ホーム画面の名前</td><td>r2_gallery</td><td>R2 Gallery</td></tr>
+          <tr><td>Web の起動色</td><td><i class="sw" style="background:#0175C2"></i>#0175C2</td><td><i class="sw" style="background:#0A0A0F"></i>#0A0A0F</td></tr>
+          <tr><td>設定の版数</td><td>R2 Gallery (Flutter) 0.1.0（固定の文字）</td><td>ビルドの値から「0.4.0（400）」の形で出す</td></tr>
+          <tr><td>アプリの言語</td><td>指定なし（英語扱い）</td><td>日本語（漢字の字形を日本語用にする）</td></tr>
+          <tr><td>ロック画面の説明</td><td>写真・アルバム・設定を開くには…</td><td>アプリを使うには…（取り込みもロックされるため）</td></tr>
+        </table></div>
+      </section>
+    </div>
+
+    <section class="card">
+      <h2>7. 今回このキャンバスで変えた所</h2>
+      <ul>
+        <li><span class="tag">追加</span>「レビュー提案（11/11）」ページ: 設定（提案）・接続先の変更（提案）・フォルダ（提案）・ロック画面（提案）・この土台</li>
+        <li><span class="tag">修正</span>現行 · 写真タブ: 右上に「並び替え」を追加。日付見出しの丸は選択中だけ出るので、通常の絵からは外した</li>
+        <li><span class="tag">修正</span>現行 · 設定タブ: 実装どおり、1 項目 1 枚のカードに直し、「オフライン保存」のカードと、上部のライブラリ切替の行を足した</li>
+        <li><span class="tag">注記</span>リデザイン（10/11）: ページ名と 13 実装仕様の頭に「KMP 版向けの記録」と書き足した。中身の画面は変えていない</li>
+      </ul>
+      <p class="sub">決めてほしい事: 色は今の「黒地に金」を正とするか、リデザインの青へ寄せるか。この資料は、今の実装（金）を正として書いている。</p>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1500}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

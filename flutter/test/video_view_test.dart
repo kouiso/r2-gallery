@@ -21,6 +21,9 @@ class _System implements PlayerSystem {
   final volumeSets = <double>[];
   final brightSets = <double>[];
   int resets = 0;
+  int brightnessReads = 0;
+  Completer<double?>? brightnessGate;
+  Completer<void>? brightnessWriteGate;
 
   @override
   Future<double?> volume() async => vol;
@@ -31,12 +34,19 @@ class _System implements PlayerSystem {
   }
 
   @override
-  Future<double?> brightness() async => bright;
+  Future<double?> brightness() async {
+    brightnessReads++;
+    final gate = brightnessGate;
+    if (gate != null) return gate.future;
+    return bright;
+  }
+
   @override
   Future<bool> brightnessAuto() async => auto;
   @override
   Future<double?> setBrightness(double v) async {
     brightSets.add(v);
+    await brightnessWriteGate?.future;
     return bright = v;
   }
 
@@ -362,7 +372,9 @@ void main() {
       if (stop == 'lock') {
         expect(app.lockNow(), isTrue);
       } else {
-        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.detached);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.detached,
+        );
       }
       gate.complete();
       await tester.pump();
@@ -391,14 +403,17 @@ void main() {
   });
 
   for (final replay in [false, true]) {
-    testWidgets('#196: 復帰判定中の手動${replay ? 'リプレイ' : '再生'}もロックを追い越さない',
-        (tester) async {
+    testWidgets('#196: 復帰判定中の手動${replay ? 'リプレイ' : '再生'}もロックを追い越さない', (
+      tester,
+    ) async {
       final app = _ForegroundApp()..hasPin = true;
       final rig = await _pump(tester, app: app);
       await rig.video.pause();
       if (replay) {
         rig.video.value = rig.video.value.copyWith(
-            isCompleted: true, position: const Duration(seconds: 60));
+          isCompleted: true,
+          position: const Duration(seconds: 60),
+        );
       }
       final before = rig.video.plays;
       final gate = Completer<void>();

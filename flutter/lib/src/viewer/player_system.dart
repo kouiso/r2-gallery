@@ -10,7 +10,6 @@ abstract class PlayerSystem {
   /// 実際に設定できた値を返す（音量は段階があるので丸められる）。
   Future<double?> setVolume(double v);
 
-<<<<<<< HEAD
   /// 端末がいま出している明るさ。実際の値を読めなければ null（自動調整中で古い Android など）。
   Future<double?> brightness();
   Future<double?> setBrightness(double v);
@@ -19,13 +18,6 @@ abstract class PlayerSystem {
   Future<bool> brightnessAuto();
 
   /// プレイヤーを閉じたら端末の設定どおりの明るさに戻す。
-=======
-  /// 現在値を確認できない時は null。呼び出し側で中間値などを推測しない。
-  Future<double?> brightness();
-  Future<double?> setBrightness(double v);
-
-  /// プレイヤーが変更する前の窓の明るさへ戻す。端末の保存設定は変えない。
->>>>>>> archive/integration/video-ux-main-20261022
   Future<void> resetBrightness();
 }
 

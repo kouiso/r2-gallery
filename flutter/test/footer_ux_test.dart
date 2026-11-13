@@ -154,16 +154,15 @@ void main() {
       await tester.pump();
       expect(video.value.isPlaying, isFalse);
 
-      final adjustments = find.text('明るさ・音量');
+      // 明るさ・音量の入口は main の #198 の操作バーのアイコン（key: level-toggle）
+      final adjustments = find.byKey(const ValueKey('level-toggle'));
       final hasAdjustments = adjustments.evaluate().isNotEmpty;
-      final adjustmentLabelClipped = hasAdjustments &&
-          tester.renderObject<RenderParagraph>(adjustments).didExceedMaxLines;
       if (hasAdjustments) {
         expect(adjustments.hitTestable(), findsOneWidget);
         await tester.tap(adjustments);
         await tester.pump();
         await _capture(tester, '${scenario.name}-03-adjustments');
-        await tester.tap(find.byTooltip('調整を閉じる'));
+        await tester.tap(adjustments);
         await tester.pump();
       }
       await tester.tap(find.byTooltip('ロック'));
@@ -196,7 +195,6 @@ void main() {
       // 同じ harness を基点で動かした時にも前後比較用の画像を撮り終えてから差分を検出する。
       expect(hasBackLabel, isTrue);
       expect(hasAdjustments, isTrue);
-      expect(adjustmentLabelClipped, isFalse);
       expect(externalAbsent, isTrue);
       expect(clippedLabels, isEmpty);
       expect(buttons.keys, unorderedEquals(labels));

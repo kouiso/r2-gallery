@@ -4,10 +4,6 @@ import android.content.res.Configuration
 import android.media.AudioManager
 import android.os.Bundle
 import android.os.SystemClock
-<<<<<<< HEAD
-import android.provider.MediaStore
-=======
->>>>>>> archive/integration/video-ux-main-20261022
 import android.provider.Settings
 import android.view.WindowManager
 import android.webkit.CookieManager
@@ -77,35 +73,12 @@ class MainActivity : FlutterFragmentActivity() {
                             }
                         }
                     }
-<<<<<<< HEAD
                     // この窓で上書き中ならその値、端末任せ（-1）なら端末がいま出している明るさを返す。
                     // 未設定を固定値に見立てると、ドラッグの最初の一動きで急に明るさが飛ぶ（#198）。
                     // 実際の値を読めない時（端末が自動調整中）は null を返し、実値のように見せない
                     "getBrightness" -> {
                         val b = window.attributes.screenBrightness
                         result.success(if (b >= 0f) b.toDouble() else deviceBrightness())
-=======
-                    "getBrightness" -> {
-                        val b = window.attributes.screenBrightness
-                        if (b >= 0f) {
-                            result.success(b.toDouble())
-                        } else {
-                            // 自動調整中は保存値と現在の明るさが違うため、推測して上書きしない。
-                            val value = try {
-                                val mode = Settings.System.getInt(contentResolver,
-                                    Settings.System.SCREEN_BRIGHTNESS_MODE)
-                                val raw = Settings.System.getInt(contentResolver,
-                                    Settings.System.SCREEN_BRIGHTNESS)
-                                if (mode == Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL && raw in 1..255)
-                                    raw.toDouble() / 255 else null
-                            } catch (_: Settings.SettingNotFoundException) {
-                                null
-                            } catch (_: SecurityException) {
-                                null
-                            }
-                            result.success(value)
-                        }
->>>>>>> archive/integration/video-ux-main-20261022
                     }
                     // 端末が明るさを自動調整している間か。読めない理由を利用者へ伝えるために使う
                     "isAutoBrightness" -> result.success(isAutoBrightness())
@@ -196,7 +169,6 @@ class MainActivity : FlutterFragmentActivity() {
         if (!isChangingConfigurations) SharedEngine.detach(this)
     }
 
-<<<<<<< HEAD
     // 端末がいま画面に出している明るさ（0.0〜1.0）。実際の値を読めなければ null。
     // 設定値（SCREEN_BRIGHTNESS）は手動で決めた明るさで、自動調整中に画面が出している値とは別物。
     // 自動調整中の実際の値を読む公開 API は無いので、その間は読めないものとして返す（#198）
@@ -215,79 +187,4 @@ class MainActivity : FlutterFragmentActivity() {
     } catch (e: Settings.SettingNotFoundException) {
         false
     }
-
-    private fun withWritePermission(then: (Boolean) -> Unit) {
-        if (Build.VERSION.SDK_INT >= 29 ||
-            ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
-            PackageManager.PERMISSION_GRANTED
-        ) {
-            then(true)
-            return
-        }
-        // 尋ねている最中に重ねて呼ばれたら、先の問い合わせの答えを待たずに断る（応答を取りこぼさない）
-        if (pendingWritePermission != null) {
-            then(false)
-            return
-        }
-        pendingWritePermission = then
-        writePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-    }
-
-    // KMP 版 MediaExporter と同じ置き場（Pictures/R2Gallery・Movies/R2Gallery）
-    private fun saveToMediaStore(src: File, displayName: String, mime: String) {
-        val isVideo = mime.startsWith("video/")
-        val resolver = contentResolver
-        val collection = if (isVideo) {
-            if (Build.VERSION.SDK_INT >= 29) {
-                MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-            } else {
-                MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-            }
-        } else {
-            if (Build.VERSION.SDK_INT >= 29) {
-                MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-            } else {
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-            }
-        }
-        val dirName = if (isVideo) Environment.DIRECTORY_MOVIES else Environment.DIRECTORY_PICTURES
-        val values = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
-            put(MediaStore.MediaColumns.MIME_TYPE, mime)
-            if (Build.VERSION.SDK_INT >= 29) {
-                put(MediaStore.MediaColumns.RELATIVE_PATH, "$dirName/R2Gallery")
-                put(MediaStore.MediaColumns.IS_PENDING, 1)
-            } else {
-                // 従来の置き場を明示する。insert だけだとギャラリーの走査対象から外れることがある
-                val dir = File(Environment.getExternalStoragePublicDirectory(dirName), "R2Gallery")
-                dir.mkdirs()
-                put(MediaStore.MediaColumns.DATA, File(dir, displayName).absolutePath)
-            }
-        }
-        val uri = resolver.insert(collection, values)
-            ?: throw IllegalStateException("MediaStore insert returned null")
-        try {
-            val out = resolver.openOutputStream(uri)
-                ?: throw IllegalStateException("MediaStore output stream unavailable")
-            out.use { o -> src.inputStream().use { it.copyTo(o, 1 shl 20) } }
-            if (Build.VERSION.SDK_INT >= 29) {
-                val done = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
-                resolver.update(uri, done, null, null)
-            } else {
-                // IS_PENDING が無い版は走査を明示して呼ぶ
-                MediaScannerConnection.scanFile(
-                    this,
-                    arrayOf(values.getAsString(MediaStore.MediaColumns.DATA)),
-                    arrayOf(mime),
-                    null,
-                )
-            }
-        } catch (e: Exception) {
-            // 書き込み途中で失敗した時に、中身の無い行をギャラリーへ残さない
-            resolver.delete(uri, null, null)
-            throw e
-        }
-    }
-=======
->>>>>>> archive/integration/video-ux-main-20261022
 }

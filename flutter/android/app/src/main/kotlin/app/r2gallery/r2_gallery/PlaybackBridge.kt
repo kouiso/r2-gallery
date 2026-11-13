@@ -243,10 +243,14 @@ object PlaybackBridge {
         try { context?.unregisterReceiver(receiver) } catch (_: Exception) {}
     }
 
-    /** API 31 以上は OS が自動で入るので、入ってよい間だけ有効にしておく。 */
+    /**
+     * API 31 以上は OS が自動で入るので、入ってよい間だけ有効にしておく。
+     * 小窓のボタンの絵は API 26〜30 でも入った後に差し替える必要があるため、対応端末なら全経路で渡す
+     * （setAutoEnterEnabled は pipParams 側で API 31 以上に限っている）。
+     */
     private fun applyPipParams() {
         val activity = host?.get() ?: return
-        if (PipPolicy.route(Build.VERSION.SDK_INT, pipSupported()) != PipPolicy.Route.SYSTEM_AUTO_ENTER) return
+        if (PipPolicy.route(Build.VERSION.SDK_INT, pipSupported()) == PipPolicy.Route.NONE) return
         val state = snapshot
         val auto = PipPolicy.autoEnterAllowed(pipArmed, state?.playing == true, state?.ended == true)
         val showsPause = state?.playing == true && state.ended != true

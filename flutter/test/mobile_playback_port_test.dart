@@ -163,4 +163,28 @@ void main() {
     expect(session.message, contains('停止しました'));
     expect(audio.activations.last, isFalse);
   });
+
+  test('入る設定は幅・高さを整数で native へ渡し、閉じた理由は native の値で分岐する', () async {
+    await session.play();
+    final arm = calls.lastWhere((c) => c.method == 'armPip');
+    expect(arm.arguments, {
+      'session': session.id,
+      'armed': true,
+      'width': 16,
+      'height': 9,
+    });
+    await session.lifecycle(AppLifecycleState.inactive);
+    await native('pipChanged', {'session': session.id, 'active': true});
+    expect(session.pip, isTrue);
+    await native('pipChanged', {
+      'session': session.id,
+      'active': false,
+      'restoring': false,
+    });
+    for (var i = 0; i < 50 && calls.last.method != 'clear'; i++) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    expect(video.value.isPlaying, isFalse);
+    expect(calls.last.method, 'clear');
+  });
 }

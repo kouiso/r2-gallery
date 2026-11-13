@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'pip_menu_entry.dart';
 import 'playback_session.dart';
 
 class PlaybackMenu extends StatelessWidget {
@@ -41,35 +42,11 @@ class PlaybackMenu extends StatelessWidget {
                       : (value) =>
                             unawaited(session.setBackgroundAllowed(value)),
                 ),
-                ListTile(
-                  leading: const Icon(Icons.picture_in_picture_alt),
-                  title: const Text('小窓で再生'),
-                  subtitle: Text(
-                    session.pipSupported
-                        ? '同じ再生位置のまま、他のアプリに重ねて表示します'
-                        : 'この端末では小窓再生を利用できません',
-                  ),
-                  onTap: session.closed || !session.pipSupported
-                      ? null
-                      : () async {
-                          final render = surfaceKey.currentContext
-                              ?.findRenderObject();
-                          if (render is! RenderBox || !render.hasSize) return;
-                          final rect =
-                              render.localToGlobal(Offset.zero) & render.size;
-                          Navigator.of(sheet).pop();
-                          await WidgetsBinding.instance.endOfFrame;
-                          final accepted = await session.enterPip(rect);
-                          if (!accepted && context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  session.message ?? '小窓を開始できませんでした',
-                                ),
-                              ),
-                            );
-                          }
-                        },
+                PipMenuEntry(
+                  session: session,
+                  surfaceKey: surfaceKey,
+                  sheetContext: sheet,
+                  parentContext: context,
                 ),
                 ListTile(
                   leading: const Icon(Icons.stop_circle_outlined),

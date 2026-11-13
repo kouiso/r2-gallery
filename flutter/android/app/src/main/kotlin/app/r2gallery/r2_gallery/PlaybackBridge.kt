@@ -1,13 +1,18 @@
 package app.r2gallery.r2_gallery
 
 import android.app.Activity
+import android.app.AppOpsManager
 import android.app.PictureInPictureParams
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.Process
+import android.provider.Settings
 import android.util.Rational
 import androidx.core.content.ContextCompat
 import com.google.common.util.concurrent.ListenableFuture
@@ -37,6 +42,11 @@ object PlaybackBridge {
         private set
     val hasSession: Boolean get() = snapshot != null
     private var startingService = false
+    // Dart が「ホームへ出たら自動で小窓に入ってよい」と知らせている間だけ true。
+    private var pipArmed = false
+    private var pipAspect: IntArray = intArrayOf(16, 9)
+    // clear の後に小窓の中で終わっても、閉じる通知を Dart へ届けるために控える。
+    private var pipSession: String? = null
 
     fun register(context: Context, messenger: BinaryMessenger) {
         this.context = context.applicationContext
@@ -49,6 +59,8 @@ object PlaybackBridge {
                         result.error("invalid_player", "再生器を確認できません", null)
                     } else {
                         snapshot = PlaybackSnapshot(session)
+                        pipArmed = false
+                        pipSession = null
                         result.success(mapOf("pip" to pipSupported(), "background" to true))
                     }
                     return@setMethodCallHandler
@@ -70,10 +82,15 @@ object PlaybackBridge {
                                 if (speed.isFinite() && speed > 0) speed else 1f,
                             )
                             publish()
+                            // 一時停止の知らせが Dart から遅れても、native の再生状態で自動で入るのを止める
+                            applyPipParams()
                             result.success(null)
                         }
                         "clear" -> {
+                            pipSession = if (host?.get()?.isInPictureInPictureMode == true) session else null
                             snapshot = null
+                            pipArmed = false
+                            applyPipParams()
                             PlaybackService.instance?.clearSession()
                             startingService = false
                             SharedEngine.releaseIfDetached(context)
@@ -81,16 +98,28 @@ object PlaybackBridge {
                         }
                         "enterPip" -> {
                             val activity = host?.get()
-                            val ratio = call.argument<Number>("aspectRatio")?.toDouble() ?: 16.0 / 9
-                            val aspect = if (ratio.isFinite()) ratio.coerceIn(0.42, 2.39) else 16.0 / 9
+                            pipAspect = PipPolicy.aspect(
+                                call.argument<Number>("videoWidth")?.toInt() ?: 0,
+                                call.argument<Number>("videoHeight")?.toInt() ?: 0,
+                            )
                             val accepted = if (Build.VERSION.SDK_INT >= 26 && activity != null && pipSupported()) {
-                                activity.enterPictureInPictureMode(
-                                    PictureInPictureParams.Builder()
-                                        .setAspectRatio(Rational((aspect * 1000).toInt(), 1000))
-                                        .build(),
-                                )
+                                activity.enterPictureInPictureMode(pipParams(false))
                             } else false
                             result.success(accepted)
+                        }
+                        "armPip" -> {
+                            pipArmed = call.argument<Boolean>("armed") == true
+                            pipAspect = PipPolicy.aspect(
+                                call.argument<Number>("width")?.toInt() ?: 0,
+                                call.argument<Number>("height")?.toInt() ?: 0,
+                            )
+                            applyPipParams()
+                            result.success(null)
+                        }
+                        "pipPermitted" -> result.success(pipPermitted())
+                        "openPipSettings" -> {
+                            openPipSettings()
+                            result.success(null)
                         }
                         "exitPip" -> {
                             val activity = host?.get()
@@ -118,9 +147,74 @@ object PlaybackBridge {
         if (activity.isFinishing && !activity.isChangingConfigurations) command("close")
     }
 
-    fun pipChanged(active: Boolean) {
-        val session = snapshot?.session ?: return
-        channel?.invokeMethod("pipChanged", mapOf("session" to session, "active" to active))
+    /**
+     * [restoring] は小窓が閉じた時点の画面の状態で native が決めた値（true=元に戻す、false=×）。
+     * 時間差で見分けると端末の速さに左右されるため、Dart には結果だけを渡す。
+     */
+    fun pipChanged(active: Boolean, restoring: Boolean? = null) {
+        val session = snapshot?.session ?: pipSession ?: return
+        val arguments = mutableMapOf<String, Any>("session" to session, "active" to active)
+        if (!active && restoring != null) arguments["restoring"] = restoring
+        if (!active) pipSession = null
+        channel?.invokeMethod("pipChanged", arguments)
+    }
+
+    /** API 26〜30 は OS が自動で入らないので、ホームへ出る時に自分から入る。 */
+    fun userLeaveHint(activity: Activity) {
+        if (PipPolicy.route(Build.VERSION.SDK_INT, pipSupported()) != PipPolicy.Route.USER_LEAVE_HINT) return
+        val state = snapshot ?: return
+        if (!PipPolicy.autoEnterAllowed(pipArmed, state.playing, state.ended)) return
+        try {
+            activity.enterPictureInPictureMode(pipParams(false))
+        } catch (_: Exception) {
+            // OS に断られても画面にエラーは出さず、ホームへ出ただけの扱いにする。
+        }
+    }
+
+    private fun pipParams(autoEnter: Boolean): PictureInPictureParams {
+        val builder = PictureInPictureParams.Builder().setAspectRatio(Rational(pipAspect[0], pipAspect[1]))
+        if (Build.VERSION.SDK_INT >= 31) builder.setAutoEnterEnabled(autoEnter)
+        return builder.build()
+    }
+
+    /** API 31 以上は OS が自動で入るので、入ってよい間だけ有効にしておく。 */
+    private fun applyPipParams() {
+        val activity = host?.get() ?: return
+        if (PipPolicy.route(Build.VERSION.SDK_INT, pipSupported()) != PipPolicy.Route.SYSTEM_AUTO_ENTER) return
+        val state = snapshot
+        val auto = PipPolicy.autoEnterAllowed(pipArmed, state?.playing == true, state?.ended == true)
+        try {
+            activity.setPictureInPictureParams(pipParams(auto))
+        } catch (_: Exception) {
+            // 設定できなくても再生は止めない。自動で入らないだけ。
+        }
+    }
+
+    /** 端末の設定でこのアプリの小窓が許可されているか。調べられない時は許可の問題にしない。 */
+    private fun pipPermitted(): Boolean {
+        val app = context ?: return true
+        if (Build.VERSION.SDK_INT < 26) return true
+        return try {
+            val ops = app.getSystemService(AppOpsManager::class.java) ?: return true
+            ops.checkOpNoThrow(AppOpsManager.OPSTR_PICTURE_IN_PICTURE, Process.myUid(), app.packageName) ==
+                AppOpsManager.MODE_ALLOWED
+        } catch (_: Exception) {
+            true
+        }
+    }
+
+    private fun openPipSettings() {
+        val activity = host?.get() ?: return
+        val uri = Uri.fromParts("package", activity.packageName, null)
+        try {
+            activity.startActivity(Intent(Settings.ACTION_PICTURE_IN_PICTURE_SETTINGS, uri))
+        } catch (_: ActivityNotFoundException) {
+            // 小窓専用の画面が無い端末ではアプリ情報へ出す。
+            try {
+                activity.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, uri))
+            } catch (_: ActivityNotFoundException) {
+            }
+        }
     }
 
     private fun pipSupported(): Boolean = Build.VERSION.SDK_INT >= 26 &&

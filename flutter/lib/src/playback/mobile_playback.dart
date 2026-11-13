@@ -76,7 +76,10 @@ class NativePlaybackPort implements PlaybackPort {
     if (call.method == 'pipChanged') {
       session.pipChanged(
         args['active'] == true,
-        restoring: args['restoring'] == true,
+        // native が閉じた時点の状態で決めた値。無ければ古い経路として null のまま渡す
+        restoring: args.containsKey('restoring')
+            ? args['restoring'] == true
+            : null,
         failed: args['failed'] == true,
       );
       return true;
@@ -191,10 +194,14 @@ class NativePlaybackPort implements PlaybackPort {
           'top': rect.top,
           'width': rect.width,
           'height': rect.height,
-          'aspectRatio': session.controller.value.aspectRatio,
+          // 縦横比は native で整数のまま OS の範囲へ収める
+          'videoWidth': _px(session.controller.value.size.width),
+          'videoHeight': _px(session.controller.value.size.height),
         }) ??
         false;
   }
+
+  static int _px(double v) => v.isFinite ? v.round() : 0;
 
   @override
   Future<void> exitPip(PlaybackSession session) async {
@@ -204,6 +211,51 @@ class NativePlaybackPort implements PlaybackPort {
       debugPrint('picture in picture cleanup unavailable');
     } on MissingPluginException {
       // 非対応の環境で別の再生器を起動して代用しない。
+    }
+  }
+
+  @override
+  void armPip(PlaybackSession session, bool armed, int width, int height) {
+    if (!identical(_bound, session)) return;
+    // 通知の取りこぼしで例外を外へ漏らさない。届かなければ native は従来どおり入らない。
+    unawaited(
+      channel
+          .invokeMethod<void>('armPip', {
+            'session': session.id,
+            'armed': armed,
+            'width': width,
+            'height': height,
+          })
+          .catchError(
+            (Object _) => debugPrint('picture in picture arm unavailable'),
+          ),
+    );
+  }
+
+  @override
+  Future<bool> pipPermitted(PlaybackSession session) async {
+    try {
+      return await channel.invokeMethod<bool>('pipPermitted', {
+            'session': session.id,
+          }) ??
+          true;
+    } on PlatformException {
+      return true;
+    } on MissingPluginException {
+      return true;
+    }
+  }
+
+  @override
+  Future<void> openPipSettings(PlaybackSession session) async {
+    try {
+      await channel.invokeMethod<void>('openPipSettings', {
+        'session': session.id,
+      });
+    } on PlatformException {
+      debugPrint('picture in picture settings unavailable');
+    } on MissingPluginException {
+      // 設定画面を持たない環境では何もしない。
     }
   }
 
@@ -263,6 +315,7 @@ class PlaybackBinding {
       onRelock: () => app?.lockNow(),
       onPipBackground: () => app?.onBackground(),
       canEnterPip: () => app == null || !app.canLock || app.relockGraceMs > 0,
+      isLocked: () => app?.locked ?? false,
     );
     void changed() => session.authorizationChanged(
       connectionChanged: !connectionValid(),

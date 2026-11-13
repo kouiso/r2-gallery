@@ -77,6 +77,7 @@ class _VideoViewState extends State<VideoView>
   bool _initFailed = false;
   bool _started = false;
   bool _initializing = false;
+  bool _pipSeen = false;
   Duration _resumePosition = Duration.zero;
   bool _controls = true;
   bool _locked = false;
@@ -182,12 +183,22 @@ class _VideoViewState extends State<VideoView>
 
   void _onPlaybackChanged() {
     if (!mounted) return;
+    final inPip = _session?.pip ?? false;
+    // 自動で入る時はメニューを経由しないので、重なったシートやダイアログが小窓に写らないよう畳む
+    if (inPip && !_pipSeen) _dismissOverlays();
+    _pipSeen = inPip;
     setState(() {});
     if (widget.active) {
       widget.onControlsVisibleChange?.call(
         _controls && !_pipMode && !(_session?.closed ?? false),
       );
     }
+  }
+
+  void _dismissOverlays() {
+    final route = ModalRoute.of(context);
+    if (route == null) return;
+    Navigator.of(context).popUntil((r) => identical(r, route));
   }
 
   // ロック中や裏のページで読み込みが終わった時は、見えない所で音だけ流さないよう始めない
@@ -764,14 +775,14 @@ class _VideoViewState extends State<VideoView>
                   onPressed: _togglePlay,
                 ),
               ),
-            if (failed)
+            if (failed && !_pipMode)
               _Overlay(
                 text: '再生できませんでした',
                 icon: Icons.replay,
                 label: 'リトライ',
                 onTap: _retry,
               ),
-            if (ended && !failed)
+            if (ended && !failed && !_pipMode)
               _Overlay(
                 text: '再生が終了しました',
                 icon: Icons.replay,

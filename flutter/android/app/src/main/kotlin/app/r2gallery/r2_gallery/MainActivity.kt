@@ -7,6 +7,7 @@ import android.os.SystemClock
 import android.provider.Settings
 import android.view.WindowManager
 import android.webkit.CookieManager
+import androidx.lifecycle.Lifecycle
 import io.flutter.embedding.android.FlutterFragmentActivity
 import kotlin.math.roundToInt
 import io.flutter.embedding.engine.FlutterEngine
@@ -155,7 +156,14 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun onPictureInPictureModeChanged(inPip: Boolean, configuration: Configuration) {
         super.onPictureInPictureModeChanged(inPip, configuration)
-        PlaybackBridge.pipChanged(inPip)
+        // 閉じた時点で画面が STARTED 以上なら「元に戻す」、そうでなければ ×。時間差は使わない
+        val restoring = PipPolicy.restoring(lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
+        PlaybackBridge.pipChanged(inPip, if (inPip) null else restoring)
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        PlaybackBridge.userLeaveHint(this)
     }
 
     override fun onStop() {

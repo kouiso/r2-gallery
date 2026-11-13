@@ -52,6 +52,12 @@ class _Port implements PlaybackPort {
   @override
   Future<void> visibility(PlaybackSession session) async =>
       calls.add('visible:${session.foreground}');
+  @override
+  void armPip(PlaybackSession session, bool armed, int width, int height) {}
+  @override
+  Future<bool> pipPermitted(PlaybackSession session) async => true;
+  @override
+  Future<void> openPipSettings(PlaybackSession session) async {}
 }
 
 class _Video extends FakeVideo {

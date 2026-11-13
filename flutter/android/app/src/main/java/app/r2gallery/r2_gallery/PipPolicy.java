@@ -59,4 +59,31 @@ public final class PipPolicy {
     public static boolean restoring(boolean activityStarted) {
         return activityStarted;
     }
+
+    /** 小窓のボタンが送る放送の名前。アプリ内の受信側だけがこの 2 つを受ける。 */
+    public static final String ACTION_PLAY = "app.r2gallery.pip.PLAY";
+    public static final String ACTION_PAUSE = "app.r2gallery.pip.PAUSE";
+
+    /**
+     * 小窓に出すボタンが押された時に Dart へ送る命令。再生中なら一時停止、それ以外は再生。
+     * 見た目と命令を同じ判定から決めるので、ボタンの絵と押した結果がずれない。
+     */
+    public static String nextCommand(boolean playing) {
+        return playing ? "pause" : "play";
+    }
+
+    /** ボタンに結びつける放送の名前。[nextCommand] と対になる。 */
+    public static String actionName(boolean playing) {
+        return playing ? ACTION_PAUSE : ACTION_PLAY;
+    }
+
+    /**
+     * 受けた放送の名前から Dart への命令を決める。知らない名前は null（無視する）。
+     * 再生か一時停止の 2 つ以外は通さず、他アプリの放送が命令にならないようにする。
+     */
+    public static String commandFor(String intentAction) {
+        if (ACTION_PLAY.equals(intentAction)) return "play";
+        if (ACTION_PAUSE.equals(intentAction)) return "pause";
+        return null;
+    }
 }

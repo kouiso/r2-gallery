@@ -2,11 +2,16 @@ package app.r2gallery.r2_gallery
 
 import android.app.Activity
 import android.app.AppOpsManager
+import android.app.PendingIntent
 import android.app.PictureInPictureParams
+import android.app.RemoteAction
+import android.content.BroadcastReceiver
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -47,6 +52,10 @@ object PlaybackBridge {
     private var pipAspect: IntArray = intArrayOf(16, 9)
     // clear の後に小窓の中で終わっても、閉じる通知を Dart へ届けるために控える。
     private var pipSession: String? = null
+    // 小窓の再生／一時停止ボタンが押された放送を受ける。小窓にいる間だけ登録する。
+    private var pipReceiver: BroadcastReceiver? = null
+    // 直近に OS へ渡した小窓の設定。同じ内容なら position の更新ごとに渡し直さない。
+    private var lastPipParamsKey: String? = null
 
     fun register(context: Context, messenger: BinaryMessenger) {
         this.context = context.applicationContext
@@ -103,7 +112,7 @@ object PlaybackBridge {
                                 call.argument<Number>("videoHeight")?.toInt() ?: 0,
                             )
                             val accepted = if (Build.VERSION.SDK_INT >= 26 && activity != null && pipSupported()) {
-                                activity.enterPictureInPictureMode(pipParams(false))
+                                activity.enterPictureInPictureMode(pipParams(false)).also { lastPipParamsKey = null }
                             } else false
                             result.success(accepted)
                         }
@@ -139,7 +148,11 @@ object PlaybackBridge {
         }
     }
 
-    fun attach(activity: Activity) { host = WeakReference(activity) }
+    fun attach(activity: Activity) {
+        host = WeakReference(activity)
+        // 別の Activity には前の設定が残っていないので、必ず渡し直す
+        lastPipParamsKey = null
+    }
 
     fun detach(activity: Activity) {
         if (host?.get() !== activity) return
@@ -152,6 +165,8 @@ object PlaybackBridge {
      * 時間差で見分けると端末の速さに左右されるため、Dart には結果だけを渡す。
      */
     fun pipChanged(active: Boolean, restoring: Boolean? = null) {
+        // セッションが無くても受信側の登録は小窓の出入りに合わせて外す（取りこぼして残さない）
+        if (active) registerPipReceiver() else unregisterPipReceiver()
         val session = snapshot?.session ?: pipSession ?: return
         val arguments = mutableMapOf<String, Any>("session" to session, "active" to active)
         if (!active && restoring != null) arguments["restoring"] = restoring
@@ -166,6 +181,7 @@ object PlaybackBridge {
         if (!PipPolicy.autoEnterAllowed(pipArmed, state.playing, state.ended)) return
         try {
             activity.enterPictureInPictureMode(pipParams(false))
+            lastPipParamsKey = null
         } catch (_: Exception) {
             // OS に断られても画面にエラーは出さず、ホームへ出ただけの扱いにする。
         }
@@ -174,7 +190,57 @@ object PlaybackBridge {
     private fun pipParams(autoEnter: Boolean): PictureInPictureParams {
         val builder = PictureInPictureParams.Builder().setAspectRatio(Rational(pipAspect[0], pipAspect[1]))
         if (Build.VERSION.SDK_INT >= 31) builder.setAutoEnterEnabled(autoEnter)
+        builder.setActions(pipActions())
         return builder.build()
+    }
+
+    /**
+     * 小窓の再生／一時停止ボタン。再生中は一時停止、それ以外は再生を出す。
+     * 押した結果は Dart の command 経路（認証・ロックの猶予を通す）へそのまま渡す。
+     * セッションが無い間はボタンを出さない。
+     */
+    private fun pipActions(): List<RemoteAction> {
+        val app = context ?: return emptyList()
+        val state = snapshot ?: return emptyList()
+        val playing = state.playing && !state.ended
+        val intent = Intent(PipPolicy.actionName(playing)).setPackage(app.packageName)
+        // 再生用と一時停止用で requestCode を分け、PendingIntent が互いを上書きしないようにする
+        val pending = PendingIntent.getBroadcast(
+            app, if (playing) 1 else 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val label = if (playing) "一時停止" else "再生"
+        val icon = Icon.createWithResource(
+            app, if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
+        )
+        return listOf(RemoteAction(icon, label, label, pending))
+    }
+
+    private fun registerPipReceiver() {
+        val app = context ?: return
+        if (pipReceiver != null) return
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                val action = PipPolicy.commandFor(intent.action) ?: return
+                // 失敗は握る。session が無い・拒否された時はボタンが効かないだけで、再生は壊さない
+                try { command(action) } catch (_: Exception) {}
+            }
+        }
+        val filter = IntentFilter().apply {
+            addAction(PipPolicy.ACTION_PLAY)
+            addAction(PipPolicy.ACTION_PAUSE)
+        }
+        try {
+            ContextCompat.registerReceiver(app, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+            pipReceiver = receiver
+        } catch (_: Exception) {
+            // 登録できなくてもボタンが効かないだけ。小窓自体は使える
+        }
+    }
+
+    private fun unregisterPipReceiver() {
+        val receiver = pipReceiver ?: return
+        pipReceiver = null
+        try { context?.unregisterReceiver(receiver) } catch (_: Exception) {}
     }
 
     /** API 31 以上は OS が自動で入るので、入ってよい間だけ有効にしておく。 */
@@ -183,8 +249,13 @@ object PlaybackBridge {
         if (PipPolicy.route(Build.VERSION.SDK_INT, pipSupported()) != PipPolicy.Route.SYSTEM_AUTO_ENTER) return
         val state = snapshot
         val auto = PipPolicy.autoEnterAllowed(pipArmed, state?.playing == true, state?.ended == true)
+        val showsPause = state?.playing == true && state.ended != true
+        // 位置の更新ごとに OS へ渡し直さない。比・自動・ボタンの絵が変わった時だけ渡す
+        val key = "${pipAspect[0]}/${pipAspect[1]}:$auto:${state != null}:$showsPause"
+        if (key == lastPipParamsKey) return
         try {
             activity.setPictureInPictureParams(pipParams(auto))
+            lastPipParamsKey = key
         } catch (_: Exception) {
             // 設定できなくても再生は止めない。自動で入らないだけ。
         }
@@ -269,6 +340,7 @@ object PlaybackBridge {
     }
 
     fun release() {
+        unregisterPipReceiver()
         snapshot = null
         channel?.setMethodCallHandler(null)
         channel = null

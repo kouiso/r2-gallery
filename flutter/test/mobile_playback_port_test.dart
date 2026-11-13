@@ -124,6 +124,30 @@ void main() {
     expect(audio.activations.last, isFalse);
   });
 
+  test('小窓の中のボタン（再生／一時停止）も同じ命令経路を通り、認証が切れたら再生だけ拒否される', () async {
+    await session.play();
+    session.pipChanged(true);
+    expect(session.pip, isTrue, reason: '小窓の中の状態にしてから押す');
+    // 小窓のボタンが押されると native は command(pause) を Dart へ送る
+    expect(
+      await native('command', {'session': session.id, 'action': 'pause'}),
+      isTrue,
+    );
+    expect(video.value.isPlaying, isFalse);
+    authorized = false;
+    expect(
+      await native('command', {'session': session.id, 'action': 'play'}),
+      isFalse,
+      reason: '猶予超過・ロック後は小窓のボタンでも再生を始めない',
+    );
+    expect(video.value.isPlaying, isFalse);
+    // 止める側は認証に関わらず常に効く
+    expect(
+      await native('command', {'session': session.id, 'action': 'pause'}),
+      isTrue,
+    );
+  });
+
   test('nativeへ渡す情報は匿名の状態だけで、作品名・URL・資格情報・平文パスを含めない', () async {
     await session.play();
     await session.seek(const Duration(seconds: 29));

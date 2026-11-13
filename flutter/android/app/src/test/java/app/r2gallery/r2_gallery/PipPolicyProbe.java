@@ -50,6 +50,16 @@ public final class PipPolicyProbe {
 
         is("画面が見えている = 元に戻す", PipPolicy.restoring(true), true);
         is("画面が見えない = ×", PipPolicy.restoring(false), false);
+        is("再生中は一時停止を送る", PipPolicy.nextCommand(true), "pause");
+        is("一時停止中は再生を送る", PipPolicy.nextCommand(false), "play");
+        is("再生中の放送名は PAUSE", PipPolicy.actionName(true), PipPolicy.ACTION_PAUSE);
+        is("一時停止中の放送名は PLAY", PipPolicy.actionName(false), PipPolicy.ACTION_PLAY);
+        // 絵（放送名）と押した結果（命令）が必ず対になる
+        is("PAUSE 放送は pause", PipPolicy.commandFor(PipPolicy.actionName(true)), PipPolicy.nextCommand(true));
+        is("PLAY 放送は play", PipPolicy.commandFor(PipPolicy.actionName(false)), PipPolicy.nextCommand(false));
+        is("知らない放送は無視", PipPolicy.commandFor("android.intent.action.VIEW") == null, true);
+        is("null は無視", PipPolicy.commandFor(null) == null, true);
+        is("stop は放送から通さない", PipPolicy.commandFor("app.r2gallery.pip.STOP") == null, true);
         System.out.println("PipPolicyProbe ok: " + checks + " checks");
     }
 }

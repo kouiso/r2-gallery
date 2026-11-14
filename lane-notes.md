@@ -74,6 +74,10 @@ OBS | transfer_queue_test.dart fails intermittently under load in several worktr
 #118 | re-review FAIL must2 (docs vs diff: P1 swipe actually KEPT; approval status incomplete H7/V1/O1/O1-2/S7/quarantine, app_state.dart:694 comment) want1 nit2 (queued 118-review-9e1170f.md) | code slices OK: exitPip fixed + Kotlin built in CI, iOS fork verified, media.ts OK, font OFL no RFN | doc fix member resumed
 #118 | re-review PASS must0 want1 nit1 at 174bd20 (queued 118-review-174bd20.md) | CODE-READY; merge blocked: OWNER (feature answer ①③④) + DEVICE (6-scene + PiP closes video on real Pixel) | want: rerun PipPolicyProbe javac at head
 stream C | #125 (5517eca) and #128 (ac927b5) open, reviews running; #88/#89 docs/kmp-era-cleanup 196973f and #90/#91 docs/feature-parity-t3 c527b08 PRs queued
+HOUR 2026-11-14T13:08:55Z | merged 0 | closed 0 | output 0 | open PR 3->13 (r2-gallery #118 #120-#128 + archive #207 #208; 6 more PRs pushed, creation queued by rate limit) | open issues 106->106 | ledger open 13->12 (RG-26 done, RG-12 answered) | owner 6 (#118 features, #65, #44, #29, #32, #104; +RG-24 later) | device 10 issues + #118 video | stuck at review/rate-limit: GitHub secondary rate limit on comment+PR creation since 12:55Z blocks REVIEW/GATE posting (merges need GATE comment); first merge (#124) ready, posts at 13:56Z
+  members running now: 2 (stream A, stream B) + reviewers 6 (#120, #126, #125, #128, #127, stacked #121/#122) | items in flight: 17 | merges/closes since last line: 0/0
+  rule 1(a) iteration moved 0 (board unreadable) | rule 1(b) non-claude-cloud first: PBI-level work ordered first; 0 labels changed | skipped (-ux): 0
+  narrowest point: review verdicts (5 FAIL→rework rounds) + rate limit; capacity raised to 8 members then capped to 5 for 4-CPU load
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)

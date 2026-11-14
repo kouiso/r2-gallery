@@ -234,11 +234,10 @@ describe("index-upload", () => {
     expect(reserved.err).toContain("reserved album id: __other__");
   });
 
-  it("declares exactly the worker's image and video extensions", () => {
+  it("builds its extension lists from the shared media-ext.json", () => {
     const source = readFileSync(TOOL, "utf8");
-    const declared = (name) => source.match(new RegExp(`const ${name} = "([^"]+)"`))[1];
-    expect(declared("IMAGE")).toBe(alternatives(IMAGE_EXT).join("|"));
-    expect(declared("VIDEO")).toBe(alternatives(VIDEO_EXT).join("|"));
+    expect(source).toContain("media-ext.json");
+    expect(source).not.toMatch(/jpe\?g|\|mp4\|/);
   });
 
   it("accepts every extension the worker serves and treats images and videos like it", () => {

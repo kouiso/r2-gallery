@@ -19,7 +19,7 @@ head: fix/ci-secrets-scan-range  (head sha cf913ae)
 ## 確認
 - 失敗する→通る: 旧オプションで同じ形の履歴を作ると範囲は 0 件、新オプションでは 1 件（手元で確認）
 - `node --test .github/ci/run.test.mjs`: 9 件 pass（追加 1 件）
-- 効果の確認: `CI_SCAN_BASE=origin/main CI_SCAN_HEAD=origin/docs/run-locally bash .github/ci/gitleaks.sh`（#128 のコミット ac927b5）が `curl-auth-header` で exit 2 になる。この PR 自身の範囲 (`origin/main..HEAD`) は exit 0
+- 効果の確認（独立審査で再現）: PR のマージ参照の代わりに `git commit-tree $(git merge-tree --write-tree origin/main origin/docs/run-locally) -p origin/main -p origin/docs/run-locally` で作ったマージを HEAD にして `origin/main..<merge>` を検査すると、旧フラグ（`--no-merges --first-parent`）は 0 コミット・検出なし、新フラグは 1 コミット・`leaks found: 1`（#128 の ac927b5、`curl-auth-header`）。枝の先端をそのまま HEAD にした比較では旧フラグでも検出されるため、マージ参照で比べています。この PR 自身の範囲 (`origin/main..HEAD`) は exit 0
 - `run.mjs fast` exit 0、`pnpm test` 56 + worker 55、`sync-ai-rules --check` ok
 
 ## 注意
@@ -38,7 +38,7 @@ LOCAL-CHECK | head cf913ae | node --test .github/ci/run.test.mjs; pnpm test; nod
 
 - run.test.mjs: 9 pass (new real-git range test included)
 - run.mjs fast: exit 0 (lint, worker:typecheck, tools 56 tests, worker 55 tests, gitleaks, leak-check clean)
-- gitleaks over this PR's own range: exit 0; over origin/main..origin/docs/run-locally (#128 commit): exit 2 curl-auth-header, proving the range is now non-empty
+- gitleaks over this PR's own range: exit 0; over origin/main..origin/docs/run-locally (#128 commit): exit 2 curl-auth-header, (see body: the range bug only shows with a merge-commit HEAD)
 - sync-ai-rules --check: in sync
 
 ---

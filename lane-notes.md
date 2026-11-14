@@ -91,6 +91,7 @@ SECURITY FINDING | CI secrets-scan scans 0 commits on PRs and main pushes (ci.ym
 stream C round 2 | docs/run-locally-v2 189b77c (supersedes #128) + fix/ci-secrets-scan-range cf913ae (drop --first-parent, PR head sha; 9/9 run.test) — PRs queued, reviews running; docs/kmp-era-cleanup 196973f + docs/feature-parity-t3 c527b08 reviews running
 #122-stacked (fix/rg20-thumb-hardening 6c3d440) | re-review PASS must0 want0 nit2 (queued review file; lead corrected fail-before count 5->6 in queued body/LOCAL-CHECK, text only) | merge after #122
 OWNER RULING 2026-11-14 (relayed): 「CIはローカルで通れば通ったものとみなしていいよ」 -> gate G3: a passing LOCAL-CHECK on the exact merge head (same checks CI runs for touched files: lint, typecheck, tests, build, gate scripts) counts as checks passed; hosted CI not waited on; failing local run = failed gate; never claim hosted CI green unless it is; a later real hosted failure on that head -> immediate follow-up fix PR. Overrides the manager pass-line item "emulator green" (owner words win). Other gate items unchanged.
+fix/ci-secrets-scan-range cf913ae | review PASS must0 want1 nit2 (queued) | want (effect check wording) fixed by lead in queued body, text only; nits (ci.yml:70 comment, run.test.mjs:64 test name) -> follow-up
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)

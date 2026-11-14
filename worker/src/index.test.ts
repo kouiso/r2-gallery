@@ -1024,7 +1024,8 @@ describe("trash", () => {
 
     it("restores into the right place in an album of 2000 items", async () => {
       const keys = Array.from({ length: 2000 }, (_, n) => `big/${String(n).padStart(4, "0")}.png`);
-      const file = (await (await env.META.get(".system/albums.json"))!.json()) as {
+      const cur = await env.META.get(".system/albums.json");
+      const file = (cur ? await cur.json() : { version: 1, albums: [] }) as {
         version: 1;
         albums: unknown[];
       };

@@ -130,6 +130,9 @@ stream C done: t3 69aad36 / run-locally-v2 3572d44 / kmp-era b16b51e (fresh LOCA
 | RG-31 | blocked | wait | DEVICE |
 
 ## needs owner
+- DESIGN Q1 (2026-11-14): 「レビュー提案（11/11）」は承認待ち。設定・ロック・接続先の変更・フォルダ・見た目の土台はこの提案の絵で作ってよいか？ A 提案の絵で作る（おすすめ） / B 承認まで現行の絵 / C 画面ごと
+- DESIGN Q2: ライブラリのチップ（デザインは写真・設定のみ）— A 全タブに残し見た目だけ合わせる（おすすめ） / B 写真だけ / C 写真と設定だけ
+- DESIGN Q3: 絵が無い画面（選択モード・アルバム詳細・ゴミ箱・アップロード確認・情報シート・転送・ダイアログ）— A 色・文字・角丸だけ土台に合わせる（おすすめ） / B 先に絵を描き足す / C 10/11 KMP 版を手本
 - #114/#115: 写真数百枚の保存エラーは、どの操作（アップロード／端末への書き出し／オフライン保存）・どの端末と版・何枚目で止まったか・表示された文言を教えてほしい（手元の再現では 300 枚とも成功。Web はメモリで落ちる兆候あり）
 - バグ直し以外（設定タブ・文書・小さな改善）の PR も、審査が通って証跡がそろっていれば、聞かずに 1 本ずつマージしてよいか（マージすると本番の Web とアプリが新しくなる）。ただし、機能をなくす・操作を変える物、配信の仕組み（web-deploy.yml など）を変える物、実機での確認が要る物は、これまでどおり 1 件ずつ聞く。（はい／いいえ）推奨: はい — 該当: #125 #128 ほか stream A-D の PR（除外: #118、#81/#82）
 - #65（#63 の 2 つ目）: 一覧に出ない形式（HEIC など）は「上げる前に止める」か「HEIC を表示できるようにする」か。あわせて、既に上がっている一覧に出ないファイルをどうするか（そのまま／一覧に出す／書き出す）。推奨: 上げる前に止める・既存はそのまま
@@ -175,3 +178,4 @@ DESIGN AUDIT done: design-parity.md + 31 side-by-side PNGs (evidence/design/, co
 stale queue files 0a/0b-124, issue-115 -> posted/stale (already handled)
 PROD #135 confirmed: pages-dist == 4dad7a4 (~13:59Z)
 #127 merge-result check FAIL (4e00845 = fcfc041 + main 4dad7a4): semantic conflict — #127 adds `sort` to ApiClient.folder; main's new fake _CountApi (library_switch_test.dart:109) lacks it -> invalid_override, 2 test files fail to compile. Not merged. Member merging main into fix/rg18-server-sort + fixing fakes; then delta re-review + GATE
+JUDGE design-1 (Fable, judge-design-1.md): review boards win where both pages cover a screen (provisional on OWNER Q1); #129-#131 may merge in stack order without Q1 (still need owner merge-scope OK); 切断 move = later single PR after Q1=A; icons = extract design SVGs (C1c); title 700; chips stay on all tabs, restyle only (OWNER Q2); no web boards; trash stays red, viewer title stays date. Build order: C1a theme.dart (start first) ∥ C4 albums → C1b → C1c → C7 → C6/C2/C3/C5 after PRs → C8/C10/C11/C9. Start C1a+C4 when member slots free (existing PRs first).

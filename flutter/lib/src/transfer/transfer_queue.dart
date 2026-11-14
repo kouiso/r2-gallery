@@ -540,7 +540,7 @@ class TransferQueue extends ChangeNotifier {
         // 退避ファイルは完了を報告する前に消し終える。先に done にすると、完了を見た側
         // （画面・テスト）が掃除の途中の退避ファイルを見てしまう。
         // 消し終えて done になるまで _completing に残す。外すと別の行の書き込みが「転送中」で書き戻し、再起動で二重に上がる。
-        // この間の一時停止・取り消しは、サーバーが受け取った後なので完了を優先する（上と同じ扱い）
+        // この間の一時停止・取り消しは受け付けない（pause / cancel 側で弾く）。サーバーが受け取った後なので完了を優先する
         await _dropStaged(t);
         t.status = TransferStatus.done;
         t.loaded = t.size;
@@ -838,7 +838,9 @@ class TransferQueue extends ChangeNotifier {
   /// 一時停止。退避したファイル・uploadId・確定済みパートは残し、再開で続きから送る。
   void pause(String id) {
     final t = _find(id);
-    if (t == null || !t.active) return;
+    // 完了待ちの行はサーバーが受け取り済みで、退避ファイルも消している途中。
+    // ここで止めると再開が退避し直し、done の行に退避ファイルが残る
+    if (t == null || !t.active || _completing.contains(t)) return;
     t._gen++;
     t.status = TransferStatus.paused;
     _waits.remove(id)?.cancel();
@@ -900,7 +902,8 @@ class TransferQueue extends ChangeNotifier {
   /// 取り消し。動いている処理が止まるのを待ってから、退避ファイルと multipart を片付けて行を消す。
   Future<void> cancel(String id) async {
     final t = _find(id);
-    if (t == null || t.status == TransferStatus.done) return;
+    // 完了待ちの行は一時停止と同じ理由で触らない（取り消し→やり直しでも退避し直してしまう）
+    if (t == null || t.status == TransferStatus.done || _completing.contains(t)) return;
     final gen = ++t._gen;
     t.status = TransferStatus.cancelled;
     _waits.remove(id)?.cancel();

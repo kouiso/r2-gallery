@@ -282,7 +282,8 @@ object PlaybackBridge {
         val activity = host?.get() ?: return
         val uri = Uri.fromParts("package", activity.packageName, null)
         try {
-            activity.startActivity(Intent(Settings.ACTION_PICTURE_IN_PICTURE_SETTINGS, uri))
+            // 小窓の設定画面の定数は SDK に公開されていないので、同じ値の文字列で開く。
+            activity.startActivity(Intent("android.settings.PICTURE_IN_PICTURE_SETTINGS", uri))
         } catch (_: ActivityNotFoundException) {
             // 小窓専用の画面が無い端末ではアプリ情報へ出す。
             try {

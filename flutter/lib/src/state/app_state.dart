@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 
@@ -573,7 +572,8 @@ class SelKey {
   final String key;
   const SelKey(this.lib, this.key);
   @override
-  bool operator ==(Object o) => o is SelKey && o.lib == lib && o.key == key;
+  bool operator ==(Object other) =>
+      other is SelKey && other.lib == lib && other.key == key;
   @override
   int get hashCode => Object.hash(lib, key);
 }

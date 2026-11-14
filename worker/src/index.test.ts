@@ -1014,6 +1014,28 @@ describe("trash", () => {
       expect(await trashOrderOf(id)).toBeUndefined();
     });
 
+    it("keeps the slot of a restore whose file was already moved back when another edit prunes", async () => {
+      const { id, keys } = await mkAlbum("m13", ["a", "b", "c", "d"]);
+      const tb = await trash(keys[1]!);
+      // 前回の restore はファイルを戻した後に落ちた状態
+      await env.LIB_A.put(keys[1]!, PNG);
+      await env.LIB_A.delete(tb);
+      // 同じアルバムへの無関係な操作が刈り込みを走らせる
+      await post(`/v1/a/albums/${id}/items/remove`, { keys: [keys[3]] });
+      expect((await restore(tb)).status).toBe(200);
+      expect(await items(id)).toEqual([keys[0], keys[1], keys[2]]);
+    });
+
+    it("keeps the slot of a resumed restore when another item is trashed in the same album", async () => {
+      const { id, keys } = await mkAlbum("m14", ["a", "b", "c", "d"]);
+      const tb = await trash(keys[1]!);
+      await env.LIB_A.put(keys[1]!, PNG);
+      await env.LIB_A.delete(tb);
+      await trash(keys[3]!);
+      expect((await restore(tb)).status).toBe(200);
+      expect(await items(id)).toEqual([keys[0], keys[1], keys[2]]);
+    });
+
     it("clears trashOrder when nothing is left in the trash", async () => {
       const { id, keys } = await mkAlbum("m11", ["a", "b"]);
       const ta = await trash(keys[0]!);

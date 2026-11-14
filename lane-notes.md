@@ -199,3 +199,4 @@ QUEUED (post pass ~14:53Z, order): reviews 122/136 -> issues (newline regex, mov
 C1a design chunk (theme.dart nav/tokens) member started 14:15Z on feat/design-c1a-theme-nav
 #131 merged #130 4bed24e in: head a436ec0 (no conflicts; 接続中/変更 row inside 接続 group, 切断 kept) | flutter 489/0 | re-review #130 delta + #131 full running (files only)
 #137 REVIEW PASS at 31eb486 must0 want3 (scroll-tap test, positive strip test, 390/1440 screenshots for #73) nit3 | #138 REVIEW FAIL at 0ef025c must1 (white page before Flutter draws; #59 criteria) want3 | reviews queued as files | fix member running for both
+#132 delta PASS at e81d475 (want: body stale) | #133 delta PASS at 647da16 (want: body stale) | reviews queued; merge needs owner scope extension (stream PRs)

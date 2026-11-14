@@ -392,6 +392,28 @@ void main() {
       }, _SlowDeleteOverrides(const Duration(milliseconds: 300)));
     });
 
+    test('退避ファイルの削除中に一時停止・再開しても、退避し直さずに完了する', () async {
+      await IOOverrides.runWithIOOverrides(() async {
+        final q = make();
+        await q.restore();
+        final path = await source('pr.jpg', bytesOf(500));
+        await q.enqueueUploads('lib', [
+          UploadSource(name: 'pr.jpg', size: 500, mime: 'image/jpeg', path: path),
+        ]);
+        final t = q.tasks.single;
+        await until(() => t.status == TransferStatus.running && t.stagedPath == null,
+            what: 'staged delete');
+        q.pause(t.id);
+        q.resume(t.id);
+        await q.idle();
+        expect(t.status, TransferStatus.done);
+        expect(t.stagedPath, isNull);
+        expect(Directory('${tmp.path}/stage').listSync(), isEmpty);
+        expect(jsonDecode(ledger.value!), isEmpty);
+        expect(w.objects.keys.toList(), ['pr.jpg']);
+      }, _SlowDeleteOverrides(const Duration(milliseconds: 300)));
+    });
+
     test('退避ファイルの削除が返らなくても完了を報告し、残りは起動時の掃除に任せる', () async {
       final never = Completer<void>();
       await IOOverrides.runWithIOOverrides(() async {

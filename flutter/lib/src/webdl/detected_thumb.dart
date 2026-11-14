@@ -344,18 +344,23 @@ class _TooLarge implements Exception {
 
 /// data: URL の中身を返す。上限を超える物・読めない物は空にする。
 /// 上限は復号の前に本文の長さから見る（巨大な埋め込みを縮小のために丸ごと展開しない）。
-/// 読み取りは UriData に任せる。生のバイト列を `%89PNG` と書いたパーセント符号化も、
-/// `;BASE64` の大文字小文字違いも正しく読める（decodeComponent は UTF-8 前提で 0x89 などに失敗する）。
+/// 読み取りは UriData に任せる。生のバイト列を `%89PNG` と書いた形も読める
+/// （decodeComponent は UTF-8 前提で 0x89 などに失敗する）。
+/// UriData は `;base64` の大文字小文字を区別するので、先に小文字へ揃える。
 @visibleForTesting
 Uint8List dataUrlBytes(String url, int maxBytes) {
   final i = url.indexOf(',');
   if (i < 0) return Uint8List(0);
   final bodyLength = url.length - i - 1;
-  final base64 = url.substring(0, i).toLowerCase().endsWith(';base64');
+  final head = url.substring(0, i);
+  final base64 = head.toLowerCase().endsWith(';base64');
   // 復号後の大きさの下限（base64 は 4 文字で 3 バイト・末尾の詰めは最大 2 バイト、%XX は 3 文字で 1 バイト）。
   // 下限で見るので、上限ちょうどの正しい物は弾かない
   final lowerBound = base64 ? (bodyLength ~/ 4) * 3 - 2 : bodyLength ~/ 3;
   if (lowerBound > maxBytes) return Uint8List(0);
-  final bytes = UriData.parse(url).contentAsBytes();
+  final normalized = base64
+      ? '${head.substring(0, head.length - 7)};base64${url.substring(i)}'
+      : url;
+  final bytes = UriData.parse(normalized).contentAsBytes();
   return bytes.length > maxBytes ? Uint8List(0) : bytes;
 }

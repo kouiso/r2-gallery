@@ -20,7 +20,7 @@ class _ConnectEditScreenState extends State<ConnectEditScreen> {
   final _token = TextEditingController();
   bool _busy = false;
   String? _error;
-  String? _ok;
+  String? _okDetail;
 
   @override
   void initState() {
@@ -39,12 +39,19 @@ class _ConnectEditScreenState extends State<ConnectEditScreen> {
     _token.value = TextEditingValue(text: p.token);
     setState(() {
       _error = null;
-      _ok = null;
+      _okDetail = null;
     });
   }
 
+  // トークン欄が空なら今のトークンのまま（デザインの「変えない時は空のまま」）。
+  // 別のエンドポイントへ今のトークンを送ることになるが、確かめて通った時しか保存しない
+  String get _effectiveToken {
+    final t = _token.text.trim();
+    return t.isNotEmpty ? t : (widget.app.api.conn?.token ?? '');
+  }
+
   bool get _canSubmit =>
-      _endpoint.text.trim().isNotEmpty && _token.text.trim().isNotEmpty;
+      _endpoint.text.trim().isNotEmpty && _effectiveToken.isNotEmpty;
 
   @override
   void dispose() {
@@ -55,7 +62,7 @@ class _ConnectEditScreenState extends State<ConnectEditScreen> {
 
   void _edited() => setState(() {
         _error = null;
-        _ok = null;
+        _okDetail = null;
       });
 
   Future<void> _try() async {
@@ -63,14 +70,14 @@ class _ConnectEditScreenState extends State<ConnectEditScreen> {
     setState(() {
       _busy = true;
       _error = null;
-      _ok = null;
+      _okDetail = null;
     });
-    final r = await widget.app.tryConnect(_endpoint.text, _token.text);
+    final r = await widget.app.tryConnect(_endpoint.text, _effectiveToken);
     if (!mounted) return;
     setState(() {
       _busy = false;
       _error = r.error;
-      _ok = r.error != null
+      _okDetail = r.error != null
           ? null
           : (r.libraryCount != null
               ? 'ライブラリ ${r.libraryCount} 件が見つかりました。保存すると切り替わります。'
@@ -84,8 +91,8 @@ class _ConnectEditScreenState extends State<ConnectEditScreen> {
       _busy = true;
       _error = null;
     });
-    // connect は確かめて成功した時だけ接続を差し替える。失敗では今の接続を触らない
-    final err = await widget.app.connect(_endpoint.text, _token.text);
+    // 確かめて成功した時だけ接続を差し替える。失敗では今の接続を触らず、理由（届かない／トークン）を出す
+    final err = await widget.app.saveConnection(_endpoint.text, _effectiveToken);
     if (!mounted) return;
     if (err == null) {
       Navigator.of(context).pop(true);
@@ -93,82 +100,201 @@ class _ConnectEditScreenState extends State<ConnectEditScreen> {
     }
     setState(() {
       _busy = false;
-      _error = '$err 保存していないので、今の接続のまま使えます。';
-      _ok = null;
+      _error = err;
+      _okDetail = null;
     });
   }
+
+  Widget _field(String label, TextEditingController c, String hint,
+      {TextInputType? type, bool obscure = false, Key? fieldKey}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: const TextStyle(
+                color: AppColors.textDim, fontSize: 13, height: 20 / 13)),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 52,
+          child: TextField(
+            key: fieldKey,
+            controller: c,
+            keyboardType: type,
+            obscureText: obscure,
+            onChanged: (_) => _edited(),
+            style: const TextStyle(color: AppColors.textPrimary, fontSize: 15),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle:
+                  const TextStyle(color: AppColors.textDim, fontSize: 15),
+              filled: true,
+              fillColor: AppColors.surfaceHigh,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+              border: _fieldBorder,
+              enabledBorder: _fieldBorder,
+              focusedBorder: _fieldBorder.copyWith(
+                  borderSide: const BorderSide(color: AppColors.accent)),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  static final _fieldBorder = OutlineInputBorder(
+    borderRadius: BorderRadius.circular(14),
+    borderSide: const BorderSide(color: _outline),
+  );
+  // デザインの入力枠・ボタン枠の色
+  static const _outline = Color(0xFF6E6C7C);
+  static const _okColor = Color(0xFF7FD1A8);
 
   @override
   Widget build(BuildContext context) {
     final conn = widget.app.api.conn;
     final host = conn == null ? null : hostOf(conn.endpoint);
+    final buttonShape =
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(14));
+    const buttonText = TextStyle(fontSize: 15, fontWeight: FontWeight.w700);
     return Scaffold(
       appBar: AppBar(title: const Text('接続先を変更')),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
           children: [
-            if (host != null)
-              Card(
-                child: ListTile(
-                  title: const Text('今の接続先'),
-                  subtitle: Text(host,
-                      style: const TextStyle(
-                          color: AppColors.textDim, fontSize: 12)),
+            if (host != null) ...[
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  border: Border.all(color: AppColors.border),
+                  borderRadius: BorderRadius.circular(16),
                 ),
+                child: Row(children: [
+                  Container(
+                    key: const Key('currentDot'),
+                    width: 10,
+                    height: 10,
+                    decoration: const BoxDecoration(
+                        color: _okColor, shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('今の接続先',
+                            style: TextStyle(
+                                color: AppColors.textDim,
+                                fontSize: 13,
+                                height: 20 / 13)),
+                        Text(host,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 15,
+                                height: 22 / 15)),
+                      ],
+                    ),
+                  ),
+                ]),
               ),
+              const SizedBox(height: 16),
+            ],
+            _field('エンドポイント', _endpoint, 'https://…workers.dev',
+                type: TextInputType.url, fieldKey: const Key('endpointField')),
             const SizedBox(height: 16),
-            TextField(
-              controller: _endpoint,
-              decoration: const InputDecoration(
-                  labelText: 'エンドポイント', hintText: 'https://…workers.dev'),
-              keyboardType: TextInputType.url,
-              onChanged: (_) => _edited(),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: _token,
-              decoration: const InputDecoration(
-                  labelText: 'アクセストークン', hintText: 'r2g_…'),
-              obscureText: true,
-              onChanged: (_) => _edited(),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'r2g://setup… のペアリング文字列を、どちらの欄に貼り付けても入ります。',
-              style: TextStyle(color: AppColors.textDim, fontSize: 12),
-            ),
-            if (_ok != null) ...[
-              const SizedBox(height: 14),
-              Text('接続できました。$_ok',
-                  style: const TextStyle(
-                      color: AppColors.textPrimary, fontSize: 13)),
-            ],
-            if (_error != null) ...[
-              const SizedBox(height: 14),
-              Text(_error!,
-                  style:
-                      const TextStyle(color: AppColors.danger, fontSize: 13)),
-            ],
-            const SizedBox(height: 24),
-            OutlinedButton(
-              onPressed: _busy || !_canSubmit ? null : _try,
-              child: const Text('接続を試す'),
-            ),
-            const SizedBox(height: 8),
-            FilledButton(
-              onPressed: _busy || !_canSubmit ? null : _save,
-              child: _busy
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('保存して切り替える'),
-            ),
+            _field('アクセストークン', _token, '変えない時は空のまま',
+                obscure: true, fieldKey: const Key('tokenField')),
             const SizedBox(height: 12),
             const Text(
+              'r2g://setup… のペアリング文字列を、どちらの欄に貼り付けても入ります。',
+              style: TextStyle(
+                  color: AppColors.textDim, fontSize: 12, height: 18 / 12),
+            ),
+            if (_okDetail != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                key: const Key('okBox'),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  border: Border.all(color: AppColors.border),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(top: 1),
+                        child: Icon(Icons.check_circle_outline,
+                            size: 24, color: _okColor),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('接続できました',
+                                style: TextStyle(
+                                    color: AppColors.textPrimary,
+                                    fontSize: 14,
+                                    height: 20 / 14)),
+                            Text(_okDetail!,
+                                style: const TextStyle(
+                                    color: AppColors.textDim,
+                                    fontSize: 12,
+                                    height: 18 / 12)),
+                          ],
+                        ),
+                      ),
+                    ]),
+              ),
+            ],
+            const SizedBox(height: 24),
+            SizedBox(
+              height: 52,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                    shape: buttonShape,
+                    side: const BorderSide(color: _outline),
+                    foregroundColor: AppColors.textPrimary,
+                    textStyle: buttonText),
+                onPressed: _busy || !_canSubmit ? null : _try,
+                child: const Text('接続を試す'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 52,
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                    shape: buttonShape, textStyle: buttonText),
+                onPressed: _busy || !_canSubmit ? null : _save,
+                child: _busy
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('保存して切り替える'),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // 失敗の理由はデザインどおりボタンの下の説明の位置に出す
+            if (_error != null) ...[
+              Text(_error!,
+                  key: const Key('errorNote'),
+                  style: const TextStyle(
+                      color: AppColors.danger, fontSize: 12, height: 18 / 12)),
+              const SizedBox(height: 4),
+            ],
+            const Text(
               'つながらなかった時は保存されず、今の接続のまま使えます。',
-              style: TextStyle(color: AppColors.textDim, fontSize: 12),
+              style: TextStyle(
+                  color: AppColors.textDim, fontSize: 12, height: 18 / 12),
             ),
           ],
         ),

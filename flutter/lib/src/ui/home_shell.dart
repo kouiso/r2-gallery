@@ -71,6 +71,8 @@ class _HomeShellState extends State<HomeShell> {
   late final Set<int> _opened = {0, _tab};
   // 子画面を積んだ時のライブラリ。写真タブでライブラリを替えたら、前のライブラリの子画面は捨てる
   String? _stackLib;
+  // 接続先を差し替えた世代。変わったら子画面と写真・アルバムの状態を捨てて、新しい接続先から取り直す
+  late int _gen = widget.app.connectionGen;
   // 取り込みタブで内蔵ブラウザを開いている間は下タブを隠す（#165）
   bool _browserOpen = false;
 
@@ -105,12 +107,26 @@ class _HomeShellState extends State<HomeShell> {
   // 前のライブラリの写真を見せたまま操作させてしまうので捨てる。ゴミ箱は今のライブラリを追うので残す
   void _onAppChanged() {
     final lib = widget.app.activeLib;
-    if (lib == _stackLib) return;
+    final switched = widget.app.connectionGen != _gen;
+    if (lib == _stackLib && !switched) return;
     _stackLib = lib;
+    // 接続先が替わったら同じライブラリ id でも別物なので、ゴミ箱の子画面も含めて全部捨てる
     final stale = [
       for (final c in _albumsStack)
-        if (c is! _TrashChild) c
+        if (switched || c is! _TrashChild) c
     ];
+    if (switched) {
+      void rebuild() {
+        if (mounted) setState(() => _gen = widget.app.connectionGen);
+      }
+      // 画面の組み立て中に通知が来た時は、描画後に反映する
+      if (SchedulerBinding.instance.schedulerPhase ==
+          SchedulerPhase.persistentCallbacks) {
+        SchedulerBinding.instance.addPostFrameCallback((_) => rebuild());
+      } else {
+        rebuild();
+      }
+    }
     if (stale.isEmpty || !mounted) return;
     void drop() {
       if (!mounted) return;
@@ -324,7 +340,10 @@ class _HomeShellState extends State<HomeShell> {
       body: IndexedStack(
               index: _tab,
               children: [
-                _needsLibrary((lib) => GalleryTab(
+                // 写真・アルバムだけ世代でキーを付ける。取り込みの WebView は作り直さない
+                KeyedSubtree(
+                    key: ValueKey('photos-$_gen'),
+                    child: _needsLibrary((lib) => GalleryTab(
                       app: app,
                       lib: lib,
                       // 読み込み失敗の直し先は接続先の変更。接続中は切断せずに直せる
@@ -332,10 +351,12 @@ class _HomeShellState extends State<HomeShell> {
                           ? Navigator.of(context).push(MaterialPageRoute<void>(
                               builder: (_) => ConnectEditScreen(app: app)))
                           : _goTab(_settingsTab),
-                    )),
-                _opened.contains(_albumsTab)
-                    ? _needsLibrary(_albumsSlot)
-                    : const SizedBox.shrink(),
+                    ))),
+                KeyedSubtree(
+                    key: ValueKey('albums-$_gen'),
+                    child: _opened.contains(_albumsTab)
+                        ? _needsLibrary(_albumsSlot)
+                        : const SizedBox.shrink()),
                 // 内蔵ブラウザ（WebView）は重いので、開いた時だけ作る
                 _opened.contains(_importTab)
                     ? ImportBrowserTab(

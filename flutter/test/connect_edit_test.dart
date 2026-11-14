@@ -67,8 +67,8 @@ Future<(AppState, _Api)> _pump(WidgetTester t) async {
 }
 
 Future<void> _fill(WidgetTester t, String ep, String tok) async {
-  await t.enterText(find.widgetWithText(TextField, 'エンドポイント'), ep);
-  await t.enterText(find.widgetWithText(TextField, 'アクセストークン'), tok);
+  await t.enterText(find.byKey(const Key('endpointField')), ep);
+  await t.enterText(find.byKey(const Key('tokenField')), tok);
   await t.pump();
 }
 
@@ -106,10 +106,18 @@ void main() {
     await t.pumpAndSettle();
     expect(find.textContaining('トークンが違います'), findsOneWidget);
 
-    api.probeOk = false;
+    // 保存の失敗も試すボタンと同じ理由を出す（共通の文言にしない）
     await t.tap(find.text('保存して切り替える'));
     await t.pumpAndSettle();
-    expect(find.textContaining('今の接続のまま使えます'), findsWidgets);
+    expect(find.byKey(const Key('errorNote')), findsOneWidget);
+    expect(find.textContaining('トークンが違います'), findsOneWidget);
+    expect(find.textContaining('今の接続のまま使えます'), findsOneWidget);
+
+    api.next = ProbeOutcome.unreachable;
+    await t.tap(find.text('保存して切り替える'));
+    await t.pumpAndSettle();
+    expect(find.textContaining('接続先に届きません'), findsOneWidget);
+    expect(find.textContaining(connectFailedMessage), findsNothing);
     expect(find.text('接続先を変更'), findsOneWidget); // 画面に残る
     expect(app.connected, isTrue);
     expect(app.api.conn?.endpoint, 'https://old.example');
@@ -128,5 +136,31 @@ void main() {
     expect(app.api.conn?.endpoint, 'https://new.example');
     expect(await Kv.get(Keys.endpoint), 'https://new.example');
     expect(find.text('接続先を変更'), findsNothing);
+  });
+
+  testWidgets('トークン欄が空なら今のトークンのまま保存できる', (t) async {
+    final (app, _) = await _pump(t);
+    await t.tap(find.text('変更'));
+    await t.pumpAndSettle();
+    await t.enterText(find.byKey(const Key('endpointField')), 'https://new.example');
+    await t.pump();
+    await t.tap(find.text('保存して切り替える'));
+    await t.pumpAndSettle();
+    expect(app.api.conn?.endpoint, 'https://new.example');
+    expect(app.api.conn?.token, 'old-token');
+    expect(await Kv.get(Keys.token), 'old-token');
+  });
+
+  testWidgets('トークン欄の案内と、今の接続先の緑の点・成功の枠が出る', (t) async {
+    await _pump(t);
+    await t.tap(find.text('変更'));
+    await t.pumpAndSettle();
+    expect(find.text('変えない時は空のまま'), findsOneWidget);
+    expect(find.byKey(const Key('currentDot')), findsOneWidget);
+    await t.tap(find.text('接続を試す'));
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('okBox')), findsOneWidget);
+    expect(find.text('接続できました'), findsOneWidget);
+    expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
   });
 }

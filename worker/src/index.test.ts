@@ -1155,6 +1155,74 @@ describe("trash", () => {
   });
 });
 
+describe("stale thumbnails", () => {
+  const thumbKey = (k: string) => `.system/thumbs/a/${k}.webp`;
+  const trashPurge = async () => {
+    const ctx = createExecutionContext();
+    const ctrl = {
+      cron: "17 3 * * *",
+      scheduledTime: Date.now(),
+      noRetry: () => undefined,
+    } as unknown as ScheduledController;
+    await worker.scheduled(ctrl, env);
+    await waitOnExecutionContext(ctx);
+  };
+
+  it("purge removes the thumbnail of an expired trash entry", async () => {
+    await env.LIB_A.put(`.trash/${Date.now() - 31 * 86_400_000}/gone/old.png`, PNG);
+    await env.META.put(thumbKey("gone/old.png"), "OLD");
+    await trashPurge();
+    expect(await env.META.head(thumbKey("gone/old.png"))).toBeNull();
+  });
+
+  it("purge keeps the thumbnail while a same-name object has been re-uploaded", async () => {
+    await env.LIB_A.put(`.trash/${Date.now() - 31 * 86_400_000}/again/pic.png`, PNG);
+    await env.LIB_A.put("again/pic.png", PNG);
+    await env.META.put(thumbKey("again/pic.png"), "NEW");
+    await trashPurge();
+    expect(await env.META.head(thumbKey("again/pic.png"))).not.toBeNull();
+  });
+
+  it("purge keeps the thumbnail of a fresh trash entry (restore needs it)", async () => {
+    await env.LIB_A.put(`.trash/${Date.now()}/keep/pic.png`, PNG);
+    await env.META.put(thumbKey("keep/pic.png"), "KEEP");
+    await trashPurge();
+    expect(await env.META.head(thumbKey("keep/pic.png"))).not.toBeNull();
+  });
+
+  it("simple upload drops a stale thumbnail of the same name", async () => {
+    await env.META.put(thumbKey("re/up.png"), "OLD");
+    expect((await putObject("a", "re/up.png")).status).toBe(201);
+    expect(await env.META.head(thumbKey("re/up.png"))).toBeNull();
+  });
+
+  it("multipart complete drops a stale thumbnail of the same name", async () => {
+    await env.META.put(thumbKey("re/mp.mp4"), "OLD");
+    const create = await api("/v1/a/objects/multipart", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key: "re/mp.mp4", contentType: "video/mp4" }),
+    });
+    const { uploadId } = (await create.json()) as { uploadId: string };
+    const p = await api(
+      `/v1/a/objects/multipart/part?key=${encodeURIComponent("re/mp.mp4")}&uploadId=${uploadId}&part=1`,
+      {
+        method: "PUT",
+        headers: { "content-type": "application/octet-stream" },
+        body: new Uint8Array([1, 2, 3]),
+      },
+    );
+    const part = (await p.json()) as { partNumber: number; etag: string };
+    const done = await api("/v1/a/objects/multipart/complete", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key: "re/mp.mp4", uploadId, parts: [part] }),
+    });
+    expect(done.status).toBe(201);
+    expect(await env.META.head(thumbKey("re/mp.mp4"))).toBeNull();
+  });
+});
+
 describe("url import", () => {
   const REMOTE = "https://cdn.example.org";
 

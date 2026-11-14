@@ -96,6 +96,7 @@ fix/ci-secrets-scan-range cf913ae | review PASS must0 want1 nit2 (queued) | want
 MERGED #124 RG-22 13:27Z | head 989ca87 == GATE head https://github.com/kouiso/r2-gallery/pull/124#issuecomment-6877963078 | merge 0b43385 | #57 #58 closed by GitHub | web-deploy run 43599833103 in progress; pages-dist/fad-dist-state still 5dfe918 -> confirm before next merge
 stream A | PRs #129 (#33, 9e20f53) -> #130 (#92/#93, fbb6162) -> #131 (#66/#67, 3b748eb) stacked; evidence pr1/pr2/pr3 PNGs (goldens, Ahem font); #69/#70 OWNER-blocked on #29
 OWNER INSTRUCTION 2026-11-14 (relayed): 「…デザイン通りになるように全部作ること」 -> design page = reference for everything on screen; queue position: after existing open PRs + iteration items. Design link: https://claude.ai/artifact/6NsgHfP9kH9whED6j4ec26 (opened OK 12:2xZ; identical to repo doc/design/project). Pages: current (10/27, 11/11 修正), review (11/11 proposals), redesign (10/11 KMP record).
+stream B | #115 no repro (300 upload/export/offline OK in Dart VM + web; web tab crashed ~400MB heap; Android not tested) -> comment https://github.com/kouiso/r2-gallery/issues/115#issuecomment-6877981401 asks owner which save; #116/#117 blocked | PRs #133 (#39 detected thumb, 099833f, Refs), #134 (#83 analyze 7->0, 337a5ae, Closes), #132 (#36 duration, 7f054ef, Refs) — reviews next
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)
@@ -117,6 +118,7 @@ OWNER INSTRUCTION 2026-11-14 (relayed): 「…デザイン通りになるよう�
 | RG-31 | blocked | wait | DEVICE |
 
 ## needs owner
+- #114/#115: 写真数百枚の保存エラーは、どの操作（アップロード／端末への書き出し／オフライン保存）・どの端末と版・何枚目で止まったか・表示された文言を教えてほしい（手元の再現では 300 枚とも成功。Web はメモリで落ちる兆候あり）
 - バグ直し以外（設定タブ・文書・小さな改善）の PR も、審査が通って証跡がそろっていれば、聞かずに 1 本ずつマージしてよいか（マージすると本番の Web とアプリが新しくなる）。ただし、機能をなくす・操作を変える物、配信の仕組み（web-deploy.yml など）を変える物、実機での確認が要る物は、これまでどおり 1 件ずつ聞く。（はい／いいえ）推奨: はい — 該当: #125 #128 ほか stream A-D の PR（除外: #118、#81/#82）
 - #65（#63 の 2 つ目）: 一覧に出ない形式（HEIC など）は「上げる前に止める」か「HEIC を表示できるようにする」か。あわせて、既に上がっている一覧に出ないファイルをどうするか（そのまま／一覧に出す／書き出す）。推奨: 上げる前に止める・既存はそのまま
 - #44: 並び替えのたびにバケット全体を数え上げない作りにするため、一覧の索引を META（R2 のファイル）か D1 に持つか。D1 はデータベースの変更になる。推奨: META の索引（データベースは触らない）

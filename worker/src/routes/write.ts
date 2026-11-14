@@ -3,7 +3,13 @@ import type { Env } from "../lib/env";
 import { readable, writable } from "../lib/env";
 import { assertUserKey, HttpError, json, readJson, ref } from "../lib/http";
 import { handleImport } from "../lib/import";
-import { completeCreateOnly, copyObject, createOnly, moveObject } from "../lib/objects";
+import {
+  completeCreateOnly,
+  copyObject,
+  createOnly,
+  deleteThumb,
+  moveObject,
+} from "../lib/objects";
 import { loadIndex, mutateAlbums } from "../lib/store";
 import type { AlbumsFile, GlobalAlbum } from "../lib/store";
 
@@ -22,6 +28,8 @@ export async function handlePutObject(req: Request, env: Env, lib: string, url: 
     onlyIf: createOnly(),
   });
   if (!put) throw new HttpError(409, "destination_exists");
+  // 同名の削除済みの物のサムネが残っていると、新しい物に古い絵が出る
+  await deleteThumb(env, lib, key);
   return json({ key, size: put.size }, 201);
 }
 
@@ -85,6 +93,7 @@ export async function handleMultipartDone(
   });
   if (!uploaded.length) throw new HttpError(400, "bad_parts");
   const obj = await completeCreateOnly(bucket, up, uploaded);
+  await deleteThumb(env, lib, key);
   return json({ key, size: obj.size }, 201);
 }
 
@@ -142,11 +151,13 @@ export async function handleCopyMove(
   if (action === "copy") {
     const src = readable(env, from.lib);
     const put = await copyObject(env, src.bucket, srcKey, dst.bucket, dstKey);
+    await deleteThumb(env, dst.lib.id, dstKey);
     return json({ ok: true, to: { lib: dst.lib.id, key: dstKey }, size: put.size });
   }
   const src = writable(env, from.lib);
   if (src.lib.id === dst.lib.id && srcKey === dstKey) throw new HttpError(400, "same_key");
   const put = await moveObject(env, src.bucket, srcKey, dst.bucket, dstKey);
+  await deleteThumb(env, dst.lib.id, dstKey);
   return json({ ok: true, to: { lib: dst.lib.id, key: dstKey }, size: put.size });
 }
 

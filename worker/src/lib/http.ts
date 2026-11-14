@@ -24,7 +24,8 @@ export function corsHeaders(): Record<string, string> {
   return {
     "access-control-allow-origin": "*",
     "access-control-allow-headers": "authorization, content-type",
-    "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+    // アルバム名変更は PATCH を使う。ここに無いとブラウザが事前確認で本リクエストを止める（#54）
+    "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     "access-control-max-age": "86400",
   };
 }

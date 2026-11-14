@@ -162,6 +162,26 @@ beforeAll(async () => {
   await env.LIB_A.put("hidden/.system/x.jpg", PNG);
 });
 
+describe("CORS preflight", () => {
+  // クライアントが実際に使う全メソッドを事前確認が許可しないと、Web 版でブラウザが本リクエスト自体を送らない（#54）
+  it.each(["GET", "POST", "PUT", "PATCH", "DELETE"])("allows %s", async (method) => {
+    const res = await SELF.fetch(`${ORIGIN}/v1/lib-a/albums/x`, {
+      method: "OPTIONS",
+      headers: {
+        origin: "https://web.example.test",
+        "access-control-request-method": method,
+        "access-control-request-headers": "authorization, content-type",
+      },
+    });
+    expect(res.status).toBe(204);
+    const allowed = (res.headers.get("access-control-allow-methods") ?? "")
+      .split(",")
+      .map((m) => m.trim());
+    expect(allowed).toContain(method);
+    expect(allowed).toContain("OPTIONS");
+  });
+});
+
 describe("auth", () => {
   it("rejects requests without a bearer token", async () => {
     const res = await SELF.fetch(`${ORIGIN}/v1/libraries`);

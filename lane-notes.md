@@ -80,6 +80,7 @@ HOUR 2026-11-14T13:08:55Z | merged 0 | closed 0 | output 0 | open PR 3->13 (r2-g
   narrowest point: review verdicts (5 FAIL→rework rounds) + rate limit; capacity raised to 8 members then capped to 5 for 4-CPU load
 #126 RG-23 (#64) | re-review PASS must0 (queued 126-review-260d90f.md) | evidence evidence/126-260d90f.png | CI check/test/secrets green, emulator running | merge order: after #124, #123
 MERGE QUEUE (one at a time, after rate limit): #124 -> #123 -> #126 -> (#120 if PASS) -> #122 -> #122-stacked -> #121 -> #121-stacked(retarget) -> #127 (if PASS)
+#120 RG-19 | re-review PASS must0 want4 nit2 (queued 120-review-01936fb.md) | evidence evidence/120-01936fb.png | CI 4/4 green | stacked follow-up (trashOrder prune, O(n) insert, 8-way test) by RG-19 member; merge #120 at its turn then stacked right after (worker change only deploys with RG-24)
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)

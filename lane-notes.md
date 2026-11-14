@@ -158,3 +158,6 @@ POSTER done: new PRs #135 (#121 stacked) #136 (#122 stacked) #137 (#74) #138 (#6
 #129 REVIEW PASS must0 want3 (footer vs design row → replaced by #130; "Closes #33" needs real Android/Web screenshots or Refs; non-Conventional commit subjects) https://github.com/kouiso/r2-gallery/pull/129#issuecomment-6878176192
 #130 REVIEW FAIL must1 (test comment wrong, 4th heading オフライン保存 never asserted) want8 (design: grouped borders, offline row title/一覧>, lock subtitle, margin 12; untestable unsupported branch; 切断 connected test) https://github.com/kouiso/r2-gallery/pull/130#issuecomment-6878179095 → fix member running; #131 must merge #130's new head after both fixes
 #136 Devin finding verified real: purge regex `.*` skips keys with newlines (assertUserKey allows them) → fix added to the #122/#136 merge member's task
+PROD #141 confirmed: pages-dist == 9f14722 at 13:43Z (before #121 merge)
+MERGED #121 RG-17 (#114-ish same-name upload) ~13:49Z | head 4e24c2a == GATE https://github.com/kouiso/r2-gallery/pull/121#issuecomment-6878229434 | merge 8154862 | merge-result check 98bf444: flutter +481, fast 0, analyze 7 info (same as main)
+#135 retargeted to main; its earlier LOCAL-CHECK had fail 1 (ci fast timeouts under load) -> clean re-run on merge fbb248e (5e092d2 + main 8154862) running

@@ -1012,6 +1012,101 @@ describe("trash", () => {
       expect((await items(id)).filter((k) => k === keys[0])).toHaveLength(1);
     });
 
+    const trashOrderOf = async (id: string) => {
+      const f = (await (await env.META.get(".system/albums.json"))!.json()) as {
+        albums: { id: string; trashOrder?: string[] }[];
+      };
+      return f.albums.find((a) => a.id === id)?.trashOrder;
+    };
+    // 期限切れ purge と同じ状態：.trash の実体だけ消える（控えは残る）
+    const purge = (tk: string) => env.LIB_A.delete(tk);
+
+    it("keeps the album order when 8 items are trashed concurrently then restored in turn", async () => {
+      const { id, keys } = await mkAlbum(
+        "m9",
+        Array.from({ length: 10 }, (_, n) => String(n)),
+      );
+      const tks = await Promise.all(keys.slice(1, 9).map((k) => trash(k)));
+      expect(await items(id)).toEqual([keys[0], keys[9]]);
+      for (const tk of tks) expect((await restore(tk)).status).toBe(200);
+      expect(await items(id)).toEqual(keys);
+      expect(await trashOrderOf(id)).toBeUndefined();
+    });
+
+    it("drops purged and removed keys from trashOrder so it stays bounded", async () => {
+      const { id, keys } = await mkAlbum("m10", ["a", "b", "c", "d"]);
+      const ta = await trash(keys[0]!);
+      expect(await trashOrderOf(id)).toEqual(keys.map((k) => `a:${k}`));
+      // a は戻さないまま purge された
+      await purge(ta);
+      const tb = await trash(keys[1]!);
+      // a は落ち、今ゴミ箱にいる b と残っている c, d だけが残る
+      expect(await trashOrderOf(id)).toEqual(keys.slice(1).map((k) => `a:${k}`));
+      // アルバムから外した物も落ちる
+      await post(`/v1/a/albums/${id}/items/remove`, { keys: [keys[2]] });
+      expect(await trashOrderOf(id)).toEqual([keys[1], keys[3]].map((k) => `a:${k}`));
+      expect((await restore(tb)).status).toBe(200);
+      expect(await items(id)).toEqual([keys[1], keys[3]]);
+      expect(await trashOrderOf(id)).toBeUndefined();
+    });
+
+    it("keeps the slot of a restore whose file was already moved back when another edit prunes", async () => {
+      const { id, keys } = await mkAlbum("m13", ["a", "b", "c", "d"]);
+      const tb = await trash(keys[1]!);
+      // 前回の restore はファイルを戻した後に落ちた状態
+      await env.LIB_A.put(keys[1]!, PNG);
+      await env.LIB_A.delete(tb);
+      // 同じアルバムへの無関係な操作が刈り込みを走らせる
+      await post(`/v1/a/albums/${id}/items/remove`, { keys: [keys[3]] });
+      expect((await restore(tb)).status).toBe(200);
+      expect(await items(id)).toEqual([keys[0], keys[1], keys[2]]);
+    });
+
+    it("keeps the slot of a resumed restore when another item is trashed in the same album", async () => {
+      const { id, keys } = await mkAlbum("m14", ["a", "b", "c", "d"]);
+      const tb = await trash(keys[1]!);
+      await env.LIB_A.put(keys[1]!, PNG);
+      await env.LIB_A.delete(tb);
+      await trash(keys[3]!);
+      expect((await restore(tb)).status).toBe(200);
+      expect(await items(id)).toEqual([keys[0], keys[1], keys[2]]);
+    });
+
+    it("clears trashOrder when nothing is left in the trash", async () => {
+      const { id, keys } = await mkAlbum("m11", ["a", "b"]);
+      const ta = await trash(keys[0]!);
+      await purge(ta);
+      await post(`/v1/a/albums/${id}/items/remove`, { keys: [keys[1]] });
+      expect(await trashOrderOf(id)).toBeUndefined();
+    });
+
+    it("restores into the right place in an album of 2000 items", async () => {
+      const keys = Array.from({ length: 2000 }, (_, n) => `big/${String(n).padStart(4, "0")}.png`);
+      const cur = await env.META.get(".system/albums.json");
+      const file = (cur ? await cur.json() : { version: 1, albums: [] }) as {
+        version: 1;
+        albums: unknown[];
+      };
+      file.albums.push({
+        id: "m12",
+        title: "big",
+        items: keys.map((key) => ({ key, lib: "a", createdAt: 1 })),
+      });
+      await env.META.put(".system/albums.json", JSON.stringify(file));
+      for (const k of [keys[3]!, keys[1000]!, keys[1999]!]) await env.LIB_A.put(k, PNG);
+      const tks = await Promise.all([keys[3]!, keys[1000]!, keys[1999]!].map((k) => trash(k)));
+      // 一覧 API はページ分けされるので、albums.json を直接読む
+      const keysOf = async () => {
+        const f = (await (await env.META.get(".system/albums.json"))!.json()) as {
+          albums: { id: string; items: { key: string }[] }[];
+        };
+        return f.albums.find((a) => a.id === "m12")!.items.map((i) => i.key);
+      };
+      expect((await keysOf()).length).toBe(1997);
+      for (const tk of tks) await restore(tk);
+      expect(await keysOf()).toEqual(keys);
+    });
+
     it("leaves albums untouched when restoring an item trashed without a record", async () => {
       const { id, keys } = await mkAlbum("m7", ["a", "b"]);
       // 修正前にゴミ箱へ送った物：実体だけ .trash にあり、控えは無い。アルバムには別の物が入っている

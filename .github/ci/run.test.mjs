@@ -64,7 +64,42 @@ test('each command failure propagates its exit code and stops later phases', t =
 test('incremental secret scan preserves exact original base-parent to head scope', t => {
   const f = fixture(t);
   assert.equal(f.run('secrets', { CI_SCAN_BASE: 'abc123', CI_SCAN_HEAD: 'def456' }).status, 0);
-  assert.equal(f.calls()[0].args.at(-1), '--log-opts=--no-merges --first-parent abc123..def456');
+  assert.equal(f.calls()[0].args.at(-1), '--log-opts=--no-merges abc123..def456');
+});
+
+function git(cwd, ...args) {
+  const r = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', '-c', 'commit.gpgsign=false', ...args], { cwd, encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stderr);
+  return r.stdout.trim();
+}
+
+// 実際の git 履歴で、gitleaks に渡す範囲が PR / merge push のコミットを含むことを確かめる（以前は空だった）
+test('scan range covers the commits of a merged PR for both pull_request and push events', t => {
+  const repo = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'r2-ci-range-')));
+  t.after(() => rmSync(repo, { recursive: true, force: true }));
+  git(repo, 'init', '-q', '-b', 'main');
+  git(repo, 'commit', '-q', '--allow-empty', '-m', 'base');
+  const base = git(repo, 'rev-parse', 'HEAD');
+  git(repo, 'checkout', '-q', '-b', 'feature');
+  git(repo, 'commit', '-q', '--allow-empty', '-m', 'pr-1');
+  git(repo, 'commit', '-q', '--allow-empty', '-m', 'pr-2');
+  const prHead = git(repo, 'rev-parse', 'HEAD');
+  git(repo, 'checkout', '-q', 'main');
+  git(repo, 'commit', '-q', '--allow-empty', '-m', 'other-main-work');
+  const mainTip = git(repo, 'rev-parse', 'HEAD');
+  git(repo, 'merge', '-q', '--no-ff', '-m', 'Merge pull request', 'feature');
+  const merge = git(repo, 'rev-parse', 'HEAD');
+  const scanned = (f, env) => {
+    assert.equal(f.run('gitleaks', env).status, 0);
+    const opts = f.calls().at(-1).args.find(x => x.startsWith('--log-opts=')).slice('--log-opts='.length);
+    return git(repo, 'log', '--format=%s', ...opts.split(' ')).split('\n').filter(Boolean).sort();
+  };
+  // pull_request: head は PR の先頭 sha
+  assert.deepEqual(scanned(fixture(t), { CI_SCAN_BASE: base, CI_SCAN_HEAD: prHead }), ['pr-1', 'pr-2']);
+  // base が古いまま HEAD がマージ参照になっても PR のコミットは落ちない（main 側の追加分は重複して見るだけ）
+  assert.deepEqual(scanned(fixture(t), { CI_SCAN_BASE: base, CI_SCAN_HEAD: merge }), ['other-main-work', 'pr-1', 'pr-2']);
+  // main への merge push（before..sha）
+  assert.deepEqual(scanned(fixture(t), { CI_SCAN_BASE: mainTip, CI_SCAN_HEAD: merge }), ['pr-1', 'pr-2']);
 });
 
 test('initial push uses full history and scan findings retain exit 2', t => {

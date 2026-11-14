@@ -84,6 +84,7 @@ MERGE QUEUE (one at a time, after rate limit): #124 -> #123 -> #126 -> (#120 if 
 #125 #84/#85 | review PASS must0 nit1 (queued 125-review-5517eca.md) | evidence evidence/125-5517eca.png | CI 4/4 green | NOT an RG row: merge needs owner OK beyond RG-12 scope? -> RG-12 answer covers #118 + RG-17..23 only; stream PRs stay OWNER for merge (ask manager/owner to extend)
 #121-stacked (test/rg17-resume-409 5e092d2) | review PASS must0 want1 (fail-before count 6=4 new+2; fixed in queued body/LOCAL-CHECK by lead, text only) | queued: PR + review
 #122-stacked (fix/rg20-thumb-hardening 27de2cd) | review PASS must0 want2 — DECIDED: want1 (uncapped purge can get permanently stuck with 1000+ expired items; regression vs old progress) treated as blocking; member fixes on same branch before the PR is opened; fresh review after | reason production trash would never empty | revert: n/a
+#127 RG-18 | re-review PASS must0 want1 nit2 at fcfc041 (queued 127-review-fcfc041.md) | want1 (old→new worker switch at #47 deploy loses later pages for non-default sorts until refresh; one-time) -> follow-up PR after merge | evidence needed: UI behaviour -> headless web recording vs local worker (sort old/name/size, page 2 after sort change) — queue for a member
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)

@@ -89,6 +89,7 @@ MERGE QUEUE (one at a time, after rate limit): #124 -> #123 -> #126 -> (#120 if 
 SECURITY FINDING | CI secrets-scan scans 0 commits on PRs and main pushes (ci.yml:69-71 + gitleaks.sh: merge-commit head + --no-merges --first-parent) | fix PR fix/ci-secrets-scan-range in progress (stream C member)
 #127 | evidence evidence/127-fcfc041.png+.webm (old/name/size first-5 match seed; page 2 after sort change loads 50/50; console 0) | GATE-READY after review comment posted
 stream C round 2 | docs/run-locally-v2 189b77c (supersedes #128) + fix/ci-secrets-scan-range cf913ae (drop --first-parent, PR head sha; 9/9 run.test) — PRs queued, reviews running; docs/kmp-era-cleanup 196973f + docs/feature-parity-t3 c527b08 reviews running
+#122-stacked (fix/rg20-thumb-hardening 6c3d440) | re-review PASS must0 want0 nit2 (queued review file; lead corrected fail-before count 5->6 in queued body/LOCAL-CHECK, text only) | merge after #122
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)

@@ -107,7 +107,7 @@ class _CountApi extends ApiClient {
   int fetches = 0;
   @override
   Future<FolderPage> folder(String libId,
-          {String prefix = '', String? cursor, bool recursive = false}) async =>
+          {String prefix = '', String? cursor, bool recursive = false, String? sort}) async =>
       FolderPage(items: [
         MediaItem(
             key: 'a.jpg',

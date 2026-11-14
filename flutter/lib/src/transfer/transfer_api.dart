@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 
 import '../api/client.dart';
@@ -35,6 +36,12 @@ abstract class TransferApi {
   Future<void> putThumb(String lib, String key, Uint8List bytes);
   Future<Uint8List> fetchBytes(String url,
       {CancelToken? cancelToken, void Function(int got, int total)? onProgress});
+
+  /// そのキーに今ある物が、手元の中身（local）と同じか。無ければ false。
+  /// 同名・同サイズだけでは同じと決められないので、中身をストリームで照合する。
+  Future<bool> storedMatches(
+      String lib, String key, int size, Stream<List<int>> Function() local,
+      {CancelToken? cancelToken});
 
   /// 署名URLは期限が切れるので、一覧から取り直す。見つからなければ null。
   Future<String?> itemUrl(String lib, String key);
@@ -156,6 +163,30 @@ class ApiClientTransferApi implements TransferApi {
       final d = res.data;
       if (d == null) return Uint8List(0);
       return d is Uint8List ? d : Uint8List.fromList(d);
+    } catch (e) {
+      throw _err(e);
+    }
+  }
+
+  @override
+  Future<bool> storedMatches(
+      String lib, String key, int size, Stream<List<int>> Function() local,
+      {CancelToken? cancelToken}) async {
+    final there = await api.objectAt(lib, key);
+    if (there == null || (there.size != null && there.size != size)) return false;
+    try {
+      final res = await _dio.get<ResponseBody>(there.url,
+          options: Options(responseType: ResponseType.stream),
+          cancelToken: cancelToken);
+      final body = res.data;
+      if (body == null) throw const ApiError(502, '保存済みファイルを確認できません');
+      var received = 0;
+      final actual = await sha256.bind(body.stream.map((c) {
+        received += c.length;
+        return c;
+      })).first;
+      if (received != size) return false;
+      return actual == await sha256.bind(local()).first;
     } catch (e) {
       throw _err(e);
     }

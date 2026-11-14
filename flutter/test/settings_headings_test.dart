@@ -77,7 +77,7 @@ Future<void> _pump(WidgetTester t, AppState app) async {
       home: Scaffold(
       // 実機では親が AppState を聞いて作り直すので、同じ形にする
       body: ListenableBuilder(
-          listenable: app, builder: (_, __) => SettingsTab(app: app)),
+          listenable: app, builder: (_, _) => SettingsTab(app: app)),
     ),
     ),
   );

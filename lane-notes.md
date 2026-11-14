@@ -87,6 +87,7 @@ MERGE QUEUE (one at a time, after rate limit): #124 -> #123 -> #126 -> (#120 if 
 #127 RG-18 | re-review PASS must0 want1 nit2 at fcfc041 (queued 127-review-fcfc041.md) | want1 (old→new worker switch at #47 deploy loses later pages for non-default sorts until refresh; one-time) -> follow-up PR after merge | evidence needed: UI behaviour -> headless web recording vs local worker (sort old/name/size, page 2 after sort change) — queue for a member
 #128 | review FAIL must1 (README:64 curl Bearer dummy token trips gitleaks locally; fix needs no force-push/no ignore entry) want3 (queued 128-review-ac927b5.md) | DECIDED: supersede with new branch docs/run-locally-v2 (TOKEN=$TOKEN form), then close #128 with replacement link | reason: no history rewrite, no safeguard weakening | revert: n/a
 SECURITY FINDING | CI secrets-scan scans 0 commits on PRs and main pushes (ci.yml:69-71 + gitleaks.sh: merge-commit head + --no-merges --first-parent) | fix PR fix/ci-secrets-scan-range in progress (stream C member)
+#127 | evidence evidence/127-fcfc041.png+.webm (old/name/size first-5 match seed; page 2 after sort change loads 50/50; console 0) | GATE-READY after review comment posted
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)

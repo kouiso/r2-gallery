@@ -53,6 +53,10 @@ CAPACITY 2026-11-14 (manager relay of owner): cloud lane may run up to 8 members
 #126 RG-23 (#64 only) | review running | #65 needs owner decision
 #127 RG-18 | review running | #44 index (no full enumeration) needs owner decision
 #120 | reworked head 01936fb (trashOrder in albums.json; sidecar before mutate; resumable restore) | re-review running
+#118 | emulator SUCCESS on 6454563 (12:33Z); check/test/secrets-scan success | next (queued for a member): doc/feature-parity.md 本人承認済み->承認待ち + drop dead link, PR body (rename 閉じる->一覧に戻る, Refs #2 #3 #13, font redistribution terms, exportToDevice stub app_state.dart:696, whether worker media.ts must deploy first), then fresh re-review; then waits on owner feature answer + device video
+#121 | all 5 checks green incl. emulator (12:36Z) | HOLD for stacked test PR
+#126 | CI `check` FAILURE: .github/ci/run.test.mjs:96 expected 37 actual 1 (5/8 fail) — member changed run.mjs fast phase | FIX after review returns
+#120 | CodeRabbit still open on write.ts:196: concurrent membership add + failed sidecar rewrite can lose that membership; re-review running
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)

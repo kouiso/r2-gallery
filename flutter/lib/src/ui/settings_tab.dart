@@ -115,9 +115,8 @@ class _SettingsTabState extends State<SettingsTab> {
     if (ms != null) await app.setRelockGraceMs(ms);
   }
 
-  Widget _disconnectCard(AppState app) {
-    return Card(
-          child: ListTile(
+  Widget _disconnectTile(AppState app) {
+    return ListTile(
             leading: const Icon(Icons.link_off, color: AppColors.danger),
             title: const Text('切断',
                 style: TextStyle(color: AppColors.danger)),
@@ -142,8 +141,7 @@ class _SettingsTabState extends State<SettingsTab> {
               );
               if (ok == true) await app.disconnect();
             },
-          ),
-        );
+    );
   }
 
   @override
@@ -158,8 +156,8 @@ class _SettingsTabState extends State<SettingsTab> {
       padding: const EdgeInsets.all(16),
       children: [
         const SettingsHeading('接続', first: true),
-        Card(
-          child: ListTile(
+        SettingsGroup(children: [
+          ListTile(
             leading: Container(
               width: 10,
               height: 10,
@@ -177,18 +175,17 @@ class _SettingsTabState extends State<SettingsTab> {
                     style: TextStyle(color: AppColors.textDim, fontSize: 12)),
             onTap: host != null ? null : app.leaveBrowseOnly,
           ),
-        ),
-        // 切断の置き場はデザインでは別画面だが、#66 で接続先の変更が入るまで今の場所に残す
-        if (app.connected) const SizedBox(height: 8),
-        if (app.connected) _disconnectCard(app),
+          // 切断の置き場はデザインでは別画面だが、#66 で接続先の変更が入るまで今の場所に残す
+          if (app.connected) _disconnectTile(app),
+        ]),
         const SettingsHeading('ロック'),
-        Card(
-          child: SwitchListTile(
+        SettingsGroup(children: [
+          SwitchListTile(
             secondary: const Icon(Icons.fingerprint, color: AppColors.accent),
             title: const Text('画面ロックで保護'),
             subtitle: Text(
                 canToggleDeviceLock || app.deviceLockEnabled
-                    ? '写真・アルバム・設定を開くとき、指紋・顔・PINを求めます'
+                    ? '開くとき指紋・顔・PINを求めます'
                     : 'この端末では画面ロックを使えません。PINで保護できます',
                 style: const TextStyle(
                     color: AppColors.textDim, fontSize: 12)),
@@ -197,10 +194,7 @@ class _SettingsTabState extends State<SettingsTab> {
                 ? (on) => app.setDeviceLockEnabled(on)
                 : null,
           ),
-        ),
-        const SizedBox(height: 8),
-        Card(
-          child: ListTile(
+          ListTile(
             leading:
                 const Icon(Icons.timer_outlined, color: AppColors.accent),
             title: const Text('再ロックまでの時間'),
@@ -210,18 +204,12 @@ class _SettingsTabState extends State<SettingsTab> {
                 style: const TextStyle(color: AppColors.textDim)),
             onTap: _pickGrace,
           ),
-        ),
-        const SizedBox(height: 8),
-        Card(
-          child: ListTile(
+          ListTile(
             leading: const Icon(Icons.lock_outline, color: AppColors.accent),
             title: const Text('今すぐロック'),
             onTap: () => lockNowOrExplain(context, app),
           ),
-        ),
-        const SizedBox(height: 8),
-        Card(
-          child: ListTile(
+          ListTile(
             leading: const Icon(Icons.pin_outlined, color: AppColors.accent),
             title: Text(app.hasPin ? 'PINを変更' : 'PINを設定'),
             subtitle: const Text('画面ロックの代わりに、PINでも解除できます',
@@ -232,11 +220,13 @@ class _SettingsTabState extends State<SettingsTab> {
                 : null,
             onTap: () => _editPin(isNew: !app.hasPin),
           ),
-        ),
+        ]),
         // オフライン保存は接続なしでも見る・消すので、接続の有無に関わらず出す。
         // Web など非対応の環境では中身が空になるので見出しごと出さない
-        if (app.offlineSupported) const SettingsHeading('オフライン保存'),
-        OfflineSettingsCard(app: app),
+        if (app.offlineSupported) ...[
+          const SettingsHeading('オフライン保存'),
+          OfflineSettingsCard(app: app),
+        ],
         const SettingsHeading('このアプリについて'),
         const AppVersionLabel(),
         const SizedBox(height: 24),
@@ -249,6 +239,31 @@ class _SettingsTabState extends State<SettingsTab> {
 String formatAppVersion(String version, String build) =>
     build.isEmpty ? version : '$version（$build）';
 
+/// 見出しごとの枠。行を1枚ずつ別カードにすると何が同じ設定かが分からないので、
+/// 枠は1つにして行の間を細い線で区切る（ReviewSettings の .grp）。
+class SettingsGroup extends StatelessWidget {
+  final List<Widget> children;
+  const SettingsGroup({super.key, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      // 行のタップ波紋が角丸からはみ出さないようにする
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0)
+              const Divider(height: 1, thickness: 1, color: AppColors.border),
+            children[i],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 /// 設定の見出し。カードが同じ見た目で縦に並ぶだけだと、何の設定かが1枚ずつ読まないと
 /// 分からないので、グループごとに名前を付ける（ReviewSettings）。
 class SettingsHeading extends StatelessWidget {
@@ -259,7 +274,7 @@ class SettingsHeading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.fromLTRB(4, first ? 0 : 16, 4, 6),
+      padding: EdgeInsets.fromLTRB(4, first ? 0 : 12, 4, 6),
       child: Semantics(
         header: true,
         child: Text(
@@ -283,8 +298,8 @@ class AppVersionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: FutureBuilder<PackageInfo>(
+    return SettingsGroup(children: [
+      FutureBuilder<PackageInfo>(
         future: PackageInfo.fromPlatform(),
         builder: (context, snap) {
           final info = snap.data;
@@ -301,6 +316,6 @@ class AppVersionLabel extends StatelessWidget {
           );
         },
       ),
-    );
+    ]);
   }
 }

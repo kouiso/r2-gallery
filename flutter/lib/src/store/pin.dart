@@ -37,7 +37,7 @@ List<int> pbkdf2Sha256(String password, List<int> salt, int iterations,
 
 /// 21万回の HMAC は UI isolate で回すと数百ms 以上固まり、解除中のスピナーも止まる。
 /// 反復回数と保存形式は変えずに別 isolate へ逃がす（web では compute が同じ isolate で回す）。
-Future<List<int>> _pbkdf2Off(String pin, List<int> salt) => compute(
+Future<List<int>> _pbkdf2Off(String pin, List<int> salt) => PinLock.computeImpl(
       _pbkdf2Entry,
       (pin: pin, salt: salt, iterations: _iterations),
     );
@@ -46,6 +46,11 @@ List<int> _pbkdf2Entry(({String pin, List<int> salt, int iterations}) a) =>
     pbkdf2Sha256(a.pin, a.salt, a.iterations);
 
 class PinLock {
+  /// 重いハッシュ計算を別 isolate へ逃がす実体。テストで差し替え、実時間ではなく
+  /// 「計算が保留中でも呼び出し側が先へ進む」ことで UI isolate を占有しないことを確かめる。
+  @visibleForTesting
+  static ComputeImpl computeImpl = compute;
+
   static Future<bool> hasPin() async =>
       (await Kv.get(Keys.pinHash))?.isNotEmpty ?? false;
 

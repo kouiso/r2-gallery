@@ -60,6 +60,8 @@ CAPACITY 2026-11-14 (manager relay of owner): cloud lane may run up to 8 members
 #126 | FIX | review FAIL must1 (CI check red: run.mjs fast step breaks .github/ci/run.test.mjs) https://github.com/kouiso/r2-gallery/pull/126#issuecomment-6877448654 | fix: revert run.mjs change (drift already caught by tools/media-ext.test.mjs in test job), fix nit1 wording, add `node --test .github/ci/run.test.mjs` to LOCAL-CHECK | queued: resume RG-23 member at next free slot
 #128 stream C #86/#87 docs | Devin note: README:82 needs "clear site data / new profile" precondition | review after member report
 #123 | reworked head 91b67c1 (ALLOWED_METHODS single source; ACAO is "*", no prod origin in repo) | re-review running
+BLOCK 12:55Z | GitHub secondary rate limit on comment/PR creation ("retry after ~58m") | queue: /home/user/notes/pending-comments/*.md; scheduled check-in 13:56Z (trig_01JHmGeWwF9ubYWSGhRQZ1jc) posts them; git push unaffected
+#118 | head 9e1170f (feature-parity 承認待ち, dead link removed, body full scope; font OFL 1.1 Noto CJK subset w/ OFL.txt shipped; media.ts deploy-first recommended not required) | LOCAL-CHECK queued (rate limit) | re-review (4 slices) running
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)
@@ -91,6 +93,7 @@ CAPACITY 2026-11-14 (manager relay of owner): cloud lane may run up to 8 members
 - ひなたの 4 枚: ごみ箱から元のアルバムへ戻してよいか（期限 ~12-12）（はい／いいえ）
 
 ## for main session
+- GitHub secondary rate limit hit on comment creation at 12:55Z (all lane posts are from the owner account: reviews, LOCAL-CHECK, GATE comments). Queued locally; if it recurs, the comment-per-gate rule caps throughput at GitHub's content-creation limit
 - second review identity: Codex review bot (chatgpt-codex-connector) hits usage limits on #118 and #120 ("You have reached your Codex usage limits") -> no route to its review; CodeRabbit runs (skips >100-file PRs)
 - Project 43 iteration field unreadable from this cloud container (no ProjectV2 tool, gh token invalid): please send this/next week iteration issue numbers for r2-gallery, or give the lane a working gh token route
 - gh CLI token (GH_TOKEN) invalid in this container; using GitHub connector

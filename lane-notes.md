@@ -26,6 +26,7 @@ CYCLE 1 T=2026-11-14T12:18:56Z | PRs 3 (r2-gallery #118; archive #207 #208; excl
 JUDGE b1 (manager): #118 emulator flow update accepted (intentional tested rename of same control viewer_screen.dart:513); gate-ready needs emulator green on 6454563, rename listed in PR body, fresh re-review vs 6454563 + CI Kotlin build green, "PiP closes" named device scene. Feature-parity: BLOCKED on owner (own question, separate from RG-12); PR must reword 本人承認済み -> 承認待ち, drop dead link doc/evidence/private-storage-20261022/README.md, note exportToDevice stub (app_state.dart:696).
 #120 RG-19 | FIX->review | PR opened head f78bbf4 | local-check posted | reviewer running
 #118 | FIX | member pushed 6454563 (03-play flow 閉じる->一覧に戻る) | emulator rerun in progress | local flutter test 614/0
+DESIGN | owner shared https://claude.ai/artifact/6NsgHfP9kH9whED6j4ec26 (r2-gallery デザイン, version 1794408011-d892) | all 31 project/*.dc.html + canvas.json byte-identical to repo doc/design/project (PR #95) | UI items (#66/#67 ReviewConnectEdit, #73/#74 ReviewFolder, #76-#79 ReviewFoundation, #69-#72 ReviewLock, #92/#93 ReviewSettings, #96 Logo) build against doc/design/project/review/*.dc.html
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)

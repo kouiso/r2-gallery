@@ -93,6 +93,8 @@ stream C round 2 | docs/run-locally-v2 189b77c (supersedes #128) + fix/ci-secret
 OWNER RULING 2026-11-14 (relayed): 「CIはローカルで通れば通ったものとみなしていいよ」 -> gate G3: a passing LOCAL-CHECK on the exact merge head (same checks CI runs for touched files: lint, typecheck, tests, build, gate scripts) counts as checks passed; hosted CI not waited on; failing local run = failed gate; never claim hosted CI green unless it is; a later real hosted failure on that head -> immediate follow-up fix PR. Overrides the manager pass-line item "emulator green" (owner words win). Other gate items unchanged.
 fix/ci-secrets-scan-range cf913ae | review PASS must0 want1 nit2 (queued) | want (effect check wording) fixed by lead in queued body, text only; nits (ci.yml:70 comment, run.test.mjs:64 test name) -> follow-up
 #120-stacked (fix/rg19-trash-order-prune 1f96179) | review FAIL must2 (committed node_modules symlink breaks CI install; restore window regression drops trashOrder slot) want2 | rework by RG-19 member | checked all lane branches: no other node_modules/.wrangler/.dev.vars/wrangler.toml committed
+MERGED #124 RG-22 13:27Z | head 989ca87 == GATE head https://github.com/kouiso/r2-gallery/pull/124#issuecomment-6877963078 | merge 0b43385 | #57 #58 closed by GitHub | web-deploy run 43599833103 in progress; pages-dist/fad-dist-state still 5dfe918 -> confirm before next merge
+stream A | PRs #129 (#33, 9e20f53) -> #130 (#92/#93, fbb6162) -> #131 (#66/#67, 3b748eb) stacked; evidence pr1/pr2/pr3 PNGs (goldens, Ahem font); #69/#70 OWNER-blocked on #29
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)
@@ -106,7 +108,7 @@ fix/ci-secrets-scan-range cf913ae | review PASS must0 want1 nit2 (queued) | want
 | RG-19 | todo | agent | #48 via #49 |
 | RG-20 | todo | agent | #51 via #52 |
 | RG-21 | todo | agent | #54 via #55 |
-| RG-22 | todo | agent | #57 via #58 |
+| RG-22 | done | agent | #124 merged 13:27Z |
 | RG-23 | todo | agent | #63 via #64 #65 |
 | RG-26 | done | agent | しない: RG-Q3 = 2 |
 | RG-24 | blocked | owner | worker prod deploy / prod test / delete thumbs |

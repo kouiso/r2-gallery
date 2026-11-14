@@ -1,5 +1,11 @@
 # render-harness
 
+> **KMP 版の頃の道具で、今は動かない。** 描く対象は削除済みの `kmp/`（Compose Multiplatform）の
+> `commonMain` で、`sync.sh` はその `kmp/` からコピーする。現行クライアントは Flutter
+> （`flutter/`）なので、この道具では現行の画面は描けない。`doc/evidence/` と
+> `doc/redesign-37-handoff.md` の KMP 版の証跡の作り方を残すために置いてあり、消す場合は
+> それらの記述も合わせて直す。Flutter の画面確認は `flutter test`（`flutter/test/`）で行う。
+
 実機・エミュレータが無い環境で、画面の見た目だけの部品（`*Content.kt`・`SelectionBar`・
 `BottomTabs`・`MediaGrid` など）を **実際のソースのまま** PNG に描き出す確認用ツール。
 アプリのビルドには含まれない。

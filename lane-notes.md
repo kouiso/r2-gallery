@@ -66,6 +66,11 @@ DECIDED 12:58Z | container has 4 CPUs / 15 GB; load avg hit ~40 with 8 members +
 #121 stacked tests | branch test/rg17-resume-409 head 5e092d2 (5 new tests fail on main logic; live run vs local wrangler: put/complete/create/re-complete -> 409) | PR creation queued (rate limit) | run.mjs fast flaky under load -> rerun when load low
 #127 RG-18 | FIX | review FAIL must2 want4 nit2 (queued comment pending-comments/127-review-5095781.md): M1 grid _askedAt not reset on sort change (media_grid.dart:85-90, key gallery_tab.dart:208) list stops at 200; M2 Closes #45 unmet (full listing per page read.ts:258-290) -> Refs #45; W1 failed first page keeps old cursor; W2 _adoptStoredThumbs ignores sort; W3 loadMore ignores page.sort across worker deploy; W4 what-comments | queued: resume RG-18 member when members < 5
 #128 | note: gitleaks (unscoped) flags ac927b5 for "Bearer test-access-token" — the dummy token already defined in worker/wrangler.test.toml, not a real secret; reviewer to confirm .gitleaks.toml allowlist / CI secrets-scan result
+#123 RG-21 | re-review PASS must0 want0 nit2 (queued pending-comments/123-review-91b67c1.md) | evidence evidence/123-91b67c1.png | CI 4/4 green | next: post review, GATE, merge after #124
+#124 RG-22 | GATE-READY | review PASS https://github.com/kouiso/r2-gallery/pull/124#issuecomment-6877362997 | evidence evidence/124-989ca87.png+.webm (originals 10->0, console 0) | CI 4/4 green | evidence+GATE comments queued (0a/0b) -> merge first after rate limit
+#122 stacked | branch fix/rg20-thumb-hardening head 27de2cd (4 tests fail on c0437cf, 66/66 pass) | PR creation queued
+stream D | #74 branch feat/folders-above-photos-74 31eb486; #60 branch fix/web-manifest-60 0ef025c (description wording invented — reviewer to check vs #60) | PRs queued
+OBS | transfer_queue_test.dart fails intermittently under load in several worktrees (also untouched branch wt-d-2) -> flaky-under-load; open an issue / fix timing after merges settle
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)

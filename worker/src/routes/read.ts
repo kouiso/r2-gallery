@@ -187,6 +187,51 @@ export async function handleAlbum(
   });
 }
 
+export type FolderSort = "new" | "old" | "name" | "size";
+const FOLDER_SORTS: readonly string[] = ["new", "old", "name", "size"];
+const isFolderSort = (v: string): v is FolderSort => FOLDER_SORTS.includes(v);
+
+/** 並び順ごとの比較値(primary)と、同値の決め手になる key。 */
+interface SortPoint {
+  primary: number | string;
+  key: string;
+}
+
+function sortPoint(sort: FolderSort, o: { key: string; size: number; uploaded: Date }): SortPoint {
+  switch (sort) {
+    case "name":
+      // アプリの名前順と同じく、末尾の名前を小文字にして比べる
+      return { primary: (o.key.split("/").pop() ?? o.key).toLowerCase(), key: o.key };
+    case "size":
+      return { primary: o.size, key: o.key };
+    default:
+      return { primary: o.uploaded.getTime(), key: o.key };
+  }
+}
+
+/** 新しい順・サイズ順は大きい値が先、古い順・名前順は小さい値が先。同値は key の昇順。 */
+function compareFolderSort(sort: FolderSort, a: SortPoint, b: SortPoint): number {
+  const dir = sort === "new" || sort === "size" ? -1 : 1;
+  const p = a.primary < b.primary ? -1 : a.primary > b.primary ? 1 : 0;
+  return p * dir || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
+}
+
+const formatFolderCursor = (p: SortPoint): string =>
+  `${encodeURIComponent(String(p.primary))}|${encodeURIComponent(p.key)}`;
+
+function parseFolderCursor(sort: FolderSort, cursor: string | undefined): SortPoint | null {
+  const sep = (cursor ?? "").indexOf("|");
+  if (!cursor || sep <= 0) return null;
+  try {
+    const raw = decodeURIComponent(cursor.slice(0, sep));
+    const primary = sort === "name" ? raw : Number(raw);
+    if (typeof primary === "number" && Number.isNaN(primary)) return null;
+    return { primary, key: decodeURIComponent(cursor.slice(sep + 1)) };
+  } catch {
+    return null;
+  }
+}
+
 export async function handleFolders(
   env: Env,
   origin: string,
@@ -201,13 +246,15 @@ export async function handleFolders(
   // recursive=1 returns every media item under the prefix — the gallery
   // "all media" view — instead of one-level folder browsing.
   const recursive = url.searchParams.get("recursive") === "1";
-  // order=recent: R2 lists keys lexicographically, so freshly uploaded objects
-  // (e.g. CJK names) sort last and page way past the visible window. Collect
-  // the whole listing once, sort by upload time descending, then paginate by a
-  // position cursor (<uploadedMs>|<key> of the page's last item) — an offset
-  // cursor shifts when a new object lands at the front and re-shows files the
-  // client already rendered.
-  if (url.searchParams.get("order") === "recent") {
+  // sort=new|old|name|size: R2 は辞書順でしか列挙できず、日付・サイズ・名前で並べるには
+  // 全件を集めるしかない。端末側で読み込み済みの分だけ並べると先頭ページ以外が
+  // 順序に入らない(#44)ので、並べ替えはここで全体に対して行う。
+  // order=recent は sort=new の旧名。古いアプリが送り続けるのでそのまま受ける。
+  const sortParam = url.searchParams.get("sort");
+  if (sortParam !== null && !isFolderSort(sortParam)) return json({ error: "invalid_sort" }, 400);
+  const sort: FolderSort | null =
+    (sortParam as FolderSort | null) ?? (url.searchParams.get("order") === "recent" ? "new" : null);
+  if (sort) {
     const all: Awaited<ReturnType<R2Bucket["list"]>>["objects"] = [];
     const prefixes = new Set<string>();
     let cur: string | undefined;
@@ -227,19 +274,13 @@ export async function handleFolders(
           MEDIA_EXT.test(o.key) &&
           (!recursive || (!o.key.startsWith(SYSTEM_PREFIX) && !o.key.startsWith(TRASH_PREFIX))),
       )
-      .sort(
-        (a, b) =>
-          b.uploaded.getTime() - a.uploaded.getTime() ||
-          (a.key < b.key ? -1 : a.key > b.key ? 1 : 0),
-      );
+      .sort((a, b) => compareFolderSort(sort, sortPoint(sort, a), sortPoint(sort, b)));
+    // 位置カーソル(<並べ替えの値>|<key>)で続きを探す。件数オフセットだと、先頭に
+    // 新しい物が入った時に既に出した分をもう一度出してしまう。
     let start = 0;
-    const sep = (cursor ?? "").indexOf("|");
-    if (sep > 0) {
-      const t = Number((cursor as string).slice(0, sep));
-      const k = decodeURIComponent((cursor as string).slice(sep + 1));
-      start = files.findIndex(
-        (o) => o.uploaded.getTime() < t || (o.uploaded.getTime() === t && o.key > k),
-      );
+    const at = parseFolderCursor(sort, cursor);
+    if (at) {
+      start = files.findIndex((o) => compareFolderSort(sort, sortPoint(sort, o), at) > 0);
       if (start < 0) start = files.length;
     }
     const slice = files.slice(start, start + 200);
@@ -254,13 +295,16 @@ export async function handleFolders(
     const last = slice[slice.length - 1];
     return json({
       prefix,
+      // 適用した並び順を返す。古い Worker は返さないので、アプリはこれで
+      // 「サーバーが並べた」か「端末側で並べ直す」かを決める。
+      sort,
       folders: recursive
         ? []
         : [...prefixes].filter((p) => !p.startsWith(SYSTEM_PREFIX) && !p.startsWith(TRASH_PREFIX)),
       items,
       cursor:
         last && start + slice.length < files.length
-          ? `${last.uploaded.getTime()}|${encodeURIComponent(last.key)}`
+          ? formatFolderCursor(sortPoint(sort, last))
           : null,
     });
   }

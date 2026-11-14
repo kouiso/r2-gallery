@@ -18,7 +18,7 @@ class _LibApi extends ApiClient {
 
   @override
   Future<FolderPage> folder(String libId,
-      {String prefix = '', String? cursor, bool recursive = false}) async {
+      {String prefix = '', String? cursor, bool recursive = false, String? sort}) async {
     final n = folderCalls[libId] = (folderCalls[libId] ?? 0) + 1;
     if (n > 1 && hold != null) await hold!.future;
     return FolderPage(items: [_video('$libId-$n.mp4')]);

@@ -7,6 +7,7 @@ import '../api/client.dart';
 import '../api/models.dart';
 import '../config/baked.dart' as baked;
 import '../grid/photos_chrome.dart';
+import '../grid/sort_mode.dart';
 import '../offline/offline_store.dart';
 import '../store/device_auth.dart';
 import '../store/kv.dart';
@@ -588,7 +589,25 @@ class GalleryState extends ChangeNotifier {
   GalleryState(this.api,
       {this.prefix = '',
       this.recursive = true,
+      this.sort = SortMode.dateNew,
       this.loadMoreBackoff = const Duration(seconds: 3)});
+
+  /// 一覧の並び順。変えると取り直し(世代番号が進み、古い続きページは捨てられる)。
+  SortMode sort;
+
+  /// 今の [items] を Worker が [sort] の順で返したか。古い Worker は sort を無視して
+  /// 新着順で返すので、その時だけ端末側で並べ直す。
+  bool _serverSorted = false;
+
+  /// 画面に出す順。Worker が並べた物は触らない(触ると続きの読み込みで位置が跳ぶ)。
+  List<MediaItem> ordered() => _serverSorted ? items : sort.sorted(items);
+
+  /// 並び順を変えて先頭から取り直す。同じ順なら何もしない。
+  Future<void> changeSort(SortMode m, String lib) {
+    if (m == sort) return Future.value();
+    sort = m;
+    return refresh(lib);
+  }
 
   /// 続きページの取得に失敗した後、次を試すまで空ける時間。
   /// スクロール通知ごとに呼ばれるので、空けないと圏外のあいだ再試行と再描画を繰り返す。
@@ -626,9 +645,13 @@ class GalleryState extends ChangeNotifier {
     notifyListeners();
     try {
       // KMP 版のホームと同じく、サブフォルダの中まで含めた全メディアを出す
-      final page =
-          await api.folder(lib, prefix: prefix, cursor: null, recursive: recursive);
+      final page = await api.folder(lib,
+          prefix: prefix,
+          cursor: null,
+          recursive: recursive,
+          sort: sort.apiValue);
       if (e != epoch) return;
+      _serverSorted = page.sort == sort.apiValue;
       items = page.items;
       folders = page.folders;
       cursor = page.cursor;
@@ -649,7 +672,10 @@ class GalleryState extends ChangeNotifier {
     notifyListeners();
     try {
       final page = await api.folder(lib,
-          prefix: prefix, cursor: cursor, recursive: recursive);
+          prefix: prefix,
+          cursor: cursor,
+          recursive: recursive,
+          sort: sort.apiValue);
       if (e != epoch) return;
       final seen = {for (final it in items) '${it.lib}:${it.key}'};
       items = [

@@ -51,6 +51,7 @@ class _Api extends ApiClient {
     String prefix = '',
     String? cursor,
     bool recursive = false,
+    String? sort,
   }) async {
     folderCalls.add((
       lib: libId,

@@ -114,7 +114,10 @@ class ApiClient {
           .toList());
 
   Future<FolderPage> folder(String libId,
-      {String prefix = '', String? cursor, bool recursive = false}) {
+      {String prefix = '',
+      String? cursor,
+      bool recursive = false,
+      String? sort}) {
     return _get('${_lib(libId)}/folders', (r) {
       final items = ((r.data['items'] as List?) ?? const [])
           .map((e) => MediaItem.fromJson(e as Map<String, dynamic>))
@@ -124,12 +127,15 @@ class ApiClient {
         cursor: r.data['cursor'] as String?,
         prefix: (r.data['prefix'] as String?) ?? prefix,
         folders: ((r.data['folders'] as List?) ?? const []).cast<String>(),
+        sort: r.data['sort'] as String?,
       );
     }, query: {
       'prefix': prefix,
       if (recursive) 'recursive': '1',
       // 名前順だとゴミ箱等の先頭キーに新規アップが埋もれて出てこない（新着順に揃える）
       'order': 'recent',
+      // 並び順は Worker に渡して全体に対して並べさせる。古い Worker は無視して新着順で返す
+      'sort': ?sort,
       if (cursor != null) 'cursor': cursor,
     });
   }

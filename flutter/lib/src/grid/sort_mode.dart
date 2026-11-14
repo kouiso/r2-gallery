@@ -1,15 +1,19 @@
 import '../api/models.dart';
 
 /// 写真一覧の並び順。KMP 版 SortMode と同じ4種・同じ文言。
-/// サーバーは新着順でしか返さないので、読み込み済みの分を端末側で並べ替える。
+/// 並べ替えは Worker がライブラリ全体に対して行う。[sorted] は、並び順を知らない
+/// 古い Worker に繋がった時だけ、読み込み済みの分を端末側で並べる退避用。
 enum SortMode {
-  dateNew('新しい順'),
-  dateOld('古い順'),
-  name('名前順'),
-  size('サイズ順');
+  dateNew('新しい順', 'new'),
+  dateOld('古い順', 'old'),
+  name('名前順', 'name'),
+  size('サイズ順', 'size');
 
-  const SortMode(this.label);
+  const SortMode(this.label, this.apiValue);
   final String label;
+
+  /// Worker の `sort` パラメータ値。
+  final String apiValue;
 
   /// 日付で並ぶ時だけ日付見出しを出す（名前順・サイズ順では日が飛び飛びになるため）。
   bool get isDate => this == dateNew || this == dateOld;

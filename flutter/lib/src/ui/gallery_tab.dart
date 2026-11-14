@@ -52,7 +52,8 @@ class _GalleryTabState extends State<GalleryTab> {
   GalleryState get g => _stateFor(widget.lib);
 
   GalleryState _stateFor(String lib) => _states.putIfAbsent(lib, () {
-        final s = GalleryState(widget.app.api);
+        final s = GalleryState(widget.app.api,
+            sort: widget.app.photosChrome.sort);
         s.refresh(lib);
         return s;
       });
@@ -64,6 +65,7 @@ class _GalleryTabState extends State<GalleryTab> {
     super.initState();
     _c.bind(_stateFor(widget.lib), widget.lib);
     widget.app.photosChrome.attach(_c);
+    widget.app.photosChrome.addListener(_onSortChanged);
     // 裏で上がり終わったら、そのライブラリの一覧を取り直して新しいファイルを出す
     _doneSub = widget.app.transfers.doneEvents.listen((t) {
       if (t.isUpload) _states[t.lib]?.refresh(t.lib);
@@ -76,6 +78,13 @@ class _GalleryTabState extends State<GalleryTab> {
     // 読み込み中でも取り直す（refresh は世代番号で古い応答を捨てる）
     _changeSub = widget.app.contentChanged
         .listen((lib) => _states[lib]?.refresh(lib));
+  }
+
+  // 並び順は Worker に渡して取り直す。端末側の並べ替えだと読み込み済みの分にしか効かない
+  void _onSortChanged() {
+    final sort = widget.app.photosChrome.sort;
+    final s = _states[widget.lib];
+    if (s != null && s.sort != sort) s.changeSort(sort, widget.lib);
   }
 
   void _onImportsChanged() {
@@ -104,6 +113,9 @@ class _GalleryTabState extends State<GalleryTab> {
     final cached = _states[widget.lib];
     if (cached == null) {
       _stateFor(widget.lib);
+    } else if (cached.sort != widget.app.photosChrome.sort) {
+      // 離れている間に並び順が変わっていた
+      cached.changeSort(widget.app.photosChrome.sort, widget.lib);
     } else if (!cached.loading) {
       cached.refresh(widget.lib);
     }
@@ -112,6 +124,7 @@ class _GalleryTabState extends State<GalleryTab> {
 
   @override
   void dispose() {
+    widget.app.photosChrome.removeListener(_onSortChanged);
     widget.app.photosChrome.detach(_c);
     _c.dispose();
     _doneSub?.cancel();
@@ -141,7 +154,6 @@ class _GalleryTabState extends State<GalleryTab> {
   void _openPlayer(List<MediaItem> sorted, int index) {
     final lib = widget.lib;
     final g = _stateFor(lib);
-    final sort = widget.app.photosChrome.sort;
     openViewer(context,
         app: widget.app,
         lib: lib,
@@ -149,7 +161,7 @@ class _GalleryTabState extends State<GalleryTab> {
         index: index,
         // 開いた後に一覧が読み込む続きのページも、スワイプで辿れるようにする
         source: g,
-        readItems: () => sort.sorted(g.items),
+        readItems: g.ordered,
         onNearEnd: () => g.loadMore(lib),
         onChanged: _refresherFor(lib));
   }
@@ -171,7 +183,7 @@ class _GalleryTabState extends State<GalleryTab> {
       // オフライン保存の目録が変わったら「保存済み」の印を出し直す
       listenable: Listenable.merge([g, chrome, widget.app.offline]),
       builder: (context, _) {
-        final sorted = chrome.sort.sorted(g.items);
+        final sorted = g.ordered();
         final readOnly = _c.readOnly;
         // サムネ未生成分は開いた一覧のついでに裏で補完する。
         // 書き戻せないライブラリでは原本を取りに行くだけ無駄なので回さない

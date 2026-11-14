@@ -66,7 +66,7 @@ class _FakeApi extends ApiClient {
 
   @override
   Future<FolderPage> folder(String libId,
-      {String prefix = '', String? cursor, bool recursive = false}) async {
+      {String prefix = '', String? cursor, bool recursive = false, String? sort}) async {
     calls.add('GET folder $prefix');
     final t = tree[prefix];
     return FolderPage(

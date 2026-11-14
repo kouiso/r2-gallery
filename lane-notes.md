@@ -164,3 +164,8 @@ MERGED #121 RG-17 (#114-ish same-name upload) ~13:49Z | head 4e24c2a == GATE htt
 #135 Devin (after retarget): 3 analysis-only suggestions (completesSeen assert, live re-read, comment wording) — optional, no push; carry to follow-up
 #132 REVIEW FAIL must1 (v+d entries per video vs 200-entry receiver cap → >100 videos lose candidates permanently) https://github.com/kouiso/r2-gallery/pull/132#issuecomment-6878246909 | #133 PASS want2 (data: size check before decode; percent-encoded data: lost) https://github.com/kouiso/r2-gallery/pull/133#issuecomment-6878244654 | #134 PASS https://github.com/kouiso/r2-gallery/pull/134#issuecomment-6878242232 → fix member on #132+#133 running
 docs re-reviews PASS: #140 t3 69aad36 (want: stale 注意 in body), #142 v2 3572d44, #139 kmp b16b51e → posting; merges need owner scope extension
+PROD #121 confirmed: pages-dist == 8154862 (~13:54Z)
+MERGED #135 (#121 stacked tests) ~13:56Z | head 5e092d2 == GATE https://github.com/kouiso/r2-gallery/pull/135#issuecomment-6878303408 | merge 4dad7a4 | merge-result fbb248e: flutter +486, fast 0 | Devin 3 optional suggestions -> follow-up
+docs reviews posted: #140 https://github.com/kouiso/r2-gallery/pull/140#issuecomment-6878263306 | #142 https://github.com/kouiso/r2-gallery/pull/142#issuecomment-6878269184 | #139 https://github.com/kouiso/r2-gallery/pull/139#issuecomment-6878274802
+DEVICE REQUEST sent to manager: iPhone Safari check of production web (upload confirm, video play, grid vs design)
+#127 merge-result check (4e00845 = fcfc041 + main 4dad7a4) running; reviewer on #137+#138 running

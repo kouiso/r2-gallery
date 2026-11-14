@@ -29,8 +29,8 @@ This entry does not build the Flutter client. `flutter pub get`, `flutter test`,
 For local security checks, install gitleaks 8.24.3 on PATH. The cloud fallback
 still downloads its pinned version into `RUNNER_TEMP` if absent. No absent-tool
 case is treated as a passing scan: without gitleaks and `RUNNER_TEMP`, the entry stops at the
-`gitleaks` phase. With no `CI_SCAN_BASE`, gitleaks scans the
-full history. Set `CI_SCAN_BASE` and `CI_SCAN_HEAD` to reproduce the workflow's
+`gitleaks` phase. With no `CI_SCAN_BASE`, gitleaks scans all local refs (not only the current branch)
+with their full history. Set `CI_SCAN_BASE` and `CI_SCAN_HEAD` to reproduce the workflow's
 base-parent-to-head range. Its redaction flags and finding exit code 2 are
 preserved. Supply the existing `QN_FORBIDDEN_WORDS` or `QN_FORBIDDEN_WORDS_FILE`
 input for the hygiene word scan. The entry does not invent an empty word list

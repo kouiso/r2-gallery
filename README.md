@@ -46,7 +46,7 @@ npx wrangler deploy
 
 ```sh
 pnpm install
-# リポジトリのルートで実行する（固定版の wrangler と hono はルートの node_modules にある）。
+# リポジトリのルートで実行する（lockfile で固定した wrangler と hono はルートの node_modules にある）。
 # 旧来の `cd worker && npx wrangler dev` は worker/wrangler.toml が git 管理外で無いため、そのままでは起動しない
 pnpm exec wrangler dev --local --port 8787 \
   --config worker/wrangler.test.toml --persist-to worker/.wrangler/state

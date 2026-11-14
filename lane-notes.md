@@ -1,4 +1,4 @@
-STATE RUNNING 2026-11-14T12:16:14Z | counts pending
+STATE PAUSED 2026-11-14T14:20Z (manager: account allowance; resume on RESUME)
 mission: それぞれのプロジェクトに書いてあるプランに書いてある作業をやること / どのプロジェクトもまず既存のPRを本質的に対処することを作業を優先してください。そうしないと溜まってばっかりなので
 model claude-opus-5-5 (lead) | advisor present (fable, set 2026-11-14 by owner) | github via connector (gh: GH_TOKEN invalid) | push via git | png ok (playwright chromium)
 goal: work plan r2-gallery until cycle DONE or DONE-WAITING (set 2026-11-14) | DONE-WAITING satisfies it: yes
@@ -200,3 +200,10 @@ C1a design chunk (theme.dart nav/tokens) member started 14:15Z on feat/design-c1
 #131 merged #130 4bed24e in: head a436ec0 (no conflicts; 接続中/変更 row inside 接続 group, 切断 kept) | flutter 489/0 | re-review #130 delta + #131 full running (files only)
 #137 REVIEW PASS at 31eb486 must0 want3 (scroll-tap test, positive strip test, 390/1440 screenshots for #73) nit3 | #138 REVIEW FAIL at 0ef025c must1 (white page before Flutter draws; #59 criteria) want3 | reviews queued as files | fix member running for both
 #132 delta PASS at e81d475 (want: body stale) | #133 delta PASS at 647da16 (want: body stale) | reviews queued; merge needs owner scope extension (stream PRs)
+
+## PAUSED 2026-11-14T14:20Z — resume plan
+RESUME FIRST: post queue (GitHub secondary limit lifts ~14:52Z; <=1 writer, >=2s apart), then GATE+merge #127 (head 30d6430, delta PASS, LOCAL-CHECK 495/0) -> confirm pages-dist -> #122 (5fc8b7d PASS) -> confirm -> retarget #136 to main, GATE+merge #136 (0bdc006 PASS; merge-result a84de3f = 0bdc006+main 4dad7a4: worker tests pass, 14:19Z) -> confirm.
+QUEUED GITHUB WRITES (17 files in pending-comments/): issue-new-move-source-thumb-orphan, issue-new-worker-newline-regex (create first, then fill #MOVEISSUE/#NLISSUE in pr-136-body-update and update #136 body), pr-122-review-5fc8b7d, pr-127-localcheck-30d6430, pr-127-review-30d6430, pr-130-localcheck-4bed24e, pr-131-localcheck-5ea35d5, pr-131-localcheck-a436ec0, pr-132-localcheck-e81d475, pr-132-review-e81d475, pr-133-localcheck-647da16, pr-133-review-647da16, pr-136-review-0bdc006, pr-137-review-31eb486, pr-138-review-0ef025c, pr-145-review-79c7b8c, pr-136-body-update. Plus GATE comments for #127/#122/#136 (write at merge time). Also PR body updates owed: #132/#133 (stale counts), #130 (replace "デザインどおり" with the 9 remaining diffs), #129 (Closes #33 -> Refs #33), #138 (addendum when member writes it).
+IN FLIGHT at pause (told to finish current step, push, write paused-*.md, stop): C1a design member (feat/design-c1a-theme-nav), #145 fix member (ledger race + timeout), pin_test root-cause member (fix/pin-test-isolate-timing), #137/#138 fix member, #130-delta/#131 reviewer. Read pending-comments/paused-*.md on resume.
+STATE OF PRs: merge-ready after posting: #127, #122, #136. Fixing: #145 (FAIL must1), #138 (FAIL must1). PASS but owner merge-scope needed: #125, #129, #132, #133, #134, #137 (wants), #139, #140, #142, #143. Waiting review: #130 (4bed24e), #131 (a436ec0). OWNER/DEVICE: #118. Design: C1a in progress; C4 next; owner Q1-Q3.
+No scheduled check-ins left (14:53Z one deleted at pause).

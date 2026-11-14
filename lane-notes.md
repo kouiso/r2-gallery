@@ -1,7 +1,7 @@
 STATE RUNNING 2026-11-14T12:16:14Z | counts pending
 mission: それぞれのプロジェクトに書いてあるプランに書いてある作業をやること / どのプロジェクトもまず既存のPRを本質的に対処することを作業を優先してください。そうしないと溜まってばっかりなので
 model claude-opus-5-5 (lead) | advisor absent (no advisor tool in this session) | github via connector (gh: GH_TOKEN invalid) | push via git | png ok (playwright chromium)
-goal: unknown | DONE-WAITING satisfies it: unknown
+goal: work plan r2-gallery until cycle DONE or DONE-WAITING (set 2026-11-14) | DONE-WAITING satisfies it: yes
 rules read: r2-gallery CLAUDE.md/AGENTS.md (same content), .github/scrum-board.yml (project 43), .github/ci/README; archive CLAUDE.md. Stricter: comments Japanese why-only; PR titles Japanese; never edit pages-dist; feature-parity (never drop a feature without owner OK); run `node .github/ci/run.mjs fast` and `node tools/sync-ai-rules.mjs --check` before push; no PR template in either repo.
 DEPLOY | kouiso/r2-gallery merge to main -> production | evidence .github/workflows/web-deploy.yml:4-6,33-48 (push main -> pages-dist = Pages production, CLAUDE.md:49) + CLAUDE.md:48 / .agents/skills/fad-distribute/SKILL.md:8 (merge to main ships APK to FAD testers)
 DEPLOY | kouiso/r2-gallery merge to other bases (feature branches) -> nothing | evidence ci.yml:5-9, maestro.yml:7-16, web-deploy.yml:4-6 (only main triggers deploy)

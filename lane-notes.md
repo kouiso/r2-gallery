@@ -37,6 +37,8 @@ JUDGE b2 (manager): RG-17..23 first; iteration items jump queue (unreadable here
 #121 RG-17 | review running | head 4e24c2a
 #122 RG-20 | review running | head c0437cf
 #123 RG-21 | review running | head 04944bc
+OWNER ANSWER 2026-11-14 (relayed by manager) | RG-12 + merges of RG-17..RG-23: 「中身がokなら問題ない1」 = YES if every SECOND EDITION gate holds on the current head (incl. evidence; #118 needs its device video). Merge one at a time; after each: web-deploy run green + pages-dist .source-sha == merge SHA, fad-dist-state .source-sha follows; if broken -> open + merge revert PR at once.
+DECIDED | G5 production exclusion lifted for r2-gallery main merges of #118 and RG-17..23 PRs only (owner answer above) | revert: owner says 取り込みは止めて. Worker-side fixes still need RG-24 (worker prod deploy) separately; client PRs must work against deployed Worker. Other PRs (stream A-D) still OWNER for merge unless owner extends.
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)
@@ -44,7 +46,7 @@ JUDGE b2 (manager): RG-17..23 first; iteration items jump queue (unreadable here
 |---|---|---|---|
 | RG-10 | doing | agent | #118 open; evidence video = DEVICE |
 | RG-11 | doing | agent | re-review of #118 after fixes |
-| RG-12 | blocked | owner | merge #118 (production) |
+| RG-12 | done | owner | answered 2026-11-14: 中身がokなら問題ない |
 | RG-17 | todo | agent | #41 via #42 #43 |
 | RG-18 | todo | agent | #44 via #45 #46 |
 | RG-19 | todo | agent | #48 via #49 |
@@ -63,7 +65,6 @@ JUDGE b2 (manager): RG-17..23 first; iteration items jump queue (unreadable here
 - #104 重複一覧 API のために本番 Worker の CPU 上限で読み取り量を測ってよいか（本番での計測・読み取りのみ）（はい／いいえ）
 - #118 feature changes (separate from RG-12; blocks #118): ①「端末に保存」(端末ギャラリーへの書き出し) を廃止しアプリ内オフライン保存だけにする ②明るさ・音量のスワイプを明示パネルに置き換える ③更新後、以前のオフライン保存は隔離され表示されない（消えはしないが移行手段なし）④O1・O1-2・S7 を実機確認待ちで ☑→◐ — それぞれ OK か（はい／いいえ）。推奨: ①② は既に作られた変更なので はい、③ は移行を足すまで いいえ
 - ASK | Is kouiso/r2-gallery-archive's main still watched by any deploy lane (equus r2-web-deploy) so that a merge there would change production? yes/no/don't know | read: archive .github/workflows/ci.yml:7-8, archive CLAUDE.md:49, r2-gallery CLAUDE.md:49 ("retired in #10") | the retirement note covers the relay, not the external lane | on "don't know": never merge in the archive (only closes planned anyway)
-- RG-12 (+ bug-fix merges): 審査が通り証跡が付いた PR を、あなたの OK を待たずにマージしてよいか（マージすると本番の Web と FAD が新しくなる）。壊れたら戻し PR も即取り込んでよいか。（はい／いいえ） — recommend: はい
 - ひなたの 4 枚: ごみ箱から元のアルバムへ戻してよいか（期限 ~12-12）（はい／いいえ）
 
 ## for main session

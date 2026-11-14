@@ -7,12 +7,15 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:r2_gallery/src/api/client.dart';
 import 'package:r2_gallery/src/api/models.dart';
 import 'package:r2_gallery/src/state/app_state.dart';
+import 'package:r2_gallery/src/state/pairing.dart';
 import 'package:r2_gallery/src/store/device_auth.dart';
 import 'package:r2_gallery/src/store/kv.dart';
 import 'package:r2_gallery/src/transfer/transfer_platform.dart';
 import 'package:r2_gallery/src/transfer/transfer_queue.dart';
 import 'package:r2_gallery/src/ui/settings_tab.dart';
 import 'package:r2_gallery/src/ui/theme.dart';
+import 'package:r2_gallery/src/webdl/detected.dart';
+import 'package:r2_gallery/src/webdl/web_transfer.dart';
 
 class _Api extends ApiClient {
   ProbeOutcome next = const ProbeOutcome.ok(libraryCount: 2);
@@ -243,6 +246,114 @@ void main() {
       expect(app.api.conn?.token, 'new-token');
       expect(await Kv.get(Keys.token), 'new-token');
       expect(app.transfers.tasks.single.status, TransferStatus.queued);
+    });
+  });
+
+  group('送り先の比べ方', () {
+    test('パスに @ を入れた別ホストは同じホストと読まない', () {
+      expect(isSameHost('https://old.example', 'https://evil.example/@old.example'),
+          isFalse);
+      expect(hostOf('https://evil.example/@old.example'), 'evil.example');
+    });
+
+    test('userinfo 付きのエンドポイントは受け付けず、同じホストとも読まない', () {
+      expect(normalizeConnectInput('https://user@old.example', 't'), isNull);
+      expect(normalizeConnectInput('https://u:p@old.example/x', 't'), isNull);
+      expect(isSameHost('https://old.example', 'https://user@old.example'),
+          isFalse);
+    });
+
+    test('443 とポート無しは同じ、別のポートは別、ホストの大文字小文字は区別しない', () {
+      expect(isSameHost('https://old.example:443', 'https://old.example'), isTrue);
+      expect(isSameHost('https://old.example:8443', 'https://old.example'),
+          isFalse);
+      expect(isSameHost('https://OLD.Example/v1', 'https://old.example'), isTrue);
+      expect(isSameHost('old.example', 'https://old.example'), isTrue);
+    });
+  });
+
+  testWidgets('パスに @ を入れた別ホストでトークン欄が空なら、今のトークンを送らない', (t) async {
+    final (app, api) = await _pump(t);
+    await t.tap(find.text('変更'));
+    await t.pumpAndSettle();
+    await t.enterText(find.byKey(const Key('endpointField')),
+        'https://evil.example/@old.example');
+    await t.pump();
+    await t.tap(find.text('保存して切り替える'));
+    await t.pumpAndSettle();
+    expect(find.text('接続先を変える時は、新しい接続先のトークンを入れてください。'),
+        findsOneWidget);
+    expect(api.probed, isEmpty);
+    expect(app.api.conn?.endpoint, 'https://old.example');
+  });
+
+  group('別の接続先への保存を止める行', () {
+    Future<(AppState, _Api)> connected() async {
+      FlutterSecureStorage.setMockInitialValues({});
+      final api = _Api();
+      final app = AppState(
+          api: api,
+          bakedEndpoint: '',
+          bakedToken: '',
+          transferPlatform: _NoPlatform(),
+          isWeb: false);
+      expect(await app.connect('https://old.example', 'old-token'), isNull);
+      api.probed.clear();
+      app.transfers.setOnline(false);
+      return (app, api);
+    }
+
+    Future<void> expectBlocked(AppState app, _Api api, String endpoint) async {
+      expect(app.hasUnsentTransfers, isTrue);
+      expect(await app.saveConnection(endpoint, 'new-token'),
+          AppState.unsentTransfersMessage);
+      expect(api.probed, isEmpty);
+      expect(app.api.conn?.endpoint, 'https://old.example');
+    }
+
+    UploadSource bytes() => UploadSource(
+        name: 'a.jpg',
+        size: 3,
+        mime: 'image/jpeg',
+        bytes: Uint8List.fromList([1, 2, 3]));
+
+    test('一時停止中のアップロード', () async {
+      final (app, api) = await connected();
+      await app.upload('review', [bytes()]);
+      app.transfers.pause(app.transfers.tasks.single.id);
+      expect(app.transfers.tasks.single.status, TransferStatus.paused);
+      await expectBlocked(app, api, 'https://new.example');
+    });
+
+    test('失敗したアップロード', () async {
+      final (app, api) = await connected();
+      // 読み口の無い元は積んだ時点で失敗の行になる
+      await app.upload('review',
+          [const UploadSource(name: 'a.jpg', size: 3, mime: 'image/jpeg')]);
+      expect(app.transfers.tasks.single.status, TransferStatus.error);
+      await expectBlocked(app, api, 'https://new.example');
+    });
+
+    test('失敗したネット取り込み', () async {
+      final (app, api) = await connected();
+      // http/https 以外の URL は積んだ時点で失敗の行になる（取り消すボタンは出ない行）
+      app.webQueue.enqueue(
+          'review', [const DetectedItem('file:///x.mp4', DetectedKind.video)]);
+      expect(app.webQueue.tasks.single.status, WebTaskStatus.error);
+      await expectBlocked(app, api, 'https://new.example');
+    });
+
+    test('パスに @ を入れた別ホストへの保存も止める', () async {
+      final (app, api) = await connected();
+      await app.upload('review', [bytes()]);
+      await expectBlocked(app, api, 'https://evil.example/@old.example');
+    });
+
+    test('userinfo 付きのエンドポイントは確かめずに断る', () async {
+      final (app, api) = await connected();
+      expect(await app.saveConnection('https://user@old.example', 'x'),
+          connectFailedMessage);
+      expect(api.probed, isEmpty);
     });
   });
 

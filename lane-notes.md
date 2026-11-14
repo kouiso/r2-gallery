@@ -72,6 +72,8 @@ DECIDED 12:58Z | container has 4 CPUs / 15 GB; load avg hit ~40 with 8 members +
 stream D | #74 branch feat/folders-above-photos-74 31eb486; #60 branch fix/web-manifest-60 0ef025c (description wording invented — reviewer to check vs #60) | PRs queued
 OBS | transfer_queue_test.dart fails intermittently under load in several worktrees (also untouched branch wt-d-2) -> flaky-under-load; open an issue / fix timing after merges settle
 #118 | re-review FAIL must2 (docs vs diff: P1 swipe actually KEPT; approval status incomplete H7/V1/O1/O1-2/S7/quarantine, app_state.dart:694 comment) want1 nit2 (queued 118-review-9e1170f.md) | code slices OK: exitPip fixed + Kotlin built in CI, iOS fork verified, media.ts OK, font OFL no RFN | doc fix member resumed
+#118 | re-review PASS must0 want1 nit1 at 174bd20 (queued 118-review-174bd20.md) | CODE-READY; merge blocked: OWNER (feature answer ①③④) + DEVICE (6-scene + PiP closes video on real Pixel) | want: rerun PipPolicyProbe javac at head
+stream C | #125 (5517eca) and #128 (ac927b5) open, reviews running; #88/#89 docs/kmp-era-cleanup 196973f and #90/#91 docs/feature-parity-t3 c527b08 PRs queued
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)

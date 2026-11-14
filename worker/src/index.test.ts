@@ -8,6 +8,7 @@ import {
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import worker, { forbiddenHost, type Env } from "./index";
+import { ALLOWED_METHODS } from "./lib/http";
 
 declare module "cloudflare:test" {
   interface ProvidedEnv extends Env {
@@ -163,9 +164,10 @@ beforeAll(async () => {
 });
 
 describe("CORS preflight", () => {
-  // クライアントが実際に使う全メソッドを事前確認が許可しないと、Web 版でブラウザが本リクエスト自体を送らない（#54）
-  it.each(["GET", "POST", "PUT", "PATCH", "DELETE"])("allows %s", async (method) => {
-    const res = await SELF.fetch(`${ORIGIN}/v1/lib-a/albums/x`, {
+  // 本番の Pages オリジンはリポジトリに無く、worker は allow-origin を "*" で返す設計。
+  // よって任意のオリジンで検証する（特定オリジンは作り話になるため置かない）。
+  const preflight = (method: string) =>
+    SELF.fetch(`${ORIGIN}/v1/lib-a/albums/x`, {
       method: "OPTIONS",
       headers: {
         origin: "https://web.example.test",
@@ -173,12 +175,26 @@ describe("CORS preflight", () => {
         "access-control-request-headers": "authorization, content-type",
       },
     });
+  const list = (v: string | null) => (v ?? "").split(",").map((m) => m.trim().toLowerCase());
+
+  // クライアントが実際に使う全メソッドを許可しないと、Web 版でブラウザが本リクエスト自体を送らない（#54）
+  it.each(["GET", "POST", "PUT", "PATCH", "DELETE"])("allows %s", async (method) => {
+    const res = await preflight(method);
     expect(res.status).toBe(204);
-    const allowed = (res.headers.get("access-control-allow-methods") ?? "")
-      .split(",")
-      .map((m) => m.trim());
-    expect(allowed).toContain(method);
-    expect(allowed).toContain("OPTIONS");
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+    const allowed = list(res.headers.get("access-control-allow-methods"));
+    expect(allowed).toContain(method.toLowerCase());
+    expect(allowed).toContain("options");
+    const headers = list(res.headers.get("access-control-allow-headers"));
+    expect(headers).toContain("authorization");
+    expect(headers).toContain("content-type");
+  });
+
+  // 入口の方法拒否が通すメソッドは全部 CORS にも出ること（一覧を二重管理しない回帰防止）。
+  // GET/HEAD/POST は単純メソッドで事前確認は不要だが、一覧を一本化しているので全て並ぶのが正。
+  it("lists every method the entry guard accepts", async () => {
+    const allowed = list((await preflight("PATCH")).headers.get("access-control-allow-methods"));
+    for (const m of ALLOWED_METHODS) expect(allowed).toContain(m.toLowerCase());
   });
 });
 

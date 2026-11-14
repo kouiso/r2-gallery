@@ -20,12 +20,16 @@ export const json = (body: unknown, status = 200): Response =>
     },
   });
 
+// 入口のメソッド拒否と CORS 許可を同じ一覧から作る。別々に持つと片方だけ更新されて
+// ブラウザが事前確認で本リクエストを止める（#54 の PATCH 漏れ）。
+export const ALLOWED_METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"] as const;
+
 export function corsHeaders(): Record<string, string> {
   return {
     "access-control-allow-origin": "*",
     "access-control-allow-headers": "authorization, content-type",
-    // アルバム名変更は PATCH を使う。ここに無いとブラウザが事前確認で本リクエストを止める（#54）
-    "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+    // OPTIONS は事前確認そのものなので一覧には含めず、ここで足す
+    "access-control-allow-methods": [...ALLOWED_METHODS, "OPTIONS"].join(", "),
     "access-control-max-age": "86400",
   };
 }

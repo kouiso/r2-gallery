@@ -39,6 +39,11 @@ JUDGE b2 (manager): RG-17..23 first; iteration items jump queue (unreadable here
 #123 RG-21 | review running | head 04944bc
 OWNER ANSWER 2026-11-14 (relayed by manager) | RG-12 + merges of RG-17..RG-23: 「中身がokなら問題ない1」 = YES if every SECOND EDITION gate holds on the current head (incl. evidence; #118 needs its device video). Merge one at a time; after each: web-deploy run green + pages-dist .source-sha == merge SHA, fad-dist-state .source-sha follows; if broken -> open + merge revert PR at once.
 DECIDED | G5 production exclusion lifted for r2-gallery main merges of #118 and RG-17..23 PRs only (owner answer above) | revert: owner says 取り込みは止めて. Worker-side fixes still need RG-24 (worker prod deploy) separately; client PRs must work against deployed Worker. Other PRs (stream A-D) still OWNER for merge unless owner extends.
+#121 RG-17 | review PASS must0 want3 nit4 https://github.com/kouiso/r2-gallery/pull/121#issuecomment-6877308115 | evidence evidence/121-4e24c2a.png | waiting: emulator green + manager JUDGE 3 (evidence bar, wants follow-up)
+#123 RG-21 | FIX | review FAIL must1 (Closes #55 but methods list not single-sourced: http.ts:28 vs index.ts:85) https://github.com/kouiso/r2-gallery/pull/123#issuecomment-6877333888 | queued: resume RG-21 member when slot frees
+#124 RG-22 | review running | head 989ca87
+#125 #84/#85 (stream C) | PR opened | review after member report
+#120 | FIX in progress (RG-19 member resumed)
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)

@@ -145,6 +145,7 @@ class TransferQueue extends ChangeNotifier {
     this.makeThumb,
     this.parallel = 2,
     this.netRetryDelay = const Duration(seconds: 15),
+    this.stagedDeleteTimeout = const Duration(seconds: 5),
     this.multipartThreshold = ApiClient.multipartThreshold,
     this.partSize = 8 * 1024 * 1024,
     bool? persist,
@@ -159,6 +160,7 @@ class TransferQueue extends ChangeNotifier {
   final FileThumbMaker? makeThumb;
   final int parallel;
   final Duration netRetryDelay;
+  final Duration stagedDeleteTimeout;
   final int multipartThreshold;
   final int partSize;
   final LedgerStore _ledger;
@@ -535,14 +537,16 @@ class TransferQueue extends ChangeNotifier {
       _completing.add(t);
       try {
         await _persist();
+        // 退避ファイルは完了を報告する前に消し終える。先に done にすると、完了を見た側
+        // （画面・テスト）が掃除の途中の退避ファイルを見てしまう。
+        // 消し終えて done になるまで _completing に残す。外すと別の行の書き込みが「転送中」で書き戻し、再起動で二重に上がる。
+        // この間の一時停止・取り消しは、サーバーが受け取った後なので完了を優先する（上と同じ扱い）
+        await _dropStaged(t);
+        t.status = TransferStatus.done;
+        t.loaded = t.size;
       } finally {
         _completing.remove(t);
       }
-      // 退避ファイルは完了を報告する前に消し終える。先に done にすると、完了を見た側
-      // （画面・テスト）が掃除の途中の退避ファイルを見てしまう
-      await _dropStaged(t);
-      t.status = TransferStatus.done;
-      t.loaded = t.size;
       if (!_done.isClosed) _done.add(t);
     } catch (e) {
       if (token.isCancelled || !_owns(t, gen)) {
@@ -815,10 +819,17 @@ class TransferQueue extends ChangeNotifier {
     if (p == null) return;
     try {
       final f = File(p);
-      if (await f.exists()) await f.delete();
+      // 削除が返らなくても完了の報告を止めない（止まるとサービスが残り続ける）
+      await (() async {
+        if (await f.exists()) await f.delete();
+      })()
+          .timeout(stagedDeleteTimeout);
     } on FileSystemException catch (e) {
       // 消し損ねても次の起動時の掃除で消える
       debugPrint('staged upload not removed: $e');
+    } on TimeoutException {
+      // 残ったファイルは次の起動時の掃除に任せる
+      debugPrint('staged upload delete timed out: $p');
     }
   }
 

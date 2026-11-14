@@ -85,6 +85,8 @@ MERGE QUEUE (one at a time, after rate limit): #124 -> #123 -> #126 -> (#120 if 
 #121-stacked (test/rg17-resume-409 5e092d2) | review PASS must0 want1 (fail-before count 6=4 new+2; fixed in queued body/LOCAL-CHECK by lead, text only) | queued: PR + review
 #122-stacked (fix/rg20-thumb-hardening 27de2cd) | review PASS must0 want2 — DECIDED: want1 (uncapped purge can get permanently stuck with 1000+ expired items; regression vs old progress) treated as blocking; member fixes on same branch before the PR is opened; fresh review after | reason production trash would never empty | revert: n/a
 #127 RG-18 | re-review PASS must0 want1 nit2 at fcfc041 (queued 127-review-fcfc041.md) | want1 (old→new worker switch at #47 deploy loses later pages for non-default sorts until refresh; one-time) -> follow-up PR after merge | evidence needed: UI behaviour -> headless web recording vs local worker (sort old/name/size, page 2 after sort change) — queue for a member
+#128 | review FAIL must1 (README:64 curl Bearer dummy token trips gitleaks locally; fix needs no force-push/no ignore entry) want3 (queued 128-review-ac927b5.md) | DECIDED: supersede with new branch docs/run-locally-v2 (TOKEN=$TOKEN form), then close #128 with replacement link | reason: no history rewrite, no safeguard weakening | revert: n/a
+SECURITY FINDING | CI secrets-scan scans 0 commits on PRs and main pushes (ci.yml:69-71 + gitleaks.sh: merge-commit head + --no-merges --first-parent) | fix PR fix/ci-secrets-scan-range in progress (stream C member)
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)
@@ -117,6 +119,7 @@ MERGE QUEUE (one at a time, after rate limit): #124 -> #123 -> #126 -> (#120 if 
 - ひなたの 4 枚: ごみ箱から元のアルバムへ戻してよいか（期限 ~12-12）（はい／いいえ）
 
 ## for main session
+- CI secrets-scan in r2-gallery has been scanning an empty commit range on PRs and pushes (reviewer finding 13:17Z); lane is fixing it in a PR. Other repos copying .github/ci/gitleaks.sh may share the bug
 - GitHub secondary rate limit hit on comment creation at 12:55Z (all lane posts are from the owner account: reviews, LOCAL-CHECK, GATE comments). Queued locally; if it recurs, the comment-per-gate rule caps throughput at GitHub's content-creation limit
 - second review identity: Codex review bot (chatgpt-codex-connector) hits usage limits on #118 and #120 ("You have reached your Codex usage limits") -> no route to its review; CodeRabbit runs (skips >100-file PRs)
 - Project 43 iteration field unreadable from this cloud container (no ProjectV2 tool, gh token invalid): please send this/next week iteration issue numbers for r2-gallery, or give the lane a working gh token route

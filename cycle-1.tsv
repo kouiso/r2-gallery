@@ -1,0 +1,111 @@
+kind	repo	number	state	draft	labels	assignees	author	created	title
+pr	r2-gallery	119	open	true			kouiso	2026-11-14T12:16:22Z	作業メモ: r2-gallery レーンのノート（マージしない）
+pr	r2-gallery	118	open	false			kouiso	2026-11-14T07:24:19Z	動画: 再生中にホームへ戻ったら自動で小窓にする（旧208 の載せ直し）
+pr	r2-gallery-archive	208	open	true			kouiso	2026-10-23T12:58:51Z	動画UI・日本語表示・専用保存と再生ライフサイクルを改善
+pr	r2-gallery-archive	207	open	false			kouiso	2026-10-22T18:33:56Z	動画を、他のアプリに重ねる小窓（PiP）で見られるようにする
+issue	r2-gallery	117	OPEN				kouiso	2026-11-14T06:58:23Z	[SBI] 300 枚の保存の回帰テストを入れる
+issue	r2-gallery	116	OPEN				kouiso	2026-11-14T06:58:21Z	[SBI] SBI-1 で分かった原因を直す
+issue	r2-gallery	115	OPEN				kouiso	2026-11-14T06:58:21Z	[SBI] 合成の写真 300 枚で「アップロード」「端末への書き出し」「オフライン保存」を試し、本当のエラーを記録する
+issue	r2-gallery	114	OPEN		bug		kouiso	2026-11-14T06:58:17Z	[PBI][bug] 写真を何百枚もまとめて保存しようとすると、エラーになってできない
+issue	r2-gallery	113	OPEN				kouiso	2026-11-14T02:58:44Z	[SBI] アップロード時のアルバム指定を Android の実機と Web で確かめる
+issue	r2-gallery	112	OPEN				kouiso	2026-11-14T02:58:43Z	[SBI] アップロードの確認シートに「アルバム」の欄を足す
+issue	r2-gallery	111	OPEN				kouiso	2026-11-14T02:58:41Z	[SBI] 転送キューが、上がった物をアルバムへ入れる（台帳に持たせて、再開しても二重に上げない）
+issue	r2-gallery	110	OPEN				kouiso	2026-11-14T02:58:39Z	[SBI] アップロード時の重複検知を Android の実機と Web で確かめる
+issue	r2-gallery	109	OPEN				kouiso	2026-11-14T02:58:38Z	[SBI] 選んだファイルのハッシュを計算し、確認シートで重複を知らせてスキップを選べるようにする
+issue	r2-gallery	108	OPEN				kouiso	2026-11-14T02:58:37Z	[SBI] 保存済みと同じ中身かを照会する API（POST /v1/:lib/objects/check）を Worker に作る
+issue	r2-gallery	107	OPEN				kouiso	2026-11-14T02:58:35Z	[SBI] 重複の一覧を Android の実機と Web で確かめる
+issue	r2-gallery	106	OPEN				kouiso	2026-11-14T02:58:34Z	[SBI] アプリに「重複」一覧の画面を作る（束ごとに残す・消すを選ぶ）
+issue	r2-gallery	105	OPEN				kouiso	2026-11-14T02:58:32Z	[SBI] 重複として消す時、消す側が入っていたアルバムを残す側へ付け替える
+issue	r2-gallery	104	OPEN				kouiso	2026-11-14T02:58:31Z	[SBI] 重複の束を返す API（GET /v1/:lib/duplicates）を Worker に作る
+issue	r2-gallery	103	OPEN				kouiso	2026-11-14T02:58:29Z	[SBI] ハッシュの置き場（hashes ファイル）と SHA-256 の計算の道具を Worker に入れる
+issue	r2-gallery	102	OPEN				kouiso	2026-11-14T02:58:28Z	[PBI] アップロードする時に、アルバムを選んでそのまま入れられるようにする
+issue	r2-gallery	101	OPEN				kouiso	2026-11-14T02:58:27Z	[PBI] アップロードする時に、保存済みと中身が全く同じ物を見つけて知らせる
+issue	r2-gallery	100	OPEN				kouiso	2026-11-14T02:58:25Z	[PBI] 保存済みの中身が全く同じ画像・動画を見つけて、削除してよい物として示す
+issue	r2-gallery	99	OPEN				kouiso	2026-11-12T05:09:50Z	[SBI] ライブラリの切り替えの形を持ち主に決めてもらい、結果を #98 に書く
+issue	r2-gallery	98	OPEN		owner-decision		kouiso	2026-11-12T05:09:39Z	[PBI][UX] ライブラリを、決めた形の入口で切り替えられるようにする
+issue	r2-gallery	97	OPEN				kouiso	2026-11-12T05:09:17Z	[SBI] ロゴの案（案A／案B）を持ち主に決めてもらい、結果を #96 に書く
+issue	r2-gallery	96	OPEN		owner-decision		kouiso	2026-11-12T05:09:03Z	[PBI][UX] アプリと Web 版のアイコン・ロゴを、決めた案にする
+issue	r2-gallery	94	OPEN				kouiso	2026-11-11T16:09:38Z	[SBI] Android の実機で設定タブを確かめる
+issue	r2-gallery	93	OPEN		claude-cloud		kouiso	2026-11-11T16:09:29Z	[SBI] 設定タブを見出しで区切り、行をデザインの並びにする
+issue	r2-gallery	92	OPEN				kouiso	2026-11-11T16:09:21Z	[PBI][UX] 設定タブを見出しで区切り、接続・ロック・保存・版数を見分けられるようにする
+issue	r2-gallery	91	OPEN		claude-cloud		kouiso	2026-11-11T16:08:56Z	[SBI] doc/feature-parity.md の T3・worker/src/index.ts の API 一覧・flutter/README.md・AGENTS.md の参照を直す
+issue	r2-gallery	90	OPEN				kouiso	2026-11-11T16:08:46Z	[PBI][docs] 機能の対応表・API 一覧・flutter/README を、今の実装に合わせる
+issue	r2-gallery	89	OPEN		claude-cloud		kouiso	2026-11-11T16:08:27Z	[SBI] .github/ci/README.md・Taskfile.yml・tools/render-harness・doc/redesign-37-handoff.md を、今の構成に合わせる
+issue	r2-gallery	88	OPEN				kouiso	2026-11-11T16:08:18Z	[PBI][docs] KMP 版の頃の文書と道具を、今の Flutter の構成に合わせる
+issue	r2-gallery	87	OPEN		claude-cloud		kouiso	2026-11-11T16:07:58Z	[SBI] README に「手元で動かす」節を足し、AGENTS.md の記述を合わせる
+issue	r2-gallery	86	OPEN				kouiso	2026-11-11T16:07:49Z	[PBI][docs] 手元で Worker とアプリをつないで動かす手順を、文書に書く
+issue	r2-gallery	85	OPEN		claude-cloud		kouiso	2026-11-11T16:07:28Z	[SBI] Worker のテスト用の実行環境を上げる（上げられなければ日付を揃えて理由を書く）
+issue	r2-gallery	84	OPEN				kouiso	2026-11-11T16:07:20Z	[PBI][chore] Worker のテストを、設定した互換日付の実行環境で走らせる
+issue	r2-gallery	83	OPEN		claude-cloud		kouiso	2026-11-11T16:06:53Z	[SBI] flutter analyze の指摘を 0 件にする
+issue	r2-gallery	82	OPEN		claude-cloud		kouiso	2026-11-11T16:06:45Z	[SBI] Flutter の版を1か所に固定し、ワークフロー・Devin の設定・README がそこを指すようにする
+issue	r2-gallery	81	OPEN				kouiso	2026-11-11T16:06:37Z	[PBI][chore] Flutter の検査が、決まった版で、文書どおりのコマンドで最後まで通るようにする
+issue	r2-gallery	80	OPEN				kouiso	2026-11-11T16:06:00Z	[SBI] Android の実機で、主な画面の見た目を確かめる
+issue	r2-gallery	79	OPEN		claude-cloud		kouiso	2026-11-11T16:05:51Z	[SBI] ビューア・動画・取り込みの画面を、テーマの定義に置き換える
+issue	r2-gallery	78	OPEN		claude-cloud		kouiso	2026-11-11T16:05:42Z	[SBI] 写真・アルバム・フォルダ・ゴミ箱・転送の画面を、テーマの定義に置き換える
+issue	r2-gallery	77	OPEN		claude-cloud		kouiso	2026-11-11T16:05:35Z	[SBI] テーマに文字・角丸・色の名前を足し、設定・ロック・接続の画面を置き換える
+issue	r2-gallery	76	OPEN				kouiso	2026-11-11T16:05:27Z	[PBI][UX] 文字の大きさと角丸を画面をまたいで揃え、動画パネルの強調色をアプリの色に合わせる
+issue	r2-gallery	75	OPEN				kouiso	2026-11-11T16:05:03Z	[SBI] Android の実機でフォルダの画面を確かめる
+issue	r2-gallery	74	OPEN		claude-cloud		kouiso	2026-11-11T16:04:55Z	[SBI] 下位フォルダの段を写真の上に出す
+issue	r2-gallery	73	OPEN				kouiso	2026-11-11T16:04:46Z	[PBI][UX] フォルダを開いた時、下位フォルダが写真より上に見えるようにする
+issue	r2-gallery	72	OPEN				kouiso	2026-11-11T16:04:31Z	[SBI] 動画の操作のロックの言葉と印を変え、テストの文言を追随させる
+issue	r2-gallery	71	OPEN				kouiso	2026-11-11T16:04:22Z	[PBI][UX] 動画の「ロック」を、アプリのロックと見分けられる言葉と印にする
+issue	r2-gallery	70	OPEN				kouiso	2026-11-11T16:04:10Z	[SBI] ロック画面と設定タブの説明文を直し、テストの文言を追随させる
+issue	r2-gallery	69	OPEN				kouiso	2026-11-11T16:04:01Z	[PBI][UX] ロックの説明を、実際にロックされる範囲に合わせる
+issue	r2-gallery	68	OPEN				kouiso	2026-11-11T16:03:39Z	[SBI] Android の実機で、接続先の変更と、失敗した時に今の接続が残る事を確かめる
+issue	r2-gallery	67	OPEN		claude-cloud		kouiso	2026-11-11T16:03:30Z	[SBI] 設定の接続の行から開く「接続先を変更」の画面を作る
+issue	r2-gallery	66	OPEN				kouiso	2026-11-11T16:03:21Z	[PBI][UX] 接続中でも、設定から接続先を変更できるようにする
+issue	r2-gallery	65	OPEN				kouiso	2026-11-11T16:02:54Z	[SBI] 判断の後: 一覧に出ない形式を上げる前に止める、または HEIC を表示できるようにする
+issue	r2-gallery	64	OPEN		claude-cloud		kouiso	2026-11-11T16:02:41Z	[SBI] 一覧が拾う拡張子の表を、Worker とアプリで1つの元から作る
+issue	r2-gallery	63	OPEN		bug		kouiso	2026-11-11T16:02:37Z	[PBI][bug] HEIC など、上げても一覧に出ない形式をアップロードできてしまう
+issue	r2-gallery	62	OPEN		claude-cloud		kouiso	2026-11-11T16:02:08Z	[SBI] ビューアに左右キー・Esc と、マウス用の前後のボタンを足す
+issue	r2-gallery	61	OPEN				kouiso	2026-11-11T14:57:45Z	[PBI][UX] Web 版のビューアで、キーボードとマウスでも前後の写真へ送れるようにする
+issue	r2-gallery	60	OPEN		claude-cloud		kouiso	2026-11-11T14:57:28Z	[SBI] manifest.json・index.html・pubspec.yaml の名前・説明・色を直す
+issue	r2-gallery	59	OPEN				kouiso	2026-11-11T14:57:21Z	[PBI][UX] Web 版の名前・説明・起動時の色を、アプリに合わせる
+issue	r2-gallery	58	OPEN		claude-cloud		kouiso	2026-11-11T14:56:52Z	[SBI] Web では端末側のサムネ補完を回さない（または Web でも作れる方法にする）
+issue	r2-gallery	57	OPEN		bug		kouiso	2026-11-11T14:56:36Z	[PBI][bug] Web 版で写真タブを開くと、画像の原本を1枚ずつ取りに行っては失敗する
+issue	r2-gallery	56	OPEN				kouiso	2026-11-11T14:56:23Z	[SBI] 本番の Worker に反映し、配信中の Web 版でアルバムの名前を変更できる事を確かめる
+issue	r2-gallery	55	OPEN		claude-cloud		kouiso	2026-11-11T14:56:17Z	[SBI] 事前確認の応答に PATCH を足し、テストを足す
+issue	r2-gallery	54	OPEN		bug		kouiso	2026-11-11T14:56:04Z	[PBI][bug] Web 版でアルバムの名前を変更できない
+issue	r2-gallery	53	OPEN				kouiso	2026-11-11T14:55:45Z	[SBI] 本番の Worker に反映し、溜まったサムネの扱いを決めて行う
+issue	r2-gallery	52	OPEN		claude-cloud		kouiso	2026-11-11T14:55:32Z	[SBI] 期限の削除と、アップロードの受け口で、古いサムネを消す
+issue	r2-gallery	51	OPEN		bug		kouiso	2026-11-11T14:55:20Z	[PBI][bug] 消した物のサムネが残り続け、同じ名前で上げ直すと古いサムネが出る事がある
+issue	r2-gallery	50	OPEN				kouiso	2026-11-11T14:55:02Z	[SBI] 本番の Worker に反映し、アプリで「元に戻す」とゴミ箱からの復元を確かめる
+issue	r2-gallery	49	OPEN		claude-cloud		kouiso	2026-11-11T14:54:50Z	[SBI] ゴミ箱へ送る時に外したアルバムを控え、復元の時に戻す
+issue	r2-gallery	48	OPEN		bug		kouiso	2026-11-11T14:54:35Z	[PBI][bug] 「元に戻す」を押しても、アルバムへの所属が戻らない
+issue	r2-gallery	47	OPEN				kouiso	2026-11-11T14:54:13Z	[SBI] 本番の Worker に反映し、実際のライブラリで並び替えと一覧の速さを確かめる
+issue	r2-gallery	46	OPEN		claude-cloud		kouiso	2026-11-11T14:54:07Z	[SBI] アプリが並び順を Worker に渡し、続きの読み込みで位置がずれないようにする
+issue	r2-gallery	45	OPEN		claude-cloud		kouiso	2026-11-11T14:53:53Z	[SBI] Worker が、並び順を受け取って一覧を返せるようにする（毎回の全件列挙と、1件ずつのサムネ確認をやめる）
+issue	r2-gallery	44	OPEN		bug		kouiso	2026-11-11T14:53:39Z	[PBI][bug] 並び替え（古い順・名前順・サイズ順）が、読み込み済みの分にしか効かない
+issue	r2-gallery	43	OPEN				kouiso	2026-11-11T14:53:16Z	[SBI] Android の実機で、同じ名前の大きい動画2本を同時に上げて両方残る事を確かめる
+issue	r2-gallery	42	OPEN		claude-cloud		kouiso	2026-11-11T14:53:01Z	[SBI] やり直しの時と分割の完了の時の「同名あり」を、中身の照合と名前の付け直しで扱う
+issue	r2-gallery	41	OPEN		bug		kouiso	2026-11-11T14:52:41Z	[PBI][bug] 同じ名前の大きいファイルを同時に上げると、片方が送られないまま「完了」になる
+issue	r2-gallery	40	OPEN				kouiso	2026-11-10T11:09:33Z	feat: Androidの他アプリからR2 Gallery内の画像・動画を選択できるようにする
+issue	r2-gallery	39	OPEN				kouiso	2026-11-09T06:24:40Z	[PBI][bug] 検知一覧でサムネイルが表示されない場合を切り分けて修正する
+issue	r2-gallery	38	OPEN				kouiso	2026-11-09T06:24:36Z	[PBI][feature] 検知済みの不要な候補を選択して取り込み対象から除外する
+issue	r2-gallery	37	OPEN				kouiso	2026-11-09T06:24:31Z	[PBI][feature] 現在検知されている画像を取り込み候補から一括除外する
+issue	r2-gallery	36	OPEN				kouiso	2026-11-09T06:24:26Z	[PBI][feature] ダウンロード検知した動画の長さを分・秒で表示する
+issue	r2-gallery	35	OPEN				kouiso	2026-11-08T11:50:01Z	[PBI][refactor] R2 Gallery全体をSOLID原則に照らして監査・段階的リファクタリングする
+issue	r2-gallery	34	OPEN				kouiso	2026-11-08T11:49:52Z	[PBI][Release] アプリの開発・配布に連動してバージョン番号とビルド番号が正しく更新されるようにする
+issue	r2-gallery	33	OPEN				kouiso	2026-11-08T11:49:50Z	[PBI][UX] 設定画面のアプリバージョン表記から「Flutter」を除去する
+issue	r2-gallery	32	OPEN				kouiso	2026-11-08T11:49:48Z	[PBI][UX] Personal／Reviewで分かれている設定画面を1つの共通設定に統一する
+issue	r2-gallery	30	OPEN				kouiso	2026-11-08T08:55:21Z	[PBI][feature][privacy] オフライン・通常端末保存の一括整理と安全な削除を実装する
+issue	r2-gallery	29	OPEN				kouiso	2026-11-08T08:54:47Z	[PBI][UX][security] アプリ独自PIN設定を撤去し端末の画面ロック認証に統一する
+issue	r2-gallery	28	OPEN				kouiso	2026-11-08T08:51:13Z	[PBI][bug] ブラウザ取り込みのタスク終了後のキュー維持・バックグラウンド継続を実機検収し未達を修正する
+issue	r2-gallery	27	OPEN				kouiso	2026-11-08T08:51:11Z	[PBI][feature] 転送のモバイル回線利用を選べるWi‑Fi限定設定と自動待機・再開を実装する
+issue	r2-gallery	26	OPEN				kouiso	2026-11-08T08:44:03Z	[PBI][feature] ギャラリー・ブラウザ検出一覧に写真／動画フィルターを追加する
+issue	r2-gallery	25	OPEN				kouiso	2026-11-08T08:44:01Z	[PBI][performance] ギャラリーのページ取得によるスクロールの引っかかりを解消する
+issue	r2-gallery	24	OPEN				kouiso	2026-11-08T08:41:23Z	[PBI][bug] 長時間放置後の起動・復帰時に再ローディングが遅い問題を改善する
+issue	r2-gallery	15	OPEN		devin		kouiso	2026-11-01T11:39:10Z	動画の再生バーが下すぎて掴みにくく、前後の動画送りに取られる
+issue	r2-gallery	13	OPEN		devin		kouiso	2026-10-29T12:40:24Z	[PBI] 日本語が中国語風の字形にならないフォント表示にする
+issue	r2-gallery	11	OPEN		devin		kouiso	2026-10-29T12:06:31Z	issueとPRの書き方チェック・公開内容チェックなど、共通の自動化を入れる
+issue	r2-gallery	10	OPEN		devin		kouiso	2026-10-29T11:44:17Z	[PBI] Cloudflare Pagesを現行リポジトリへ直接連携し、旧repoへのSSH転送を整理する
+issue	r2-gallery	4	OPEN		devin		kouiso	2026-10-28T10:32:59Z	動画: 再生中にホームへ戻ったら自動で小窓（PiP）にする＋kouiso/r2-gallery-archive#208 を main と合わせてマージ可能にする
+issue	r2-gallery	3	OPEN		devin		kouiso	2026-10-28T10:32:57Z	[PBI][feature] 他アプリに重ねる小窓再生（Picture in Picture / PiP）に対応する
+issue	r2-gallery	2	OPEN		devin		kouiso	2026-10-28T10:32:56Z	[PBI][feature] 動画のバックグラウンド再生に対応する（アプリ切替・画面ロック）
+issue	r2-gallery	1	OPEN		devin		kouiso	2026-10-28T10:32:55Z	[PBI][bug] 大量スクロール時のクラッシュを調査し、一覧のメモリ保持を抑える
+issue	r2-gallery-archive	220	OPEN		owner-decision,devin		kouiso	2026-10-29T10:59:41Z	変更提案 #207（動画の小窓表示）を閉じてよいか決める
+issue	r2-gallery-archive	212	OPEN		devin		kouiso	2026-10-25T12:41:05Z	[PBI][ci] Private Linux CIを既存Hetznerへ限定する移行準備
+issue	r2-gallery-archive	186	OPEN		devin		kouiso	2026-10-21T10:35:05Z	[SBI][chore] 承認済みテストデータの削除と前後件数の証跡 (parent: kouiso/r2-gallery#184)
+issue	r2-gallery-archive	185	OPEN		devin		kouiso	2026-10-21T10:35:04Z	[SBI][chore] 動作確認用データの洗い出し（R2/D1、読み取りのみ） (parent: kouiso/r2-gallery#184)
+issue	r2-gallery-archive	184	OPEN		devin		kouiso	2026-10-21T10:35:04Z	[PBI][chore] Claude動作確認用のR2/D1テストデータを消す
+issue	r2-gallery-archive	113	OPEN		devin		kouiso	2026-10-18T11:36:25Z	[PBI][bug] Reviewライブラリの審査メモ・評価情報が表示されない問題を修正する

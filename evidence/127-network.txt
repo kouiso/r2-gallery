@@ -1,0 +1,26 @@
+PR #127 head fcfc04170c21280c6bb7cb8940bccc3fe86414a0 - Flutter web --release vs local worker (fcfc041), 250 seeded PNGs (distinct names/sizes/upload times)
+console errors: 0
+
+[古い順] first5 from API : ['p197.png', 'p225.png', 'p044.png', 'p170.png', 'p157.png']
+[古い順] expected from seed: ['p197.png', 'p225.png', 'p044.png', 'p170.png', 'p157.png']
+[古い順] API order match=True  grid tile colors match expected=True
+[古い順] page2 n=50 first5=['p143.png', 'p078.png', 'p146.png', 'p030.png', 'p138.png'] match=True
+
+[名前順] first5 from API : ['p000.png', 'p001.png', 'p002.png', 'p003.png', 'p004.png']
+[名前順] expected from seed: ['p000.png', 'p001.png', 'p002.png', 'p003.png', 'p004.png']
+[名前順] API order match=True  grid tile colors match expected=True
+[名前順] page2 n=50 first5=['p200.png', 'p201.png', 'p202.png', 'p203.png', 'p204.png'] match=True
+
+[サイズ順] first5 from API : ['p067.png', 'p179.png', 'p177.png', 'p101.png', 'p122.png']
+[サイズ順] expected from seed: ['p067.png', 'p179.png', 'p177.png', 'p101.png', 'p122.png']
+[サイズ順] API order match=True  grid tile colors match expected=True
+[サイズ順] page2 n=50 first5=['p032.png', 'p138.png', 'p026.png', 'p050.png', 'p096.png'] match=True
+
+/v1/<lib>/folders requests in order:
+  [initial] GET /v1/a/folders?prefix=&recursive=1&order=recent&sort=new  -> items=200 next_cursor=1794662214202|p208.png
+  [old] GET /v1/a/folders?prefix=&recursive=1&order=recent&sort=old  -> items=200 next_cursor=1794662218460|p174.png
+  [old-scroll] GET /v1/a/folders?prefix=&recursive=1&order=recent&sort=old&cursor=1794662218460%7Cp174.png  -> items=50 next_cursor=None
+  [name] GET /v1/a/folders?prefix=&recursive=1&order=recent&sort=name  -> items=200 next_cursor=p199.png|p199.png
+  [name-scroll] GET /v1/a/folders?prefix=&recursive=1&order=recent&sort=name&cursor=p199.png%7Cp199.png  -> items=50 next_cursor=None
+  [size] GET /v1/a/folders?prefix=&recursive=1&order=recent&sort=size  -> items=200 next_cursor=4288|p077.png
+  [size-scroll] GET /v1/a/folders?prefix=&recursive=1&order=recent&sort=size&cursor=4288%7Cp077.png  -> items=50 next_cursor=None

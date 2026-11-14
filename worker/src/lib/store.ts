@@ -80,6 +80,8 @@ export interface GlobalAlbum {
   title: string;
   subtitle?: string;
   items: GlobalAlbumItem[];
+  /** ゴミ箱にいる物も含めた並び（`lib:key`）。複数枚を戻しても元の並びに戻すための控え。 */
+  trashOrder?: string[];
 }
 
 export interface AlbumsFile {

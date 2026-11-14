@@ -1,6 +1,6 @@
 import { MAX_SIMPLE_UPLOAD, SYSTEM_PREFIX, TRASH_PREFIX } from "../lib/const";
 import type { Env } from "../lib/env";
-import { readable, writable } from "../lib/env";
+import { bucketFor, readable, writable } from "../lib/env";
 import { assertUserKey, HttpError, json, readJson, ref } from "../lib/http";
 import { handleImport } from "../lib/import";
 import { completeCreateOnly, copyObject, createOnly, moveObject } from "../lib/objects";
@@ -40,34 +40,72 @@ function foldGhostsIntoOrder(album: GlobalAlbum) {
   album.trashOrder = order;
 }
 
+// 候補のうち、今もゴミ箱に実体がある物だけを返す。期限切れ purge は控えを消さないので、
+// 控えの有無ではなく .trash 側の実体で「生きているか」を決める。
+async function liveTrashed(env: Env, candidates: Set<string>): Promise<Set<string>> {
+  const live = new Set<string>();
+  const libs = new Set([...candidates].map((id) => id.slice(0, id.indexOf(":"))));
+  for (const lib of libs) {
+    const t = bucketFor(env, lib);
+    if (!t) continue;
+    const prefix = `${SYSTEM_PREFIX}trash-albums/${lib}/`;
+    let cursor: string | undefined;
+    do {
+      const listed = await env.META.list({ prefix, cursor });
+      for (const o of listed.objects) {
+        const m = /^(\d+)\/(.+)\.json$/.exec(o.key.slice(prefix.length));
+        if (!m || !candidates.has(`${lib}:${m[2]}`)) continue;
+        if (await t.bucket.head(`${TRASH_PREFIX}${m[1]}/${m[2]}`)) live.add(`${lib}:${m[2]}`);
+      }
+      cursor = listed.truncated ? listed.cursor : undefined;
+    } while (cursor);
+  }
+  return live;
+}
+
+// 並びの控えが増え続けないよう、アルバムにも今のゴミ箱にも無い key（アルバムから外した物、
+// purge された物）を落とし、ゴミ箱の物が無くなれば控え自体を消す。mutateAlbums の中で呼ぶので、
+// 他の trash が控えを書いてから albums.json を更新する順序のおかげで、並行して送った物は落ちない。
+async function pruneTrashOrder(env: Env, album: GlobalAlbum) {
+  const order = album.trashOrder;
+  if (!order) return;
+  const present = new Set(album.items.map(refKey));
+  const ghosts = new Set(order.filter((k) => !present.has(k)));
+  const live = ghosts.size ? await liveTrashed(env, ghosts) : ghosts;
+  if (!live.size) {
+    delete album.trashOrder;
+    return;
+  }
+  album.trashOrder = order.filter((k) => present.has(k) || live.has(k));
+}
+
 function insertByTrashOrder(album: GlobalAlbum, item: GlobalAlbumItem) {
   const id = refKey(item);
   const order = album.trashOrder ?? [];
   const idx = order.indexOf(id);
-  const present = (k: string) => album.items.findIndex((i) => refKey(i) === k);
+  // 項目数の2乗にならないよう、現在の位置は一度だけ作る
+  const where = new Map(album.items.map((i, n) => [refKey(i), n]));
   let at = album.items.length;
   if (idx >= 0) {
     // 最寄りの手前の物の後ろ → 無ければ最寄りの後ろの物の前 → 無ければ先頭
     at = 0;
     let found = false;
     for (let j = idx - 1; j >= 0 && !found; j--) {
-      const k = present(order[j]!);
-      if (k >= 0) {
+      const k = where.get(order[j]!);
+      if (k !== undefined) {
         at = k + 1;
         found = true;
       }
     }
     for (let j = idx + 1; j < order.length && !found; j++) {
-      const k = present(order[j]!);
-      if (k >= 0) {
+      const k = where.get(order[j]!);
+      if (k !== undefined) {
         at = k;
         found = true;
       }
     }
   }
   album.items.splice(at, 0, item);
-  // ゴミ箱の物が残っていなければ並びの控えは要らない
-  if (order.every((k) => present(k) >= 0)) delete album.trashOrder;
 }
 
 /** PUT /v1/:lib/objects?key= — small object upload; refuses to overwrite. */
@@ -253,13 +291,14 @@ export async function handleLibOps(
     // Shared albums must not keep pointing at an object that no longer
     // exists — drop the key from every album that lists it.
     let removed: TrashAlbumMembership[] = [];
-    await mutateAlbums(env, (data) => {
+    await mutateAlbums(env, async (data) => {
       // etag 競合で再実行されるので、毎回作り直す
       removed = snapshot(data);
       for (const a of data.albums) {
         if (!a.items.some((i) => i.lib === lib && i.key === key)) continue;
         foldGhostsIntoOrder(a);
         a.items = a.items.filter((i) => !(i.lib === lib && i.key === key));
+        await pruneTrashOrder(env, a);
       }
     });
     // 控えを書いてから所属が増減していたら（並行操作）、実際に外した分で書き直す
@@ -283,11 +322,12 @@ export async function handleLibOps(
   if (!resumed) await moveObject(env, bucket, trashKey, bucket, original);
   if (saved) {
     const memberships = await saved.json<TrashAlbumMembership[]>();
-    await mutateAlbums(env, (data) => {
+    await mutateAlbums(env, async (data) => {
       for (const m of memberships) {
         const album = data.albums.find((a) => a.id === m.albumId);
         if (!album || album.items.some((i) => i.lib === lib && i.key === original)) continue;
         insertByTrashOrder(album, m.item);
+        await pruneTrashOrder(env, album);
       }
     });
     await env.META.delete(sidecar);
@@ -365,11 +405,12 @@ export async function handleAlbumItemsRemove(req: Request, env: Env, lib: string
   writable(env, lib);
   const keys = new Set(albumKeys(await readJson(req)));
   let removed = 0;
-  const data = await mutateAlbums(env, (d) => {
+  const data = await mutateAlbums(env, async (d) => {
     const album = findAlbum(d, id);
     const before = album.items.length;
     album.items = album.items.filter((i) => !(i.lib === lib && keys.has(i.key)));
     removed = before - album.items.length;
+    await pruneTrashOrder(env, album);
   });
   const album = findAlbum(data, id);
   return json({ id, removed, count: album.items.length });

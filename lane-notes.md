@@ -173,3 +173,5 @@ DESIGN AUDIT done: design-parity.md + 31 side-by-side PNGs (evidence/design/, co
 #122 / #136 updated by merge (no rewrite): #122 5fc8b7d (conflict only write.ts imports), #136 0bdc006 (+ newline purge fix, fail-before 88/1 -> 89/0). LOCAL-CHECKs posted https://github.com/kouiso/r2-gallery/pull/122#issuecomment-6878339291 https://github.com/kouiso/r2-gallery/pull/136#issuecomment-6878340560 | fresh review running
 #145 opened = hosted-fail follow-up: transfer_queue done reported before staged delete (product order bug, not flake); fix + IOOverrides regression test 5/5 fail before, 30/30 pass after | LOCAL-CHECK https://github.com/kouiso/r2-gallery/pull/145#issuecomment-6878349294 | review running
 stale queue files 0a/0b-124, issue-115 -> posted/stale (already handled)
+PROD #135 confirmed: pages-dist == 4dad7a4 (~13:59Z)
+#127 merge-result check FAIL (4e00845 = fcfc041 + main 4dad7a4): semantic conflict — #127 adds `sort` to ApiClient.folder; main's new fake _CountApi (library_switch_test.dart:109) lacks it -> invalid_override, 2 test files fail to compile. Not merged. Member merging main into fix/rg18-server-sort + fixing fakes; then delta re-review + GATE

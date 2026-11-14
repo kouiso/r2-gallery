@@ -47,6 +47,7 @@ dependencies {
     // LaunchTheme の親に Theme.AppCompat を使う（local_auth の認証ダイアログが要求）。
     // プラグイン側の依存は app のリソース解決から見えないので、ここで直接持つ
     implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("androidx.media3:media3-session:1.9.2")
 }
 
 flutter {

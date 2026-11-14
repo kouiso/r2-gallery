@@ -1,0 +1,217 @@
+
+ RUN  v3.2.7 /workspace/r2-gallery/worker
+
+Proxy environment variables detected. We'll use your proxy for fetch requests.
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mFailed to write to log file Error: ENOENT: no such file or directory, mkdir '/home/agent/.config/.wrangler'[0m
+
+      at async Object.mkdir (node:internal/fs/promises:916:10)
+      at async ensureDirectoryExists (/workspace/r2-gallery/node_modules/.pnpm/wrangler@4.72.0_@cloudflare+workers-types@5.20260930.1/node_modules/wrangler/wrangler-dist/cli.js:42374:3)
+      at async /workspace/r2-gallery/node_modules/.pnpm/wrangler@4.72.0_@cloudflare+workers-types@5.20260930.1/node_modules/wrangler/wrangler-dist/cli.js:42416:7
+      at async Mutex.runWith (/workspace/r2-gallery/node_modules/.pnpm/miniflare@4.20260310.0/node_modules/miniflare/dist/src/index.js:52466:48)
+      at async appendToDebugLogFile (/workspace/r2-gallery/node_modules/.pnpm/wrangler@4.72.0_@cloudflare+workers-types@5.20260930.1/node_modules/wrangler/wrangler-dist/cli.js:42414:3) {
+    errno: -2,
+    code: 'ENOENT',
+    syscall: 'mkdir',
+    path: '/home/agent/.config/.wrangler'
+  }
+
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mWould have written: [0m
+
+  --- 2026-10-22T14:45:34.611Z debug
+  🪵  Writing logs to "/home/agent/.config/.wrangler/logs/wrangler-2026-10-22_14-45-34_427.log"
+  ---
+
+
+
+[vpw:debug] Adding `enable_nodejs_tty_module` compatibility flag during tests as this feature is needed to support the Vitest runner.
+[vpw:debug] Adding `enable_nodejs_fs_module` compatibility flag during tests as this feature is needed to support the Vitest runner.
+[vpw:debug] Adding `enable_nodejs_http_modules` compatibility flag during tests as this feature is needed to support the Vitest runner.
+[vpw:debug] Adding `enable_nodejs_perf_hooks_module` compatibility flag during tests as this feature is needed to support the Vitest runner.
+[vpw:info] Starting single runtime for vitest.config.ts...
+[mf:warn] The latest compatibility date supported by the installed Cloudflare Workers Runtime is "2026-03-10",
+but you've requested "2026-09-01". Falling back to "2026-03-10"...
+stdout | src/media_startup.test.ts > signed video startup HTTP probes > returns only the requested suffix with one ranged R2 read
+{"probe":"suffix-4","status":200,"bytes":262144,"original":[{"method":"get","key":"startup-probe/clip.mp4"}],"meta":[]}
+
+stdout | src/media_startup.test.ts > signed video startup HTTP probes > answers HEAD from metadata without creating an R2 body stream
+{"probe":"head","status":200,"original":[{"method":"get","key":"startup-probe/clip.mp4"}],"meta":[]}
+
+workerd/api/r2-rpc.c++:130: warning: R2 error response does not contain the CF-R2-Error header.; response.statusCode = 500
+[mf:error] AssertionError: false == true
+    at new AssertionError (node-internal:internal_assertionerror:427:15)
+    at assert (node-internal:internal_assert:49:15)
+    at fetchSingleRange (file:///workspace/r2-gallery/node_modules/.pnpm/miniflare@4.20260310.0/node_modules/miniflare/src/workers/shared/blob.worker.ts:48:2)
+    at async #get (file:///workspace/r2-gallery/node_modules/.pnpm/miniflare@4.20260310.0/node_modules/miniflare/src/workers/r2/bucket.worker.ts:764:12)
+    at async R2BucketObject.get (file:///workspace/r2-gallery/node_modules/.pnpm/miniflare@4.20260310.0/node_modules/miniflare/src/workers/r2/bucket.worker.ts:1025:13)
+    at async R2BucketObject.fetch (file:///workspace/r2-gallery/node_modules/.pnpm/miniflare@4.20260310.0/node_modules/miniflare/src/workers/shared/router.worker.ts:45:32)
+    at async R2BucketObject.fetch (file:///workspace/r2-gallery/node_modules/.pnpm/miniflare@4.20260310.0/node_modules/miniflare/src/workers/shared/object.worker.ts:148:11)
+workerd/jsg/util.c++:407: info: exception = workerd/api/streams/internal.c++:2341: disconnected: pump canceled
+stack: /workspace/r2-gallery/node_modules/.pnpm/@cloudflare+workerd-linux-64@1.20260310.1/node_modules/@cloudflare/workerd-linux-64/bin/workerd@2f14457 /workspace/r2-gallery/node_modules/.pnpm/@cloudflare+workerd-linux-64@1.20260310.1/node_modules/@cloudflare/workerd-linux-64/bin/workerd@2d079c0 /workspace/r2-gallery/node_modules/.pnpm/@cloudflare+workerd-linux-64@1.20260310.1/node_modules/@cloudflare/workerd-linux-64/bin/workerd@25bc4c0 /workspace/r2-gallery/node_modules/.pnpm/@cloudflare+workerd-linux-64@1.20260310.1/node_modules/@cloudflare/workerd-linux-64/bin/workerd@4f08c10 /workspace/r2-gallery/node_modules/.pnpm/@cloudflare+workerd-linux-64@1.20260310.1/node_modules/@cloudflare/workerd-linux-64/bin/workerd@1fdb280
+ × src/media_startup.test.ts > signed video startup HTTP probes > returns only the requested suffix with one ranged R2 read 16ms
+   → expected 200 to be 206 // Object.is equality
+ × src/media_startup.test.ts > signed video startup HTTP probes > answers HEAD from metadata without creating an R2 body stream 6ms
+   → expected [ { method: 'get', …(2) } ] to deeply equal [ { method: 'head', …(1) } ]
+ × src/media_startup.test.ts > signed video startup HTTP probes > ignores Range on HEAD and retains the full representation metadata 3ms
+   → expected null to be '262144' // Object.is equality
+ ✓ src/media_startup.test.ts > signed video startup HTTP probes > clamps valid range bytes=0-3 to actual returned bytes 5ms
+ ✓ src/media_startup.test.ts > signed video startup HTTP probes > clamps valid range bytes=262140- to actual returned bytes 2ms
+ ✓ src/media_startup.test.ts > signed video startup HTTP probes > clamps valid range bytes=262140-262244 to actual returned bytes 2ms
+ × src/media_startup.test.ts > signed video startup HTTP probes > clamps valid range bytes=-262244 to actual returned bytes 7ms
+   → expected 200 to be 206 // Object.is equality
+ × src/media_startup.test.ts > signed video startup HTTP probes > returns 416 for unsatisfiable bytes=-0 on startup-probe/clip.mp4 2ms
+   → expected 200 to be 416 // Object.is equality
+ × src/media_startup.test.ts > signed video startup HTTP probes > returns 416 for unsatisfiable bytes=262144- on startup-probe/clip.mp4 3ms
+   → get: The requested range is not satisfiable (10039)
+ × src/media_startup.test.ts > signed video startup HTTP probes > returns 416 for unsatisfiable bytes=0-3 on startup-probe/empty.mp4 3ms
+   → get: Unspecified error (0)
+ ✓ src/media_startup.test.ts > signed video startup HTTP probes > keeps unsupported multi-range requests as a full streamed response 799ms
+ × src/media_startup.test.ts > signed video startup HTTP probes > uses metadata reads for thumbnail HEAD and fallback too 9ms
+   → expected [ { method: 'get', …(2) } ] to deeply equal [ { method: 'head', …(1) } ]
+ ✓ src/media_startup.test.ts > signed video startup HTTP probes > validates the signature before any R2 HEAD or GET
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/media_startup.test.ts > signed video startup HTTP probes > returns only the requested suffix with one ranged R2 read
+AssertionError: expected 200 to be 206 // Object.is equality
+
+- Expected
++ Received
+
+- 206
++ 200
+
+ ❯ src/media_startup.test.ts:74:29
+     72|       }),
+     73|     );
+     74|     expect(response.status).toBe(206);
+       |                             ^
+     75|     expect(response.headers.get("content-range")).toBe(`bytes ${SIZE -…
+     76|     expect(response.headers.get("content-length")).toBe("4");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  src/media_startup.test.ts > signed video startup HTTP probes > answers HEAD from metadata without creating an R2 body stream
+AssertionError: expected [ { method: 'get', …(2) } ] to deeply equal [ { method: 'head', …(1) } ]
+
+- Expected
++ Received
+
+  [
+    {
+      "key": "startup-probe/clip.mp4",
+-     "method": "head",
++     "method": "get",
++     "options": undefined,
+    },
+  ]
+
+ ❯ src/media_startup.test.ts:86:22
+     84|     console.log(JSON.stringify({ probe: "head", status: response.statu…
+     85|     expect(response.status).toBe(200);
+     86|     expect(original).toEqual([{ method: "head", key: KEY }]);
+       |                      ^
+     87|     expect(meta).toEqual([]);
+     88|     expect(response.headers.get("content-length")).toBe(String(SIZE));
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  src/media_startup.test.ts > signed video startup HTTP probes > ignores Range on HEAD and retains the full representation metadata
+AssertionError: expected null to be '262144' // Object.is equality
+
+- Expected:
+"262144"
+
++ Received:
+null
+
+ ❯ src/media_startup.test.ts:103:52
+    101|     });
+    102|     expect(response.status).toBe(200);
+    103|     expect(response.headers.get("content-length")).toBe(String(SIZE));
+       |                                                    ^
+    104|     expect(response.headers.get("content-range")).toBeNull();
+    105|     expect(original).toEqual([{ method: "head", key: KEY }]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  src/media_startup.test.ts > signed video startup HTTP probes > clamps valid range bytes=-262244 to actual returned bytes
+AssertionError: expected 200 to be 206 // Object.is equality
+
+- Expected
++ Received
+
+- 206
++ 200
+
+ ❯ src/media_startup.test.ts:116:29
+    114|   ])("clamps valid range %s to actual returned bytes", async (range, o…
+    115|     const { response, original } = await request({ headers: { range } …
+    116|     expect(response.status).toBe(206);
+       |                             ^
+    117|     expect(response.headers.get("content-range")).toBe(
+    118|       `bytes ${offset}-${offset + length - 1}/${SIZE}`,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  src/media_startup.test.ts > signed video startup HTTP probes > returns 416 for unsatisfiable bytes=-0 on startup-probe/clip.mp4
+AssertionError: expected 200 to be 416 // Object.is equality
+
+- Expected
++ Received
+
+- 416
++ 200
+
+ ❯ src/media_startup.test.ts:133:29
+    131|   ])("returns 416 for unsatisfiable %s on %s", async (range, key, size…
+    132|     const { response } = await request({ headers: { range } }, key);
+    133|     expect(response.status).toBe(416);
+       |                             ^
+    134|     expect(response.headers.get("content-range")).toBe(`bytes */${size…
+    135|     expect((await response.arrayBuffer()).byteLength).toBe(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+ FAIL  src/media_startup.test.ts > signed video startup HTTP probes > returns 416 for unsatisfiable bytes=262144- on startup-probe/clip.mp4
+Error: get: The requested range is not satisfiable (10039)
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
+
+ FAIL  src/media_startup.test.ts > signed video startup HTTP probes > returns 416 for unsatisfiable bytes=0-3 on startup-probe/empty.mp4
+Error: get: Unspecified error (0)
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
+
+ FAIL  src/media_startup.test.ts > signed video startup HTTP probes > uses metadata reads for thumbnail HEAD and fallback too
+AssertionError: expected [ { method: 'get', …(2) } ] to deeply equal [ { method: 'head', …(1) } ]
+
+- Expected
++ Received
+
+  [
+    {
+      "key": ".system/thumbs/a/startup-probe/clip.mp4.webp",
+-     "method": "head",
++     "method": "get",
++     "options": undefined,
+    },
+  ]
+
+ ❯ src/media_startup.test.ts:149:27
+    147|     const fallback = await request({ method: "HEAD" }, KEY, "t");
+    148|     expect(fallback.response.status).toBe(200);
+    149|     expect(fallback.meta).toEqual([{ method: "head", key: thumbKey }]);
+       |                           ^
+    150|     expect(fallback.original).toEqual([{ method: "head", key: KEY }]);
+    151|     await env.META.put(thumbKey, new Uint8Array([1, 2, 3]), {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  8 failed | 5 passed (13)
+   Start at  14:45:33
+   Duration  3.19s (transform 173ms, setup 0ms, collect 313ms, tests 884ms, environment 0ms, prepare 161ms)
+
+[vpw:debug] Shutting down runtimes...
+[vpw:debug] Disposing remote proxy sessions...
+🪵  Logs were written to "/home/agent/.config/.wrangler/logs/wrangler-2026-10-22_14-45-34_427.log"

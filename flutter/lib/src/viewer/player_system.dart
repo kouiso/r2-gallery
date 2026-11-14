@@ -1,9 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-/// 動画プレイヤーのドラッグで触る端末側の値（音量・画面の明るさ）。どちらも 0.0〜1.0。
+/// 動画プレイヤーから触る画面の値。値は 0.0〜1.0。
+/// 音量の端末APIは互換用。プレイヤーUIは動画コントローラの音量だけを変える。
 abstract class PlayerSystem {
-  /// 取れない端末・環境では null（ジェスチャーを効かせない）。
+  /// 取れない端末・環境では null。
   Future<double?> volume();
 
   /// 実際に設定できた値を返す（音量は段階があるので丸められる）。

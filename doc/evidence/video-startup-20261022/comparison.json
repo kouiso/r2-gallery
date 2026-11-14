@@ -1,0 +1,63 @@
+{
+  "baseline": "3e93d7ca4b37fe1ef8127658085d7728621e0ceb",
+  "probe_source_sha256": {
+    "video_startup_probe_test.dart": "1f629b3b619f8b4a7bf51428d42e279b07bf10ad5362ce17024940dcc9960868",
+    "offline_video_startup_probe_test.dart": "6b4af5a4c2ce05c1a9b44dd264920d7f9c93f055fd02e5ca86be96a301f07df6"
+  },
+  "samples_per_case": 3,
+  "network_model": [
+    {
+      "scope": "virtual-clock mock play accepted; NOT first frame",
+      "scenario": "independent",
+      "before_ms": 410,
+      "after_ms": 410,
+      "review_api_invocations_before": [
+        1,
+        1,
+        1
+      ],
+      "review_api_invocations_after": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "scope": "virtual-clock mock play accepted; NOT first frame",
+      "scenario": "contended",
+      "before_ms": 650,
+      "after_ms": 410,
+      "review_api_invocations_before": [
+        1,
+        1,
+        1
+      ],
+      "review_api_invocations_after": [
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "offline_local": [
+    {
+      "scope": "real Dart debug crypto and warm temporary fixture I/O; NOT native first frame",
+      "bytes": 1048576,
+      "before_preparation_ms": 208.624,
+      "after_preparation_ms": 153.773,
+      "before_max_timer_gap_ms_median": 198.158,
+      "after_max_timer_gap_ms_median": 14.442
+    },
+    {
+      "scope": "real Dart debug crypto and warm temporary fixture I/O; NOT native first frame",
+      "bytes": 8388608,
+      "before_preparation_ms": 1231.61,
+      "after_preparation_ms": 1175.832,
+      "before_max_timer_gap_ms_median": 1201.189,
+      "after_max_timer_gap_ms_median": 26.181
+    }
+  ],
+  "first_frame": "NOT MEASURED",
+  "native_build": "HELD; no SDK license acceptance or installation",
+  "baseline_product_diff": "none; only untracked identical probe test files added"
+}

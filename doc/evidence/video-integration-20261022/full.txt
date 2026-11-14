@@ -1,0 +1,753 @@
+UTC: 2026-10-22T18:58:20.805491+00:00
+CWD: /workspace/r2-validation-0738bee/flutter
+ARGV: ["flutter", "test", "--no-pub", "--concurrency=1", "--reporter", "expanded"]
+
+00:00 +0: loading /workspace/r2-validation-0738bee/flutter/test/private_storage_policy_test.dart
+00:00 +0: /workspace/r2-validation-0738bee/flutter/test/private_storage_policy_test.dart: 非対応のbackendは全ての接続で保存・復号・削除を拒否し、秘密KVとfilesystemへ進まない
+00:00 +1: /workspace/r2-validation-0738bee/flutter/test/private_storage_policy_test.dart: iOSの保護設定を待つ間は暗号文を書かず、準備は並列でも1回にまとめる
+00:00 +2: /workspace/r2-validation-0738bee/flutter/test/private_storage_policy_test.dart: iOSの失敗・未登録・falseを保護済みとせず、私的な診断を隠して再試行できる
+00:00 +3: /workspace/r2-validation-0738bee/flutter/test/private_storage_policy_test.dart: Androidは設定ファイルでbackupを制御し、iOSチャネルや外部保存先へ渡さない
+00:00 +4: loading /workspace/r2-validation-0738bee/flutter/test/gallery_state_test.dart
+00:01 +4: /workspace/r2-validation-0738bee/flutter/test/gallery_state_test.dart: 続きページの取得失敗 失敗した直後はスクロール通知が来ても再試行せず、間を空けたら再試行する
+00:01 +5: /workspace/r2-validation-0738bee/flutter/test/gallery_state_test.dart: 続きページの取得失敗 成功すれば待ち時間は残らず、取り直しでも解ける
+00:01 +6: /workspace/r2-validation-0738bee/flutter/test/gallery_state_test.dart: サムネのバックフィル 動画のサムネを保存できたら、その行だけ差し替えて読み込み済みの続きページは残す
+00:01 +7: /workspace/r2-validation-0738bee/flutter/test/gallery_state_test.dart: サムネのバックフィル 画像だけのバックフィルでは一覧を取り直さない（画像は元から thumbUrl を持つ）
+00:01 +8: /workspace/r2-validation-0738bee/flutter/test/gallery_state_test.dart: サムネのバックフィル サムネを作れなかった動画だけなら取り直さない
+00:01 +9: /workspace/r2-validation-0738bee/flutter/test/gallery_state_test.dart: サムネのバックフィル サムネを保存できた画像ごとに後始末を呼ぶ（保存できなかった分は呼ばない）
+00:01 +10: /workspace/r2-validation-0738bee/flutter/test/gallery_state_test.dart: サムネのバックフィル バックフィルの失敗は握りつぶさず数え、残りの行は続ける
+thumb backfill failed (1): 1.jpg: HTTP 415: thumb_must_be_webp
+00:01 +11: /workspace/r2-validation-0738bee/flutter/test/gallery_state_test.dart: サムネのバックフィル 1件ずつ順に流し、途中の失敗で後ろの分を止めない
+thumb backfill failed (1): 1.jpg: Bad state: decode failed
+00:01 +12: loading /workspace/r2-validation-0738bee/flutter/test/offline_playback_files_test.dart
+00:02 +12: /workspace/r2-validation-0738bee/flutter/test/offline_playback_files_test.dart: 再生用平文は専用セッションにだけ置き、破棄で削除する
+00:02 +13: /workspace/r2-validation-0738bee/flutter/test/offline_playback_files_test.dart: 異常終了した専用セッションだけ掃除し、他のファイルには触れない
+00:02 +14: /workspace/r2-validation-0738bee/flutter/test/offline_playback_files_test.dart: 同じ起動中の別の再生セッションを消さない
+00:02 +15: loading /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart
+00:03 +15: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 画面保持の要求と Web の解放・再取得 再生要求がある時だけ一度取得し、反復通知では取り直さない
+00:03 +16: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 画面保持の要求と Web の解放・再取得 ScreenAwakeStatus.unsupported を成功と扱わず、拒否後に進捗通知で要求を連打しない
+00:03 +17: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 画面保持の要求と Web の解放・再取得 ScreenAwakeStatus.denied を成功と扱わず、拒否後に進捗通知で要求を連打しない
+00:03 +18: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 画面保持の要求と Web の解放・再取得 ScreenAwakeStatus.failed を成功と扱わず、拒否後に進捗通知で要求を連打しない
+00:03 +19: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 画面保持の要求と Web の解放・再取得 OS による解放は尊重し、非表示から表示へ戻った時に新しく取得する
+00:03 +20: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 画面保持の要求と Web の解放・再取得 一時停止したまま可視化しても再取得しない
+00:03 +21: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 画面保持の要求と Web の解放・再取得 取得待ちの間に退出したら、遅れて届いた保持を直ちに解放する
+00:03 +22: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 画面保持の要求と Web の解放・再取得 新しい動画の要求を、古い画面の dispose で解除しない
+00:03 +23: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 画面保持の要求と Web の解放・再取得 古い解放が処理中でも、新しい取得はその後に行う
+00:03 +24: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 画面保持の要求と Web の解放・再取得 解放失敗を成功と扱わず、次の再生要求が内部の held に取り残されない
+00:03 +25: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 画面保持の要求と Web の解放・再取得 停止中の解放失敗は進捗通知で連打せず、退出時に保持不明分を再解放する
+00:03 +26: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 再生画面への接続 前景で初期化済みの再生中だけ保持し、pause/end/error/退出で解放する
+00:04 +27: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 再生画面への接続 背面移行と手動電源ロック相当の paused で解放し、前景の再生にだけ戻す
+00:04 +28: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 再生画面への接続 裏の動画とアプリロック中は保持しない
+00:04 +29: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 再生画面への接続 VideoView の pause と退出から共通保持を解放する
+00:04 +30: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: TargetPlatform.android の橋渡しは既存チャネルへ true/false だけを送る
+00:04 +31: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: TargetPlatform.iOS の橋渡しは既存チャネルへ true/false だけを送る
+00:04 +32: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: Android チャネルの 未実装 を区別する
+00:04 +33: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: Android チャネルの 取得拒否 を区別する
+00:04 +34: loading /workspace/r2-validation-0738bee/flutter/test/offline_privacy_test.dart
+00:05 +34: /workspace/r2-validation-0738bee/flutter/test/offline_privacy_test.dart: 管理下の保存動画も同じdecoderで背景再生し、接続取消で平文とOS操作を解放する
+00:07 +35: /workspace/r2-validation-0738bee/flutter/test/offline_privacy_test.dart: 1件削除は再生中の平文・OS操作も解放し、別接続や旧保存を消さない
+00:07 +36: /workspace/r2-validation-0738bee/flutter/test/offline_privacy_test.dart: 全件削除は再生中の平文・OS操作も解放し、別接続や旧保存を消さない
+00:07 +37: /workspace/r2-validation-0738bee/flutter/test/offline_privacy_test.dart: 初期化中に閉じても平文を残さず、遅れて再生しない
+00:08 +38: /workspace/r2-validation-0738bee/flutter/test/offline_privacy_test.dart: 非同期復号の結果待ちで接続が変わったら平文cacheもdecoderも作らない
+00:08 +39: /workspace/r2-validation-0738bee/flutter/test/offline_privacy_test.dart: 再生初期化に失敗したら平文と再生器を片付け、内部パスを表示しない
+00:08 +40: /workspace/r2-validation-0738bee/flutter/test/offline_privacy_test.dart: バックグラウンドで初期化が終わっても再生を始めない
+00:09 +41: /workspace/r2-validation-0738bee/flutter/test/offline_privacy_test.dart: 復帰のロック判定中にロックされたら再開しない
+00:09 +42: /workspace/r2-validation-0738bee/flutter/test/offline_privacy_test.dart: 復帰待ち中の手動停止を後から自動再生で上書きしない
+00:09 +43: /workspace/r2-validation-0738bee/flutter/test/offline_privacy_test.dart: account 変更で作品名と復号データを隠し、動画の平文を削除する
+00:10 +44: /workspace/r2-validation-0738bee/flutter/test/offline_privacy_test.dart: lock 変更で作品名と復号データを隠し、動画の平文を削除する
+00:10 +45: /workspace/r2-validation-0738bee/flutter/test/offline_privacy_test.dart: 別アカウントと未所属のrefからは動画を初期化しない
+00:10 +46: /workspace/r2-validation-0738bee/flutter/test/offline_privacy_test.dart: 新しい接続の読み込みを待つ間にも古い接続の一覧を見せない
+offline playback cache sweep unavailable
+00:10 +47: loading /workspace/r2-validation-0738bee/flutter/test/video_startup_probe_test.dart
+00:12 +47: /workspace/r2-validation-0738bee/flutter/test/video_startup_probe_test.dart: 同じ遅延注入で初回playまでの経路を記録 resourceContended=false
+00:14 +48: /workspace/r2-validation-0738bee/flutter/test/video_startup_probe_test.dart: 同じ遅延注入で初回playまでの経路を記録 resourceContended=true
+00:15 +49: loading /workspace/r2-validation-0738bee/flutter/test/viewer_paging_test.dart
+00:16 +49: /workspace/r2-validation-0738bee/flutter/test/viewer_paging_test.dart: スワイプで前後のメディアへ移る 開いたメディアから始まり、スワイプで次へ移る
+00:17 +50: /workspace/r2-validation-0738bee/flutter/test/viewer_paging_test.dart: スワイプで前後のメディアへ移る 動画のコントローラは表示中のページの 1 本だけ（隣は先読みしない）
+00:18 +51: /workspace/r2-validation-0738bee/flutter/test/viewer_paging_test.dart: スワイプで前後のメディアへ移る スワイプの途中（半分未満）でも隣の動画は読み込まない
+00:18 +52: /workspace/r2-validation-0738bee/flutter/test/viewer_paging_test.dart: スワイプで前後のメディアへ移る 画像のページへ移っても動画のコントローラは残らない
+00:19 +53: /workspace/r2-validation-0738bee/flutter/test/viewer_paging_test.dart: 拡大した画像からのスワイプ 端に着く前は外へ流してもページは動かない
+00:19 +54: /workspace/r2-validation-0738bee/flutter/test/viewer_paging_test.dart: 拡大した画像からのスワイプ 左端まで寄せたあと外へ引けば、1.01 倍超でも前の画像へ移る
+00:19 +55: /workspace/r2-validation-0738bee/flutter/test/viewer_paging_test.dart: 拡大した画像からのスワイプ 2 倍を超えて拡大したら原寸を重ね、等倍へ戻したら外す
+00:19 +56: /workspace/r2-validation-0738bee/flutter/test/viewer_paging_test.dart: 一覧の続きと対象外のメディア 開いた後に一覧が読み込んだ続きのページも、末尾に足されてスワイプできる
+00:20 +57: /workspace/r2-validation-0738bee/flutter/test/viewer_paging_test.dart: 一覧の続きと対象外のメディア 一覧が先頭から取り直されても並びは崩れない
+00:20 +58: /workspace/r2-validation-0738bee/flutter/test/viewer_paging_test.dart: 一覧の続きと対象外のメディア 画像と動画以外はスワイプの対象にしない
+00:20 +59: /workspace/r2-validation-0738bee/flutter/test/viewer_paging_test.dart: 動画のシーク スライダーはドラッグ中に seek せず、離した時に 1 回だけ seek する
+00:21 +60: /workspace/r2-validation-0738bee/flutter/test/viewer_paging_test.dart: 背面に回った時の再生 再生中なら止め、戻ったら再開する（inactive→paused と続いても再開できる）
+00:21 +61: /workspace/r2-validation-0738bee/flutter/test/viewer_paging_test.dart: 背面に回った時の再生 読み込み中に背面へ回ったら、読み終えても鳴らさず戻った時に再生する
+00:21 +62: /workspace/r2-validation-0738bee/flutter/test/viewer_paging_test.dart: 背面に回った時の再生 自分で止めていた動画は、戻っても勝手に再生しない
+00:21 +63: /workspace/r2-validation-0738bee/flutter/test/viewer_paging_test.dart: 画像の表示 原本は専用キャッシュにパスだけのキーで入れ、decode 幅を画面に合わせる
+00:21 +64: /workspace/r2-validation-0738bee/flutter/test/viewer_paging_test.dart: 画像の表示 画面幅が取れない時は decode 幅を指定しない
+00:21 +65: /workspace/r2-validation-0738bee/flutter/test/viewer_paging_test.dart: ロック中の再生 ロックした瞬間に再生中の動画を止め、戻っても勝手に再開しない
+00:21 +66: /workspace/r2-validation-0738bee/flutter/test/viewer_paging_test.dart: ロック中の再生 ロック中に読み込みが終わった動画は鳴らさない
+00:21 +67: loading /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart
+00:23 +67: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S1 ペアリングリンク tools/pairing-url.mjs の出力を読める
+00:23 +68: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S1 ペアリングリンク 作った文字列はそのまま読み戻せる
+00:23 +69: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S1 ペアリングリンク 崩れた文字列は例外にせず null
+00:23 +70: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S1 ペアリングリンク リンクで開くと、その接続先とトークンで繋ぐ
+00:23 +71: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S1 ペアリングリンク 以前の Flutter 版の endpoint/token 形式も受ける
+00:23 +72: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S1 ペアリングリンク 読めないリンクでは何も試さない
+00:23 +73: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S2 ペアリング文字列の貼り付け トークン欄に貼ると両方の欄が埋まり、そのまま接続できる
+00:25 +74: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S3 接続入力の補正 ホスト名だけ・末尾スラッシュ・トークンの改行を補って繋ぐ
+00:25 +75: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S3 接続入力の補正 http は平文でトークンが流れるので試さずに断る
+00:25 +76: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S3 接続入力の補正 トークンが空白だけなら試さない
+00:25 +77: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S3 接続入力の補正 表示用のホスト名は userinfo もパスも落とす
+00:25 +78: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S4 読み取り専用への書き込みを止める 操作ごとに KMP 版と同じ文言で止める
+00:25 +79: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S4 読み取り専用への書き込みを止める 読み取り専用ライブラリでは追加の＋も「写真・動画を追加」も出さない
+00:25 +80: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S4 読み取り専用への書き込みを止める 読み取り専用ライブラリのゴミ箱では復元を送らず理由を出す
+00:25 +81: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S4 読み取り専用への書き込みを止める 書けるライブラリなら復元は通る
+00:26 +82: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S6 ロックの設定 再ロックまでの時間を選ぶと保存され、行にも出る
+00:26 +83: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S8 接続状態 接続中はホスト名とライブラリ数だけ出し、URL 全体やトークンは出さない
+00:26 +84: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S8 接続状態 未接続ならそう出し、タップで接続画面へ戻れる
+00:27 +85: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S9 起動失敗バナー ライブラリが取れなければ理由を出し、再試行で直れば消える
+00:27 +86: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S9 起動失敗バナー 閉じるで帯だけ消せる
+00:27 +87: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S9 起動失敗バナー 起動処理が想定外のエラーで落ちても、読み込み中のまま止めず理由を出す
+00:27 +88: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S9 起動失敗バナー 一度取れた一覧は、取り直しに失敗しても手元のまま使い続ける
+00:27 +88: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S9 起動失敗バナー 起動処理が想定外のエラーで落ちても、読み込み中のまま止めず理由を出す
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:27 +88: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S9 起動失敗バナー 一度取れた一覧は、取り直しに失敗しても手元のまま使い続ける
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:27 +89: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S9 起動失敗バナー 起動時の失敗の説明にトークンを出さない
+00:27 +90: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S10 接続せずに取り込みだけ使う スキップすると取り込みタブが開き、写真タブは接続画面に戻る
+00:28 +91: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S10 接続せずに取り込みだけ使う 写真タブの接続画面から繋ぐと、そのまま一覧に切り替わる
+00:29 +92: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S12 ライブラリ切替 読み取り専用のライブラリには鍵を付ける
+00:29 +93: /workspace/r2-validation-0738bee/flutter/test/settings_port_test.dart: S12 ライブラリ切替 最後に開いたライブラリが消えていたら、残っている先頭へ切り替える
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+00:29 +94: loading /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart
+00:30 +94: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: ApiClient.putFile 小さいファイルは一括 PUT
+00:30 +95: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: ApiClient.putFile 大きいファイルは8MBずつ読んで multipart に流す（全体をメモリに載せない）
+00:33 +96: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: ApiClient.putFile パートの途中で失敗したら multipart を中止して例外を返す
+00:34 +97: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: WebTransferQueue 取得→アップロード→サムネ→履歴まで通り、一時ファイルは消える
+00:34 +98: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: WebTransferQueue 取り込み済みの見分け（#162） 同じ保存先へ同じ URL から取り込み済みで、R2 に残っていれば記録を返す
+00:34 +99: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: WebTransferQueue 取り込み済みの見分け（#162） URL が違えば、名前と大きさが同じ別の動画でも止めない
+00:34 +100: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: WebTransferQueue 取り込み済みの見分け（#162） R2 から消した（ゴミ箱へ移した）動画は「既にあります」にしない
+00:34 +101: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: WebTransferQueue 取り込み済みの見分け（#162） 消した後に同じ名前の別ファイルが置かれていたら止めない
+00:34 +102: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: WebTransferQueue 取り込み済みの見分け（#162） 別のライブラリへの取り込みは、この保存先の重複にしない
+00:34 +103: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: WebTransferQueue 取り込み済みの見分け（#162） 確かめられない時（一覧の取得に失敗）は止めず、今まで通り取り込ませる
+duplicate check skipped: HTTP 500: This exception was thrown because the response has a status code of 500 and RequestOptions.validateStatus was configured to throw for this status code.
+The status code of 500 has the following meaning: "Server error - the server failed to fulfil an apparently valid request"
+Read more about status codes at https://developer.mozilla.org/en-US/docs/Web/HTTP/Status
+In order to resolve this exception you typically have either to verify and fix your request code or you have to fix the server code.
+
+00:35 +104: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: WebTransferQueue 取り込み済みの見分け（#162） 保存先を持たない古い履歴は、キーと大きさが両方合う時だけ重複とみなす
+00:35 +105: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: WebTransferQueue 取り込み済みの見分け（#162） 履歴に無い URL は R2 に問い合わせもしない
+00:35 +106: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: WebTransferQueue ページのヘッダ（UA / Referer / Cookie）を載せて取り、Range は引き継がない
+00:35 +107: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: WebTransferQueue 同名キーが既にあれば (2)(3) と進めて上書きしない
+00:35 +108: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: WebTransferQueue 一覧に出ない形式（音声）は取りに行かず理由を出す
+00:35 +109: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: WebTransferQueue 処理中の同じ URL は積み直さない
+00:35 +110: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: WebTransferQueue 通信が途中で切れたら Range で続きから取る
+00:35 +111: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: WebTransferQueue Range を無視するサーバーでは、部分ファイルに追記せず最初から取り直す
+00:35 +112: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: WebTransferQueue HTTP エラーは失敗として残り、直ってからのやり直しで完了する
+00:35 +113: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: WebTransferQueue 0バイトの応答は取れたことにしない
+00:35 +114: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: WebTransferQueue アップロードが失敗しても落とした分は残り、やり直しは上げ直すだけ
+00:35 +115: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: WebTransferQueue 取得中に取り消すと、何も上げず一時ファイルも消える
+00:35 +116: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: WebTransferQueue 取得中に一時停止すると落とした分を残し、再開は続きから取る
+00:36 +117: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: WebTransferQueue 同時に走るのは2件まで
+00:40 +118: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: WebTransferQueue 大きい動画は8MBずつの multipart で上がる
+00:43 +119: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: WebTransferQueue HLS 最良の画質を選び、全セグメントを順に繋いだ ts を上げる
+00:43 +120: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: WebTransferQueue HLS 暗号化された HLS は壊れた動画を作らず失敗にする
+00:43 +121: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: WebTransferQueue HLS 途中のセグメントで失敗しても、やり直しは続きのセグメントから取る
+00:43 +122: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: 取得の安全策 別ホストへのリダイレクトには、検出元の Cookie を持ち越さない
+00:43 +123: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: 取得の安全策 Cookie は送り先ごとにブラウザから引き直す
+00:43 +124: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: 取得の安全策 http/https 以外へのリダイレクトはたどらず失敗にする
+00:43 +125: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: 取得の安全策 http/https 以外の URL は積んでも取りに行かない
+00:43 +126: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 取得の途中で消されても、次の起動で続きから取って1つだけ上げる
+00:43 +127: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 取り終えた印を書く前に消されていたら、416 で止まらず取り直して1つだけ上げる
+00:43 +128: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 送り終えた直後に消されていたら、送り直さず完了にする（name (2) を作らない）
+00:43 +129: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 送りかけで消され、送り先にまだ無ければ同じ名前で送る
+00:43 +130: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 送り先に大きさの違う別ファイルがあれば、自分のものとみなさず次の名前で送る
+00:44 +131: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 同じサイズの別ファイルを復旧済みと誤認せず、自分のデータを保存する
+00:44 +132: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 復旧の安全性: 内容照合が503なら原本と台帳を残し再試行できる
+00:44 +133: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 復旧の安全性: 内容照合が途中切断なら原本と台帳を残し再試行できる
+00:44 +134: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 復旧の安全性: 内容照合が短い応答なら原本と台帳を残し再試行できる
+00:44 +135: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 復旧の安全性: 大容量の送信済み動画も内容を照合し二重に送らない
+00:44 +136: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 復旧の安全性: 単発PUTの保存結果が不正なら完了にせず原本と台帳を残す
+00:44 +137: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 復旧の安全性: multipartの保存結果が不正なら完了にせず原本と台帳を残す
+00:46 +138: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 復旧の安全性: 送信前の台帳書込み失敗では原本と台帳を残し再試行できる
+web ledger not saved: Exception: secure storage write failed
+web ledger not saved: Exception: secure storage write failed
+web ledger not saved: Exception: secure storage write failed
+00:46 +139: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 復旧の安全性: 完了の台帳書込み失敗では原本と台帳を残し再試行できる
+web ledger not saved: Exception: secure storage write failed
+00:46 +140: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 取り終えたはずの一時ファイルが消えていたら、最初から取り直す
+00:46 +141: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） URL の期限が切れて取り直せない時は、理由を出してやり直せる行にする
+00:46 +142: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） HLS は記録した所まで切り詰めて、続きのセグメントから取る
+00:46 +143: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 一時停止の行は止めたまま、失敗の行は理由付きで戻す
+00:46 +144: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 台帳に入った http/https 以外の URL や壊れた行は戻さず、型の違う項目は無視する
+00:46 +145: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 壊れた台帳でも起動は止まらず、空から始める
+web ledger unreadable: FormatException: Unexpected character (at character 2)
+{not json
+ ^
+
+00:46 +146: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 台帳に無い一時ファイルは片付ける
+00:46 +147: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 台帳を読めなかった時は、前回の台帳も一時ファイルも消さない
+web ledger not restored: Exception: secure storage busy
+00:46 +148: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 読み戻す前に積んだ取り込みでも、前回の台帳を上書きせず両方戻す
+00:46 +149: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 完了にする時には、台帳からもう外れている（完了直後に畳まれても取り直さない）
+00:46 +150: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 同じ名前・同じ大きさの別ファイルが先にあれば、自分の物とみなさず次の名前で送る
+00:46 +151: /workspace/r2-validation-0738bee/flutter/test/webdl_transfer_test.dart: アプリを消しても取り込みを失わない（#163） 何度呼んでも戻すのは1回だけ
+00:47 +152: loading /workspace/r2-validation-0738bee/flutter/test/offline_store_test.dart
+00:47 +152: /workspace/r2-validation-0738bee/flutter/test/offline_store_test.dart: KMP 版（JCE の AES/GCM）と同じ並び: 先頭12バイトの IV・暗号文・16バイトのタグ
+00:47 +153: /workspace/r2-validation-0738bee/flutter/test/offline_store_test.dart: 保存すると平文は端末に残らず、復号すると元に戻る
+00:48 +154: /workspace/r2-validation-0738bee/flutter/test/offline_store_test.dart: 同じキーでもライブラリが違えば別の保存として扱う
+00:48 +155: /workspace/r2-validation-0738bee/flutter/test/offline_store_test.dart: 書き換えられた暗号文は読まずに null を返す
+offline blob rejected
+00:48 +156: /workspace/r2-validation-0738bee/flutter/test/offline_store_test.dart: 大きい保存も同じ形式で復号し、別isolate側の暗号文・tag・鍵の不一致を拒否する
+offline blob rejected
+offline blob rejected
+offline blob rejected
+00:49 +157: /workspace/r2-validation-0738bee/flutter/test/offline_store_test.dart: すべて削除で暗号文と目録が消える。秘密置き場には鍵と目録しか書かない
+00:49 +158: /workspace/r2-validation-0738bee/flutter/test/offline_store_test.dart: 鍵は1回作ったら使い回す（作り直すと前の保存が読めなくなる）
+00:49 +159: /workspace/r2-validation-0738bee/flutter/test/offline_store_test.dart: 秘密置き場の一時障害で失敗した鍵取得は次の保存で再試行できる
+00:49 +160: /workspace/r2-validation-0738bee/flutter/test/offline_store_test.dart: 接続ごとの同じキーを分離し、件数・容量・削除も他の接続へ届かない
+00:49 +161: /workspace/r2-validation-0738bee/flutter/test/offline_store_test.dart: 未所属の旧保存を自動で取り込まず、接続の保存を消しても旧保存は残る
+00:49 +162: /workspace/r2-validation-0738bee/flutter/test/offline_store_test.dart: 別接続の初回保存が同時でも既存の鍵を一度だけ決め、両方読み直せる
+00:49 +163: /workspace/r2-validation-0738bee/flutter/test/offline_store_test.dart: 古い転送が保持した保存先は、新しい接続の保存先へ変わらない
+00:49 +164: /workspace/r2-validation-0738bee/flutter/test/offline_store_test.dart: 目録に保存領域外へのパスがあっても読まない・削除しない
+00:49 +165: loading /workspace/r2-validation-0738bee/flutter/test/player_platform_tap_test.dart
+00:50 +165: /workspace/r2-validation-0738bee/flutter/test/player_platform_tap_test.dart: 遅れて完了するnative IDを作成開始時の所有者へ返し、同じplatformへ操作を渡す
+00:50 +166: loading /workspace/r2-validation-0738bee/flutter/test/thumb_upload_test.dart
+00:51 +166: /workspace/r2-validation-0738bee/flutter/test/thumb_upload_test.dart: サムネの表記は中身から決める
+00:51 +167: /workspace/r2-validation-0738bee/flutter/test/thumb_upload_test.dart: 画像サムネ（makeImageThumb の出力）は image/jpeg で送る
+00:51 +168: /workspace/r2-validation-0738bee/flutter/test/thumb_upload_test.dart: 動画サムネの WEBP は image/webp で送る
+00:51 +169: /workspace/r2-validation-0738bee/flutter/test/thumb_upload_test.dart: JPEG を受けん前の worker に 415 で断られたら、従来の webp 表記で送り直す
+00:51 +170: /workspace/r2-validation-0738bee/flutter/test/thumb_upload_test.dart: WEBP が 415 で断られたら送り直さず失敗にする
+00:51 +171: loading /workspace/r2-validation-0738bee/flutter/test/api_retry_test.dart
+00:52 +171: /workspace/r2-validation-0738bee/flutter/test/api_retry_test.dart: GET は接続エラーを 2 回まで再試行して、通れば成功にする
+00:52 +172: /workspace/r2-validation-0738bee/flutter/test/api_retry_test.dart: GET は 2 回再試行してもだめなら ApiError で返す（それ以上は粘らない）
+00:52 +173: /workspace/r2-validation-0738bee/flutter/test/api_retry_test.dart: GET は 5xx も再試行する
+00:52 +174: /workspace/r2-validation-0738bee/flutter/test/api_retry_test.dart: GET でも 4xx は再試行しない
+00:52 +175: /workspace/r2-validation-0738bee/flutter/test/api_retry_test.dart: POST は接続エラーでも再試行しない（二重実行になり得る）
+00:52 +176: /workspace/r2-validation-0738bee/flutter/test/api_retry_test.dart: PUT は接続エラー・5xx のどちらでも再試行しない（ストリーム本文は再送できない）
+00:52 +177: loading /workspace/r2-validation-0738bee/flutter/test/offline_video_startup_probe_test.dart
+00:52 +177: /workspace/r2-validation-0738bee/flutter/test/offline_video_startup_probe_test.dart: 合成データで保存動画の認証復号と再生cache準備を測る（native decodeは含めない）
+01:00 +178: loading /workspace/r2-validation-0738bee/flutter/test/background_playback_budget_test.dart
+01:01 +178: /workspace/r2-validation-0738bee/flutter/test/background_playback_budget_test.dart: 背景再生も既存の再ロック境界を使い、猶予ちょうどの1ms後に失効する
+01:01 +179: /workspace/r2-validation-0738bee/flutter/test/background_playback_budget_test.dart: 接続なしは拒否し、ロック手段のない接続は無期限とする
+01:01 +180: loading /workspace/r2-validation-0738bee/flutter/test/widget_test.dart
+01:02 +180: /workspace/r2-validation-0738bee/flutter/test/widget_test.dart: app boots to connect screen when unconfigured
+device lock probe failed: TimeoutException after 0:00:03.000000: Future not completed
+01:03 +181: loading /workspace/r2-validation-0738bee/flutter/test/lock_test.dart
+01:04 +181: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: ロックの判定（純粋関数） 起動時は画面ロックが既定ONでロックする。web は PIN がある時だけ
+01:04 +182: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: ロックの判定（純粋関数） 解除手段が無ければロックできない（行き止まりを作らない）
+01:05 +183: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: ロックの判定（純粋関数） 猶予を超えた時だけ再ロックする（ちょうどは許す）
+01:05 +184: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: ロックの判定（純粋関数） 猶予の表示名
+01:05 +185: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: 保存値 画面ロックは既定ON、猶予は既定1時間、保存すると読み戻せる
+01:05 +186: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: 保存値 壊れた猶予の値は既定に戻す
+01:05 +187: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック PIN が無くても、端末の画面ロックがあれば起動時にロックされる
+01:05 +188: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック 端末の認証に成功したら解除できる
+01:05 +188: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック PIN が無くても、端末の画面ロックがあれば起動時にロックされる
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+01:05 +189: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック 認証に失敗したらロックのまま
+01:05 +189: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック 端末の認証に成功したら解除できる
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+01:05 +190: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック PIN が無くても「今すぐロック」でロックできる
+01:05 +190: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック 認証に失敗したらロックのまま
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+01:05 +191: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック 画面ロックを切ると起動時にロックしない
+01:05 +191: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック PIN が無くても「今すぐロック」でロックできる
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+01:05 +192: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック 解除手段が無い端末では覆わず、起動時の画面から続けられる
+01:05 +192: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック 画面ロックを切ると起動時にロックしない
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+01:05 +193: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック web は PIN が無ければロックしない。PIN があればロックする
+01:05 +193: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック 解除手段が無い端末では覆わず、起動時の画面から続けられる
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+01:05 +194: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック 猶予を超えてバックグラウンドにいたら再ロックする
+01:05 +194: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック web は PIN が無ければロックしない。PIN があればロックする
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+01:05 +195: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック 猶予内に戻ったらロックしない
+01:05 +195: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック 猶予を超えてバックグラウンドにいたら再ロックする
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+01:05 +196: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック 画面が閉じられた後に戻ったら、猶予内でも起動時と同じくロックする
+01:05 +196: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック 猶予内に戻ったらロックしない
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+01:05 +197: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック 閉じられた印は1回きり。解除した後の普通の出入りでは猶予が効く
+01:05 +197: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック 画面が閉じられた後に戻ったら、猶予内でも起動時と同じくロックする
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+01:05 +198: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック 解除の手段が無ければ、閉じられた後でも覆わない（行き止まりを作らない）
+01:05 +198: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック 閉じられた印は1回きり。解除した後の普通の出入りでは猶予が効く
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+01:05 +199: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック 設定した猶予が効く（毎回ロック）
+01:05 +199: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック 解除の手段が無ければ、閉じられた後でも覆わない（行き止まりを作らない）
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+01:05 +200: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック 設定した猶予が効く（毎回ロック）
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+01:05 +200: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック 認証ダイアログが出す一時停止は、バックグラウンドに数えない
+01:05 +201: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック ロック中に裏へ行っても、戻った時に二重で処理しない
+01:05 +201: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック 認証ダイアログが出す一時停止は、バックグラウンドに数えない
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+01:05 +202: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック 画面ロックをONにすると、その場でロックして解除できるか確かめさせる
+01:05 +202: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック ロック中に裏へ行っても、戻った時に二重で処理しない
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+01:05 +203: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: 画面 ロック画面は入った瞬間に認証を一度出し、失敗したら再試行ボタンを出す
+01:05 +203: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: AppState のロック 画面ロックをONにすると、その場でロックして解除できるか確かめさせる
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+01:06 +204: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: 画面 画面ロックが無く PIN も無ければ「ロックなしで続ける」で抜けられる
+01:06 +205: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: 画面 PIN がある端末では PIN 入力も並べる
+01:06 +206: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: 画面 「今すぐロック」は PIN が無くてもホームに常に出る
+01:06 +207: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: 画面 ロックできない時は無反応にせず理由を出す
+01:07 +208: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: ロックは Navigator の上に被せる 転送中に画面を消され、開き直した時はロック画面から始まる
+01:07 +209: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: ロックは Navigator の上に被せる 上に積んだ画面もロックで見えなくなり、触れなくなる
+01:07 +210: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: ロックは Navigator の上に被せる 積んだダイアログもロックで見えなくなる
+01:07 +211: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: ロックは Navigator の上に被せる ロックしても下の画面は捨てず、解除すると元の状態のまま戻る
+01:08 +212: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: ロックは Navigator の上に被せる ロックした瞬間に再生中の画面へ止めるよう知らせる
+01:08 +213: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: 外部画面（ファイル選択）からの復帰 選択中に裏へ回って戻っても「毎回ロック」で即ロックしない
+01:08 +214: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: 外部画面（ファイル選択）からの復帰 選択画面を開いたまま長く放置されたらロックする
+01:08 +214: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: 外部画面（ファイル選択）からの復帰 選択中に裏へ回って戻っても「毎回ロック」で即ロックしない
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+01:08 +215: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: 外部画面（ファイル選択）からの復帰 猶予が外部画面の下限より長ければ、そちらを使う
+01:08 +215: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: 外部画面（ファイル選択）からの復帰 選択画面を開いたまま長く放置されたらロックする
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+01:08 +216: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: 問い合わせの失敗ではロックを外さない 起動時に問い合わせが返らなくても、ロックしたまま抜け道を出さない
+device lock probe failed: TimeoutException after 0:00:03.000000: Future not completed
+01:11 +217: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: 問い合わせの失敗ではロックを外さない 起動時に問い合わせが失敗したら「ロックなしで続ける」を出さない
+01:11 +217: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: 問い合わせの失敗ではロックを外さない 起動時に問い合わせが返らなくても、ロックしたまま抜け道を出さない
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+01:11 +217: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: 問い合わせの失敗ではロックを外さない 起動時に問い合わせが失敗したら「ロックなしで続ける」を出さない
+device lock probe failed: PlatformException(auth_error, null, null, null)
+device lock probe failed: PlatformException(auth_error, null, null, null)
+device lock probe failed: PlatformException(auth_error, null, null, null)
+device lock probe failed: PlatformException(auth_error, null, null, null)
+01:11 +218: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: 問い合わせの失敗ではロックを外さない 前面復帰ではまずロックし、問い合わせはその後。時間切れでもロックのまま
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+device lock probe failed: TimeoutException after 0:00:03.000000: Future not completed
+01:14 +219: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: 問い合わせの失敗ではロックを外さない 問い合わせがエラーでも、前に使えた端末なら使える扱いのまま
+device lock probe failed: PlatformException(auth_error, null, null, null)
+01:14 +220: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: 問い合わせの失敗ではロックを外さない 問い合わせの結果が変わったら画面に知らせる
+01:14 +220: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: 問い合わせの失敗ではロックを外さない 問い合わせがエラーでも、前に使えた端末なら使える扱いのまま
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+01:14 +221: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: 問い合わせの失敗ではロックを外さない 問い合わせの結果が変わったら画面に知らせる
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+01:14 +221: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: 猶予の時計と窓の保護 端末の時計を戻しても、起動からの経過で再ロックする
+01:14 +222: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: 猶予の時計と窓の保護 起動からの経過が取れない環境では、Stopwatch と壁時計の長い方で測る
+01:14 +222: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: 猶予の時計と窓の保護 端末の時計を戻しても、起動からの経過で再ロックする
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+01:14 +223: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: 猶予の時計と窓の保護 ロックを使っている間は窓を保護する
+01:14 +224: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: 猶予の時計と窓の保護 アプリは保護の要否が変わる度に窓へ伝える
+01:14 +224: /workspace/r2-validation-0738bee/flutter/test/lock_test.dart: 猶予の時計と窓の保護 ロックを使っている間は窓を保護する
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+01:14 +225: loading /workspace/r2-validation-0738bee/flutter/test/import_lock_test.dart
+01:15 +225: /workspace/r2-validation-0738bee/flutter/test/import_lock_test.dart: ロックすると取り込みタブ（内蔵ブラウザ）も見えず触れなくなる
+01:17 +226: /workspace/r2-validation-0738bee/flutter/test/import_lock_test.dart: 取り込みタブから開いた転送シートもロックで隠れる
+01:18 +227: loading /workspace/r2-validation-0738bee/flutter/test/image_thumb_test.dart
+01:19 +227: /workspace/r2-validation-0738bee/flutter/test/image_thumb_test.dart: 横長は長辺 512px に縮めて JPEG にする
+01:20 +228: /workspace/r2-validation-0738bee/flutter/test/image_thumb_test.dart: 縦長も長辺 512px に縮める
+01:20 +229: /workspace/r2-validation-0738bee/flutter/test/image_thumb_test.dart: 512px より小さい画像は拡大しない
+01:20 +230: /workspace/r2-validation-0738bee/flutter/test/image_thumb_test.dart: 画像として読めないバイト列はサムネ無し（null）にする
+01:20 +231: loading /workspace/r2-validation-0738bee/flutter/test/pin_test.dart
+01:21 +231: /workspace/r2-validation-0738bee/flutter/test/pin_test.dart: 設定した PIN は照合を通り、違う PIN は通らない
+01:24 +232: /workspace/r2-validation-0738bee/flutter/test/pin_test.dart: 照合のハッシュ計算中も UI isolate のイベントループは止まらない
+01:27 +233: loading /workspace/r2-validation-0738bee/flutter/test/library_switch_test.dart
+01:29 +233: /workspace/r2-validation-0738bee/flutter/test/library_switch_test.dart: ライブラリを切り替えて戻ると、取り直しを待たずに前の一覧をすぐ出す
+01:30 +234: /workspace/r2-validation-0738bee/flutter/test/library_switch_test.dart: 署名クエリが変わってもサムネのキャッシュキーは同じ
+01:30 +235: /workspace/r2-validation-0738bee/flutter/test/library_switch_test.dart: サムネのバックフィルは同時に1本しか走らせない
+01:30 +236: loading /workspace/r2-validation-0738bee/flutter/test/tabs_test.dart
+01:32 +236: /workspace/r2-validation-0738bee/flutter/test/tabs_test.dart: 下のタブは Kotlin 版と同じ（#167） 数と順番は 写真 / アルバム / 取り込み / 設定
+01:34 +237: /workspace/r2-validation-0738bee/flutter/test/tabs_test.dart: 下のタブは Kotlin 版と同じ（#167） 起動は Kotlin 版と同じく取り込みから始まる
+01:34 +238: /workspace/r2-validation-0738bee/flutter/test/tabs_test.dart: 下のタブは Kotlin 版と同じ（#167） 押した時の行き先がそれぞれの画面になる
+01:36 +239: /workspace/r2-validation-0738bee/flutter/test/tabs_test.dart: 端末の戻るの行き先は Kotlin 版と同じ（#167） 写真タブで戻ると取り込みに着き、アプリは閉じない
+01:53 +240: /workspace/r2-validation-0738bee/flutter/test/tabs_test.dart: 端末の戻るの行き先は Kotlin 版と同じ（#167） アルバムタブで戻ると取り込みに着き、アプリは閉じない
+02:04 +241: /workspace/r2-validation-0738bee/flutter/test/tabs_test.dart: 端末の戻るの行き先は Kotlin 版と同じ（#167） 設定タブで戻ると取り込みに着き、アプリは閉じない
+02:04 +242: /workspace/r2-validation-0738bee/flutter/test/tabs_test.dart: 端末の戻るの行き先は Kotlin 版と同じ（#167） 取り込みタブで戻った時だけアプリを閉じる
+02:04 +243: /workspace/r2-validation-0738bee/flutter/test/tabs_test.dart: 端末の戻るの行き先は Kotlin 版と同じ（#167） ゴミ箱→アルバム→取り込み→閉じる の順に戻る
+02:05 +244: /workspace/r2-validation-0738bee/flutter/test/tabs_test.dart: アルバム詳細・フォルダもアルバムタブの子画面（#167） アルバムを開いても下タブが残ってアルバムが点き、写真へは1回で移れる
+02:06 +245: /workspace/r2-validation-0738bee/flutter/test/tabs_test.dart: アルバム詳細・フォルダもアルバムタブの子画面（#167） 見出しの戻る・端末の戻るでアルバム一覧へ帰って読み直し、次の戻るで取り込みへ
+02:07 +246: /workspace/r2-validation-0738bee/flutter/test/tabs_test.dart: アルバム詳細・フォルダもアルバムタブの子画面（#167） フォルダとサブフォルダも下タブを残して辿り、戻るで一つずつ帰る
+02:08 +247: /workspace/r2-validation-0738bee/flutter/test/tabs_test.dart: アルバム詳細・フォルダもアルバムタブの子画面（#167） アルバムの中で選択中は下タブを隠し、戻るは選択を解くだけ
+02:09 +248: /workspace/r2-validation-0738bee/flutter/test/tabs_test.dart: アルバム詳細・フォルダもアルバムタブの子画面（#167） フォルダの中で選択中も下タブを隠し、戻るは選択を解くだけ
+02:09 +249: /workspace/r2-validation-0738bee/flutter/test/tabs_test.dart: アルバム詳細・フォルダもアルバムタブの子画面（#167） 開いたアルバムは、別のタブから戻った時に読み直して他のタブでの増減を映す
+02:10 +250: /workspace/r2-validation-0738bee/flutter/test/tabs_test.dart: アルバム詳細・フォルダもアルバムタブの子画面（#167） 開いたフォルダも、別のタブから戻った時に読み直す
+02:11 +251: /workspace/r2-validation-0738bee/flutter/test/tabs_test.dart: アルバム詳細・フォルダもアルバムタブの子画面（#167） サブフォルダから戻ると、下に残っていた親フォルダも読み直す
+02:11 +252: /workspace/r2-validation-0738bee/flutter/test/tabs_test.dart: アルバム詳細・フォルダもアルバムタブの子画面（#167） 写真タブでライブラリを替えたら、前のライブラリで開いていたアルバムは捨てる
+02:12 +253: /workspace/r2-validation-0738bee/flutter/test/tabs_test.dart: アルバム詳細・フォルダもアルバムタブの子画面（#167） ライブラリを替えたらフォルダも捨て、ゴミ箱は残して今のライブラリを追う
+02:13 +254: /workspace/r2-validation-0738bee/flutter/test/tabs_test.dart: アルバム詳細・フォルダもアルバムタブの子画面（#167） ゴミ箱を開いたまま別のタブへ移って戻ると、ゴミ箱の続きが出る
+02:14 +255: /workspace/r2-validation-0738bee/flutter/test/tabs_test.dart: ブラウザ表示中は下のタブを隠す（#165） 開くとタブが消え、閉じると取り込みタブのまま戻る
+02:14 +256: /workspace/r2-validation-0738bee/flutter/test/tabs_test.dart: ブラウザ表示中は下のタブを隠す（#165） 端末の戻るでもブラウザを閉じ、アプリは閉じない
+02:15 +257: /workspace/r2-validation-0738bee/flutter/test/tabs_test.dart: ブラウザ表示中は下のタブを隠す（#165） タブを隠しても、下端のジェスチャー帯の分は空けたまま
+02:15 +258: /workspace/r2-validation-0738bee/flutter/test/tabs_test.dart: ブラウザ表示中は下のタブを隠す（#165） 別の URL へ移動し直しても、閉じるまでタブは隠れたまま
+02:15 +259: /workspace/r2-validation-0738bee/flutter/test/tabs_test.dart: ブラウザ表示中の端末の戻る（#165） ページを戻れる間は、ブラウザを閉じずにページを戻す
+02:15 +260: /workspace/r2-validation-0738bee/flutter/test/tabs_test.dart: ブラウザ表示中の端末の戻る（#165） 押した時点で履歴が尽きていれば、ページは戻さずブラウザを閉じる
+02:15 +261: /workspace/r2-validation-0738bee/flutter/test/tabs_test.dart: 戻るの窓口は押した時点の WebView に聞く（#165） つないだ先の答えを毎回聞き直し、外した後は戻れない扱い
+02:16 +262: loading /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart
+02:17 +262: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: P3: 再生中は操作バーを3.5秒で隠し、タップでまた出す
+02:18 +263: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: P3: 一時停止中は操作バーを隠さない
+02:18 +264: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: P2: ±10秒ボタンでその分だけ動く
+02:19 +265: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: P2: 操作ロック中はタップしても操作が出ず、解除で戻る
+02:19 +266: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: P2: 一時停止中は中央に再生アイコン、読み込み中はスピナーを出す
+02:19 +267: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: P2: 最後まで再生したらリプレイを出し、押すと頭から再生する
+02:19 +268: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: P2: 開けなかったら「再生できませんでした」を出し、押すと読み直す
+video initialization failed
+02:19 +269: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: P1: 動画を縦にスワイプしても明るさや端末音量を変更しない
+02:19 +270: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: P1: 明示したパネルでだけ明るさを少しずつ変更し、音量はこの動画だけに適用する
+02:20 +271: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: P1: 明るさの初期値が不明なら理由と無効なスライダーを出して書き込まない
+02:20 +272: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: P1: 初期値が届く前には明るさを操作できない
+02:20 +273: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: P1: 狭い横画面で文字を拡大しても調整の入口・再生操作を押せる
+02:20 +274: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: #196: 復帰判定を待っている間にlockになったら自動再生しない
+02:21 +275: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: #196: 復帰判定を待っている間にdetachedになったら自動再生しない
+02:21 +276: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: #196: 復帰判定が完了しロックされなかった時だけ自動再生する
+02:21 +277: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: #196: 復帰判定中の手動再生もロックを追い越さない
+02:21 +278: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: #196: 復帰判定中の手動リプレイもロックを追い越さない
+02:21 +279: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: #196: 手動再生は復帰判定を通過すると一度だけ開始する
+02:21 +280: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: 再生開始の非同期失敗は再試行に戻し、未処理のFutureにしない
+02:21 +281: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: #141: アプリがロックされたら再生を止める（PauseOnLock）
+02:21 +282: loading /workspace/r2-validation-0738bee/flutter/test/japanese_font_test.dart
+02:22 +282: /workspace/r2-validation-0738bee/flutter/test/japanese_font_test.dart: (setUpAll)
+02:22 +282: /workspace/r2-validation-0738bee/flutter/test/japanese_font_test.dart: 同梱日本語字形と混在文字を表示 scale=1.0
+02:23 +283: /workspace/r2-validation-0738bee/flutter/test/japanese_font_test.dart: 同梱日本語字形と混在文字を表示 scale=2.0
+02:23 +284: /workspace/r2-validation-0738bee/flutter/test/japanese_font_test.dart: (tearDownAll)
+02:23 +284: loading /workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart
+02:25 +284: /workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart: (setUpAll)
+02:25 +284: /workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart: 一覧→動画→情報→ロック解除→元一覧 narrow-1.3
+02:27 +285: /workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart: 一覧→動画→情報→ロック解除→元一覧 narrow-2.0
+02:28 +286: /workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart: 一覧→動画→情報→ロック解除→元一覧 landscape
+02:28 +287: /workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart: (tearDownAll)
+02:28 +287: loading /workspace/r2-validation-0738bee/flutter/test/mobile_playback_widget_test.dart
+02:29 +287: /workspace/r2-validation-0738bee/flutter/test/mobile_playback_widget_test.dart: (setUpAll)
+02:29 +287: /workspace/r2-validation-0738bee/flutter/test/mobile_playback_widget_test.dart: 日本語の再生方法・小窓・背景再生を同じ動画へ接続する 1.3
+02:31 +288: /workspace/r2-validation-0738bee/flutter/test/mobile_playback_widget_test.dart: 日本語の再生方法・小窓・背景再生を同じ動画へ接続する 2.0
+02:31 +289: /workspace/r2-validation-0738bee/flutter/test/mobile_playback_widget_test.dart: 非対応のOS操作を成功表示せず、基本再生を維持する
+02:32 +290: /workspace/r2-validation-0738bee/flutter/test/mobile_playback_widget_test.dart: 非表示ページはdecoder所有権を奪わず、再表示で位置を保つ
+02:32 +291: /workspace/r2-validation-0738bee/flutter/test/mobile_playback_widget_test.dart: (tearDownAll)
+02:32 +291: loading /workspace/r2-validation-0738bee/flutter/test/detected_thumb_test.dart
+02:33 +291: /workspace/r2-validation-0738bee/flutter/test/detected_thumb_test.dart: サムネの作り方 画像はページと同じヘッダで取り、縮小した物を返す
+02:33 +292: /workspace/r2-validation-0738bee/flutter/test/detected_thumb_test.dart: サムネの作り方 同じ URL は 1 回だけ取りに行く
+02:33 +293: /workspace/r2-validation-0738bee/flutter/test/detected_thumb_test.dart: サムネの作り方 取れない画像（404）は null にしてアイコンに任せる
+detected thumb skipped: HTTP 404
+02:33 +294: /workspace/r2-validation-0738bee/flutter/test/detected_thumb_test.dart: サムネの作り方 動画は再生部品に URL を渡す。閲覧サイトの Cookie は渡さない
+02:33 +295: /workspace/r2-validation-0738bee/flutter/test/detected_thumb_test.dart: サムネの作り方 HLS は一番軽い画質の最初のセグメントだけ取って 1 コマ抜く
+02:33 +296: /workspace/r2-validation-0738bee/flutter/test/detected_thumb_test.dart: サムネの作り方 一番軽い変種が音声だけなら、映像のある一番軽い変種から 1 コマ抜く
+02:33 +297: /workspace/r2-validation-0738bee/flutter/test/detected_thumb_test.dart: サムネの作り方 暗号化された HLS はセグメントを取らずにアイコンに任せる
+02:33 +298: /workspace/r2-validation-0738bee/flutter/test/detected_thumb_test.dart: サムネの作り方 上限を超える画像は受け取りを途中でやめ、縮小もせずアイコンに任せる
+detected thumb skipped: Instance of '_TooLarge'
+detected thumb skipped: Instance of '_TooLarge'
+02:33 +299: /workspace/r2-validation-0738bee/flutter/test/detected_thumb_test.dart: サムネの作り方 長く流れ続ける画像も、上限を超えた所で受け取りをやめてすぐ返る
+detected thumb skipped: Instance of '_TooLarge'
+02:33 +300: /workspace/r2-validation-0738bee/flutter/test/detected_thumb_test.dart: サムネの作り方 上限を超える HLS のセグメントは 1 コマ抜きに回さない
+detected thumb skipped: Instance of '_TooLarge'
+02:33 +301: /workspace/r2-validation-0738bee/flutter/test/detected_thumb_test.dart: サムネの作り方 音声はサムネを作らない
+02:33 +302: /workspace/r2-validation-0738bee/flutter/test/detected_thumb_test.dart: サムネの作り方 同時に取りに行くのは決めた数まで
+02:33 +303: /workspace/r2-validation-0738bee/flutter/test/detected_thumb_test.dart: HLS の画質選びは、指定すれば一番軽い物を選ぶ
+02:33 +304: /workspace/r2-validation-0738bee/flutter/test/detected_thumb_test.dart: HLS の一番軽い画質選びは音声だけの変種を飛ばす bipbop では gear0 ではなく gear1 を選ぶ
+02:33 +305: /workspace/r2-validation-0738bee/flutter/test/detected_thumb_test.dart: HLS の一番軽い画質選びは音声だけの変種を飛ばす 最高画質の選び方は変わらない
+02:33 +306: /workspace/r2-validation-0738bee/flutter/test/detected_thumb_test.dart: HLS の一番軽い画質選びは音声だけの変種を飛ばす CODECS が無い時は、RESOLUTION の無い変種を音声だけと見なす
+02:33 +307: /workspace/r2-validation-0738bee/flutter/test/detected_thumb_test.dart: HLS の一番軽い画質選びは音声だけの変種を飛ばす 知らない映像 codec でも RESOLUTION があれば映像ありと見なす
+02:33 +308: /workspace/r2-validation-0738bee/flutter/test/detected_thumb_test.dart: HLS の一番軽い画質選びは音声だけの変種を飛ばす 全部が音声だけなら、従来どおり一番軽い物を選ぶ
+02:33 +309: loading /workspace/r2-validation-0738bee/flutter/test/transfer_queue_test.dart
+02:34 +309: /workspace/r2-validation-0738bee/flutter/test/transfer_queue_test.dart: アップロード 選んだファイルは退避してから上がり、終わったら退避ファイルと台帳から消える
+02:35 +310: /workspace/r2-validation-0738bee/flutter/test/transfer_queue_test.dart: アップロード 同名があれば「name (2)」で上げる
+02:35 +311: /workspace/r2-validation-0738bee/flutter/test/transfer_queue_test.dart: アップロード 大きいファイルは multipart で分けて上がる
+02:35 +312: /workspace/r2-validation-0738bee/flutter/test/transfer_queue_test.dart: アップロード アプリが落とされても、次の起動で続きのパートから上げ直す
+02:35 +313: /workspace/r2-validation-0738bee/flutter/test/transfer_queue_test.dart: アップロード 複数動画を連続して復元しても同じセッションで続きから送り、二重登録しない
+02:35 +314: /workspace/r2-validation-0738bee/flutter/test/transfer_queue_test.dart: アップロード 一時停止は退避と確定パートを残し、再開で続きから送る
+02:35 +315: /workspace/r2-validation-0738bee/flutter/test/transfer_queue_test.dart: アップロード 取り消すと multipart を片付け、退避ファイルと行を消す
+02:35 +316: /workspace/r2-validation-0738bee/flutter/test/transfer_queue_test.dart: アップロード 2 件の完了が重なっても、先に終わった行を台帳へ書き戻さない
+02:35 +317: /workspace/r2-validation-0738bee/flutter/test/transfer_queue_test.dart: アップロード 同時に走るのは2件まで
+02:35 +318: /workspace/r2-validation-0738bee/flutter/test/transfer_queue_test.dart: アップロード 元ファイルを退避できないまま落とされた行は、理由つきの失敗として戻す
+02:35 +319: /workspace/r2-validation-0738bee/flutter/test/transfer_queue_test.dart: 接続の復旧 圏外では待機のまま始めず、回線が戻ると自動で上げる
+02:35 +320: /workspace/r2-validation-0738bee/flutter/test/transfer_queue_test.dart: 接続の復旧 通信が切れたら失敗にせず待機に戻し、繋がれば続きをやる
+02:35 +321: /workspace/r2-validation-0738bee/flutter/test/transfer_queue_test.dart: 接続の復旧 失敗した行は復帰時の再試行でまとめて積み直す
+02:35 +322: /workspace/r2-validation-0738bee/flutter/test/transfer_queue_test.dart: オフライン保存 取った中身を暗号化して端末に置き、復号すると元に戻る
+02:36 +323: /workspace/r2-validation-0738bee/flutter/test/transfer_queue_test.dart: オフライン保存 署名URLが切れていたら一覧から取り直す
+02:36 +324: loading /workspace/r2-validation-0738bee/flutter/test/baked_connection_test.dart
+02:37 +324: /workspace/r2-validation-0738bee/flutter/test/baked_connection_test.dart: 保存済みの接続が無く埋め込み値が通れば、入力なしで接続して保存する
+02:37 +325: /workspace/r2-validation-0738bee/flutter/test/baked_connection_test.dart: 埋め込み値で繋がらなければ保存せず接続画面に理由を出す
+02:37 +325: /workspace/r2-validation-0738bee/flutter/test/baked_connection_test.dart: 保存済みの接続が無く埋め込み値が通れば、入力なしで接続して保存する
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+02:37 +326: /workspace/r2-validation-0738bee/flutter/test/baked_connection_test.dart: 保存済みの接続があれば埋め込み値は試さない
+02:37 +326: /workspace/r2-validation-0738bee/flutter/test/baked_connection_test.dart: 埋め込み値で繋がらなければ保存せず接続画面に理由を出す
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+02:37 +327: /workspace/r2-validation-0738bee/flutter/test/baked_connection_test.dart: 埋め込み値を確かめている間にペアリングで繋いだら、そちらを上書きしない
+02:37 +327: /workspace/r2-validation-0738bee/flutter/test/baked_connection_test.dart: 保存済みの接続があれば埋め込み値は試さない
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+02:37 +328: /workspace/r2-validation-0738bee/flutter/test/baked_connection_test.dart: 埋め込み値が空なら何もせず接続画面のまま
+02:37 +328: /workspace/r2-validation-0738bee/flutter/test/baked_connection_test.dart: 埋め込み値を確かめている間にペアリングで繋いだら、そちらを上書きしない
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+02:37 +329: loading /workspace/r2-validation-0738bee/flutter/test/trash_test.dart
+02:38 +329: /workspace/r2-validation-0738bee/flutter/test/trash_test.dart: T1 ゴミ箱へ → 元に戻す 一括でゴミ箱へ送ると「元に戻す」が出て、押すと全部戻る
+02:40 +330: /workspace/r2-validation-0738bee/flutter/test/trash_test.dart: T1 ゴミ箱へ → 元に戻す 6秒たつと「元に戻す」は消え、何も戻さない
+02:41 +331: /workspace/r2-validation-0738bee/flutter/test/trash_test.dart: T1 ゴミ箱へ → 元に戻す 元の場所に同名があって戻せない時は理由を出す
+02:41 +332: /workspace/r2-validation-0738bee/flutter/test/trash_test.dart: T1 ゴミ箱へ → 元に戻す 一部だけ戻せなかった時は件数で伝える
+02:41 +333: /workspace/r2-validation-0738bee/flutter/test/trash_test.dart: T2 行ごとの復元と失敗理由 復元が 409 で失敗したら「同じ名前の項目が元の場所にあるため戻せませんでした」と出す
+02:41 +334: /workspace/r2-validation-0738bee/flutter/test/trash_test.dart: T2 行ごとの復元と失敗理由 復元が 403 で失敗したら「このライブラリは読み取り専用のため、戻せません」と出す
+02:41 +335: /workspace/r2-validation-0738bee/flutter/test/trash_test.dart: T2 行ごとの復元と失敗理由 復元が 404 で失敗したら「すでに元の場所に戻されています」と出す
+02:41 +336: /workspace/r2-validation-0738bee/flutter/test/trash_test.dart: T2 行ごとの復元と失敗理由 復元が 500 で失敗したら「戻せませんでした。もう一度お試しください」と出す
+02:41 +337: /workspace/r2-validation-0738bee/flutter/test/trash_test.dart: T2 行ごとの復元と失敗理由 行の「復元」を押すとその1件だけ戻り、一覧から消える
+02:41 +338: /workspace/r2-validation-0738bee/flutter/test/trash_test.dart: ゴミ箱はアルバムタブの子画面（#167） 「その他」のゴミ箱で開き、アルバムタブが点いたまま、戻るでアルバムへ帰る
+02:42 +339: /workspace/r2-validation-0738bee/flutter/test/trash_test.dart: ゴミ箱はアルバムタブの子画面（#167） アルバムの読み込みに失敗してもゴミ箱は開ける
+02:42 +340: /workspace/r2-validation-0738bee/flutter/test/trash_test.dart: 復元した写真を写真タブに戻す ゴミ箱タブで1件戻すと、写真タブに戻った時にその写真が出る
+02:43 +341: /workspace/r2-validation-0738bee/flutter/test/trash_test.dart: 復元した写真を写真タブに戻す まとめて戻した時も写真タブに出る
+02:43 +342: /workspace/r2-validation-0738bee/flutter/test/trash_test.dart: T3/S5 保持期間の案内 Worker が返した保持日数で自動削除までの日数を出す
+02:43 +343: /workspace/r2-validation-0738bee/flutter/test/trash_test.dart: T3/S5 保持期間の案内 保持日数を返さない古い Worker では既定の30日を出す
+02:43 +344: /workspace/r2-validation-0738bee/flutter/test/trash_test.dart: T4 ゴミ箱の行と状態表示 種類アイコンと「10月9日にゴミ箱へ · 3.1 MB」を出し、全ページ新しい順に並べる
+02:44 +345: /workspace/r2-validation-0738bee/flutter/test/trash_test.dart: T4 ゴミ箱の行と状態表示 空なら説明を出し、引っ張ると読み直す
+02:44 +346: /workspace/r2-validation-0738bee/flutter/test/trash_test.dart: T4 ゴミ箱の行と状態表示 一覧がある時に読み直しだけ失敗したら帯を出し、再試行で消える
+02:44 +347: /workspace/r2-validation-0738bee/flutter/test/trash_test.dart: T4 ゴミ箱の行と状態表示 裏から戻ってきたら読み直し、写真タブで捨てた分を映す
+02:44 +348: /workspace/r2-validation-0738bee/flutter/test/trash_test.dart: T4 ゴミ箱の行と状態表示 最初の読み込みに失敗したら理由と再試行を出す
+02:44 +349: /workspace/r2-validation-0738bee/flutter/test/trash_test.dart: T4 ゴミ箱の行と状態表示 読み取り専用ライブラリでは聞きに行かず、復元ボタンも出さない
+02:44 +350: /workspace/r2-validation-0738bee/flutter/test/trash_test.dart: T4 ゴミ箱の行と状態表示 行の部品は canRestore=false なら復元ボタンを出さない
+02:44 +351: /workspace/r2-validation-0738bee/flutter/test/trash_test.dart: T4 ゴミ箱の行と状態表示 選択してまとめて復元できる
+02:44 +352: /workspace/r2-validation-0738bee/flutter/test/trash_test.dart: 下端にジェスチャー帯がある端末 下タブの無い画面でも、まとめて復元のバーは帯の上に収まって押せる
+02:45 +353: /workspace/r2-validation-0738bee/flutter/test/trash_test.dart: 下端にジェスチャー帯がある端末 アプリの画面（下タブあり）でも、まとめて復元のバーは帯の上に収まって押せる
+02:45 +354: /workspace/r2-validation-0738bee/flutter/test/trash_test.dart: バイト数の表示は KMP 版と同じ丸め
+02:45 +355: loading /workspace/r2-validation-0738bee/flutter/test/private_storage_ui_test.dart
+02:46 +355: /workspace/r2-validation-0738bee/flutter/test/private_storage_ui_test.dart: (setUpAll)
+02:46 +355: /workspace/r2-validation-0738bee/flutter/test/private_storage_ui_test.dart: Web等の非対応環境では保存せず、アプリだけの保存だと表示しない
+02:47 +356: /workspace/r2-validation-0738bee/flutter/test/private_storage_ui_test.dart: (tearDownAll)
+02:47 +356: loading /workspace/r2-validation-0738bee/flutter/test/detected_thumb_ui_test.dart
+02:48 +356: /workspace/r2-validation-0738bee/flutter/test/detected_thumb_ui_test.dart: 検出一覧の表示 画像と動画が混ざっても全件にサムネが出る
+02:49 +357: /workspace/r2-validation-0738bee/flutter/test/detected_thumb_ui_test.dart: 検出一覧の表示 取れない物はアイコンになり、行の大きさは変わらない
+detected thumb skipped: HTTP 404
+02:49 +358: /workspace/r2-validation-0738bee/flutter/test/detected_thumb_ui_test.dart: 検出一覧の表示 画像として読めない中身はアイコンに戻す
+02:50 +359: loading /workspace/r2-validation-0738bee/flutter/test/private_export_boundary_test.dart
+02:51 +359: /workspace/r2-validation-0738bee/flutter/test/private_export_boundary_test.dart: 古いexport APIを直接呼んでもbridge・一時平文・ネットワークへ進まない
+02:51 +360: loading /workspace/r2-validation-0738bee/flutter/test/albums_test.dart
+02:52 +360: /workspace/r2-validation-0738bee/flutter/test/albums_test.dart: アルバム一覧 A1: 新規アルバムカードから名前を入れて作成すると一覧に出る
+02:55 +361: /workspace/r2-validation-0738bee/flutter/test/albums_test.dart: アルバム一覧 A1: 読み取り専用ライブラリでは作成の入口を出さない
+02:55 +362: /workspace/r2-validation-0738bee/flutter/test/albums_test.dart: アルバム一覧 A2: 長押しメニューから名前変更・確認つき削除
+02:55 +363: /workspace/r2-validation-0738bee/flutter/test/albums_test.dart: アルバム一覧 A2: 取り込みで作られたアルバムは長押ししてもメニューを出さない
+02:56 +364: /workspace/r2-validation-0738bee/flutter/test/albums_test.dart: アルバム一覧 A9: フォルダに切り替えると一覧が出て、フォルダを作成できる
+02:56 +365: /workspace/r2-validation-0738bee/flutter/test/albums_test.dart: アルバム一覧 B1: フォルダを開くと階層をたどれ、空なら空と出す
+02:57 +366: /workspace/r2-validation-0738bee/flutter/test/albums_test.dart: フォルダ閲覧 A3: 複数選択して「アルバムへ」→書けるアルバムだけ出て追加できる
+02:57 +367: /workspace/r2-validation-0738bee/flutter/test/albums_test.dart: フォルダ閲覧 A3: 新しい名前で作成してから追加する
+02:58 +368: /workspace/r2-validation-0738bee/flutter/test/albums_test.dart: フォルダ閲覧 B2: 日付見出しと日ごとの丸選択、名前順で見出しが消える
+02:58 +369: /workspace/r2-validation-0738bee/flutter/test/albums_test.dart: フォルダ閲覧 B2: 並び順の4種
+02:58 +370: /workspace/r2-validation-0738bee/flutter/test/albums_test.dart: フォルダ閲覧 B2: 日付見出しの文言
+02:58 +371: /workspace/r2-validation-0738bee/flutter/test/albums_test.dart: フォルダ閲覧 B1: 読み取り専用では選択にも入らず操作バーを出さない
+02:58 +372: /workspace/r2-validation-0738bee/flutter/test/albums_test.dart: アルバムの中 A6/A8: 件数つきの見出し、長押しで選択、すべて選択/解除
+02:58 +373: /workspace/r2-validation-0738bee/flutter/test/albums_test.dart: アルバムの中 A5: 選択1件を後ろへ動かすと全件の並びを書き戻す
+02:59 +374: /workspace/r2-validation-0738bee/flutter/test/albums_test.dart: アルバムの中 A4: 選択して外すと、項目のライブラリごとに外す
+02:59 +375: /workspace/r2-validation-0738bee/flutter/test/albums_test.dart: アルバムの中 A7: ゴミ箱へ→元に戻すで復元する
+02:59 +376: /workspace/r2-validation-0738bee/flutter/test/albums_test.dart: アルバムの中 A7: 元に戻すが 409 なら同名があると伝える
+02:59 +377: /workspace/r2-validation-0738bee/flutter/test/albums_test.dart: アルバムの中 A7: 選択中の長押しで個別メニュー、そこから外す
+02:59 +378: /workspace/r2-validation-0738bee/flutter/test/albums_test.dart: アルバムの中 A8: 読み取り専用アルバムでは並び替え・外すを出さない
+03:00 +379: /workspace/r2-validation-0738bee/flutter/test/albums_test.dart: アルバムの中 A8: 読み取り専用ライブラリでは選択に入らない
+03:00 +380: /workspace/r2-validation-0738bee/flutter/test/albums_test.dart: アルバムの中 A8: 末尾付近で続きを読み、引っ張って取り直す
+03:00 +381: /workspace/r2-validation-0738bee/flutter/test/albums_test.dart: A8: 続きの取得に失敗したら、取り直すまで自動では読みに行かない
+03:00 +382: /workspace/r2-validation-0738bee/flutter/test/albums_test.dart: 書き込みガード 書けないライブラリではアルバム作成もフォルダ作成も送らず理由を出す
+03:00 +383: loading /workspace/r2-validation-0738bee/flutter/test/foreground_settlement_test.dart
+03:01 +383: /workspace/r2-validation-0738bee/flutter/test/foreground_settlement_test.dart: 復帰判定中の再離脱・再復帰も同じFutureで最新のロック判定まで待つ
+03:01 +384: /workspace/r2-validation-0738bee/flutter/test/foreground_settlement_test.dart: 同じ復帰の重複通知では端末認証の問い合わせを増やさない
+03:01 +385: /workspace/r2-validation-0738bee/flutter/test/foreground_settlement_test.dart: まだ背景にいる間は新しい時刻を消費せず、次に戻った時に判定する
+03:01 +386: /workspace/r2-validation-0738bee/flutter/test/foreground_settlement_test.dart: 復帰判定中に画面が閉じられて戻った場合も、起動時と同じロックをかける
+03:01 +387: loading /workspace/r2-validation-0738bee/flutter/test/transfers_ui_test.dart
+03:02 +387: /workspace/r2-validation-0738bee/flutter/test/transfers_ui_test.dart: アップロード確認 保存先・合計サイズ・先頭3件を出し、押した時だけ積む
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+03:03 +388: /workspace/r2-validation-0738bee/flutter/test/transfers_ui_test.dart: アップロード確認 キャンセルすれば積まない
+03:04 +389: /workspace/r2-validation-0738bee/flutter/test/transfers_ui_test.dart: アップロード確認 読み取り専用のライブラリでは警告を出して押せない
+03:04 +390: /workspace/r2-validation-0738bee/flutter/test/transfers_ui_test.dart: アップロード確認 ライブラリが見つからない時も警告を出して押せない
+03:04 +391: /workspace/r2-validation-0738bee/flutter/test/transfers_ui_test.dart: アップロード確認 サイズが分からないものは「一部サイズ不明」と出す
+03:04 +392: /workspace/r2-validation-0738bee/flutter/test/transfers_ui_test.dart: 転送バーと転送シート 転送中の要約を下に出し、タップでシートを開いて一時停止・再開・取り消しできる
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+03:04 +393: /workspace/r2-validation-0738bee/flutter/test/transfers_ui_test.dart: 転送バーと転送シート 圏外の間は「オフライン（接続待ち）」と出す
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+03:04 +394: /workspace/r2-validation-0738bee/flutter/test/transfers_ui_test.dart: 転送バーと転送シート 転送が無ければ何も出さない
+03:04 +395: /workspace/r2-validation-0738bee/flutter/test/transfers_ui_test.dart: 転送バーと転送シート 完了行が消えた後も失敗だけのバーから開いて再試行し、成功した行は再送しない
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+03:05 +396: /workspace/r2-validation-0738bee/flutter/test/transfers_ui_test.dart: 転送が多い時も操作を塞がない（#106 / #111） アップロード6件と失敗1件があっても、取り込みの URL 欄はキーボードを出しても入力できる
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+03:06 +397: /workspace/r2-validation-0738bee/flutter/test/transfers_ui_test.dart: 転送が多い時も操作を塞がない（#106 / #111） 先頭の失敗行の「やり直す」は小さい画面でも画面内で押せ、その行だけやり直す（文字 1.0x）
+03:06 +398: /workspace/r2-validation-0738bee/flutter/test/transfers_ui_test.dart: 転送が多い時も操作を塞がない（#106 / #111） 先頭の失敗行の「やり直す」は小さい画面でも画面内で押せ、その行だけやり直す（文字 1.3x）
+03:06 +399: /workspace/r2-validation-0738bee/flutter/test/transfers_ui_test.dart: オフライン保存 選択して「オフライン保存」を押すとキューに積み、保存済みには印が付く
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+03:07 +400: /workspace/r2-validation-0738bee/flutter/test/transfers_ui_test.dart: オフライン保存 設定に件数を出し、すべて削除できる
+03:07 +401: /workspace/r2-validation-0738bee/flutter/test/transfers_ui_test.dart: オフライン保存 保存した写真は回線なしで一覧から開ける
+offline playback cache sweep unavailable
+03:08 +402: /workspace/r2-validation-0738bee/flutter/test/transfers_ui_test.dart: AppState のつなぎ 失敗したアップロードはアプリへの復帰で積み直され、転送中だけサービスを張る
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+03:08 +403: /workspace/r2-validation-0738bee/flutter/test/transfers_ui_test.dart: AppState のつなぎ 回線の知らせで待機と再開が切り替わる
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+03:08 +404: loading /workspace/r2-validation-0738bee/flutter/test/lock_prefetch_test.dart
+03:09 +404: /workspace/r2-validation-0738bee/flutter/test/lock_prefetch_test.dart: PIN ロック中でもライブラリ一覧は先に取っておく
+03:09 +405: /workspace/r2-validation-0738bee/flutter/test/lock_prefetch_test.dart: 解除時、先読みが通っていれば取り直さない
+03:09 +405: /workspace/r2-validation-0738bee/flutter/test/lock_prefetch_test.dart: PIN ロック中でもライブラリ一覧は先に取っておく
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+03:09 +406: /workspace/r2-validation-0738bee/flutter/test/lock_prefetch_test.dart: 解除時、先読みが通っていれば取り直さない
+web ledger not restored: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+03:09 +406: /workspace/r2-validation-0738bee/flutter/test/lock_prefetch_test.dart: 先読みが圏外で空のままなら、解除時にもう一度取る
+03:09 +406: /workspace/r2-validation-0738bee/flutter/test/lock_prefetch_test.dart: 解除時、先読みが通っていれば取り直さない
+transfer stage sweep skipped: MissingPluginException(No implementation found for method getApplicationSupportDirectory on channel plugins.flutter.io/path_provider)
+03:09 +407: loading /workspace/r2-validation-0738bee/flutter/test/private_offline_app_test.dart
+03:10 +407: /workspace/r2-validation-0738bee/flutter/test/private_offline_app_test.dart: 接続資格の切替・ログアウト・アプリロックで保存内容を見せず、旧データは消さない
+03:10 +408: /workspace/r2-validation-0738bee/flutter/test/private_offline_app_test.dart: 取得中にアカウントを替えても、新しいアカウントへ保存しない
+03:10 +409: /workspace/r2-validation-0738bee/flutter/test/private_offline_app_test.dart: 旧接続の一覧応答が新接続の認可や表示を上書きしない
+03:10 +410: /workspace/r2-validation-0738bee/flutter/test/private_offline_app_test.dart: 旧接続の一覧失敗が新接続の認可や表示を上書きしない
+03:10 +411: /workspace/r2-validation-0738bee/flutter/test/private_offline_app_test.dart: ログアウトは資格情報の削除完了を待つ前に表示と読出しを閉じる
+03:10 +412: /workspace/r2-validation-0738bee/flutter/test/private_offline_app_test.dart: 切替通知からログアウトしても古い資格情報が後から保存されない
+03:10 +413: /workspace/r2-validation-0738bee/flutter/test/private_offline_app_test.dart: 一覧待ちでログアウトした接続は成功を返さず資格も復活しない
+03:10 +414: loading /workspace/r2-validation-0738bee/flutter/test/import_gallery_test.dart
+03:12 +414: /workspace/r2-validation-0738bee/flutter/test/import_gallery_test.dart: ネット取り込みが完了すると、開いたままの写真一覧に動画が現れる
+03:13 +415: /workspace/r2-validation-0738bee/flutter/test/import_gallery_test.dart: 別ライブラリを表示中に取り込みが完了しても保存先のキャッシュだけを更新する
+03:14 +416: loading /workspace/r2-validation-0738bee/flutter/test/private_kv_policy_test.dart
+03:14 +416: /workspace/r2-validation-0738bee/flutter/test/private_kv_policy_test.dart: 既存Keychainの属性保護が完了するまで読まず、新規値も同期しない端末限定属性で扱う
+03:14 +417: loading /workspace/r2-validation-0738bee/flutter/test/mobile_playback_port_test.dart
+03:23 +417: /workspace/r2-validation-0738bee/flutter/test/mobile_playback_port_test.dart: OS操作は同じsessionの認証を通し、古いtokenや無効seekを拒否する
+03:23 +418: /workspace/r2-validation-0738bee/flutter/test/mobile_playback_port_test.dart: nativeへ渡す情報は匿名の状態だけで、作品名・URL・資格情報・平文パスを含めない
+03:24 +419: /workspace/r2-validation-0738bee/flutter/test/mobile_playback_port_test.dart: OS情報の更新失敗は背景で音声だけを残さず停止へ収束する
+system media state unavailable
+03:24 +420: loading /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart
+03:32 +420: /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart: detectKind / displayName 動画・音声・画像・HLS を拡張子で分類する
+03:32 +421: /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart: detectKind / displayName 名前は URL デコードして安全な文字だけにする
+03:33 +422: /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart: HLS BANDWIDTH 最大の変種を選ぶ
+03:33 +423: /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart: HLS AVERAGE-BANDWIDTH を BANDWIDTH と取り違えない
+03:33 +424: /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart: HLS 相対の変種は基準 URL から解決する
+03:33 +425: /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart: HLS メディアプレイリストは変種なし、セグメントを順に返す
+03:33 +426: /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart: HLS 絶対パス・プロトコル相対・相対のセグメントを解決する
+03:33 +427: /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart: HLS 暗号化と fMP4 を見分ける
+03:33 +428: /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart: SniffCollector 通信由来はリクエストのヘッダを守り、Cookie と Referer は無い時だけ補う
+03:33 +429: /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart: SniffCollector リクエストに Cookie が無ければ Cookie の入れ物から補う
+03:33 +430: /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart: SniffCollector 画像とメディアでない URL は通信から拾わない
+03:33 +431: /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart: SniffCollector 通信で拾った方が DOM 走査より優先される
+03:33 +432: /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart: SniffCollector DOM 走査は URL で重複を除き、メディアでないものは捨て、画像は取り込む
+03:33 +433: /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart: SniffCollector clear で前のページの検出を空にする
+03:33 +434: /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart: 名前と MIME 一覧に出る拡張子ならそのまま、無ければ MIME から借りる
+03:33 +435: /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart: 名前と MIME 同名キーの候補は (2)(3) を拡張子の前に付ける
+03:33 +436: /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart: 名前と MIME HLS は ts の名前と MIME で置く。音声は一覧に出ないので保存不可
+03:33 +437: /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart: 取り込み画面の部品 保存を止める理由は保存先の状態で決まる
+03:33 +438: /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart: 取り込み画面の部品 サイズ表記
+03:33 +439: /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart: 取り込み画面の部品 履歴の日時は月/日 時:分
+03:33 +440: /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart: 取り込み画面の部品 転送の要約
+03:33 +441: /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart: 履歴 新しい順で、200件を超えたら古いものから落とす
+03:33 +442: /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart: 履歴 壊れた保存値は空として扱う
+03:33 +443: /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart: URL の決まり スキームを省いた入力は https、http/https はそのまま
+03:33 +444: /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart: URL の決まり 端末内や他アプリへ抜けるスキームは開かない
+03:33 +445: /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart: URL の決まり ページが送ってきた http/https 以外の URL は検出に入れない
+03:33 +446: /workspace/r2-validation-0738bee/flutter/test/webdl_logic_test.dart: URL の決まり 1ページで抱える検出には上限がある
+03:33 +447: loading /workspace/r2-validation-0738bee/flutter/test/import_ui_test.dart
+03:34 +447: /workspace/r2-validation-0738bee/flutter/test/import_ui_test.dart: 取り込みタブは URL を入れるまで内蔵ブラウザを作らない
+03:36 +448: /workspace/r2-validation-0738bee/flutter/test/import_ui_test.dart: 内蔵ブラウザを作れない環境では、真っ黒にせず再試行できる表示にする
+03:37 +449: /workspace/r2-validation-0738bee/flutter/test/import_ui_test.dart: URL 欄は文字がある時だけ「×」を出し、押すと空にしてそのまま打ち直せる
+03:37 +450: /workspace/r2-validation-0738bee/flutter/test/import_ui_test.dart: 「×」で消すのは入力欄だけで、開いているページは閉じない
+03:37 +451: /workspace/r2-validation-0738bee/flutter/test/import_ui_test.dart: 空白だけの入力でも「×」で消せる
+03:37 +452: /workspace/r2-validation-0738bee/flutter/test/import_ui_test.dart: 取り込み済みの確認（#162） 「それでも取り込む」を選ぶと取り込む
+03:38 +453: /workspace/r2-validation-0738bee/flutter/test/import_ui_test.dart: 取り込み済みの確認（#162） 「やめる」を選ぶと取り込まない
+03:38 +454: /workspace/r2-validation-0738bee/flutter/test/import_ui_test.dart: 検出一覧は保存できるものだけ保存ボタンが効く
+03:38 +455: /workspace/r2-validation-0738bee/flutter/test/import_ui_test.dart: 保存先が書き込めない時は理由を出して保存を止める
+03:38 +456: /workspace/r2-validation-0738bee/flutter/test/import_ui_test.dart: 検出バーは件数を出してタップで開く
+03:38 +457: /workspace/r2-validation-0738bee/flutter/test/import_ui_test.dart: 転送シートは失敗の理由を出し、終わった行を消せる
+03:38 +458: /workspace/r2-validation-0738bee/flutter/test/import_ui_test.dart: http/https 以外の入力は開かず理由を出す
+03:38 +459: /workspace/r2-validation-0738bee/flutter/test/import_ui_test.dart: 保存を押すと転送キューに積まれ、すでに転送中なら積み直さない
+03:38 +460: loading /workspace/r2-validation-0738bee/flutter/test/playback_session_test.dart
+03:39 +460: /workspace/r2-validation-0738bee/flutter/test/playback_session_test.dart: 次の動画は古いdecoderの破棄を待ち、再生器を二重に作らない
+03:39 +461: /workspace/r2-validation-0738bee/flutter/test/playback_session_test.dart: 認証判定待ちのplayを、手動pauseが取り消す
+03:39 +462: /workspace/r2-validation-0738bee/flutter/test/playback_session_test.dart: 背景再生は明示許可時だけ継続し、手動pauseとpositionを復帰で失わない
+03:40 +463: /workspace/r2-validation-0738bee/flutter/test/playback_session_test.dart: 背景再生を許可しない動画は背面で止まり、復帰時に認証後だけ再開する
+03:40 +464: /workspace/r2-validation-0738bee/flutter/test/playback_session_test.dart: 前景へ戻る判定中にも一旦停止し、途中のpauseを自動再開で上書きしない
+03:40 +465: /workspace/r2-validation-0738bee/flutter/test/playback_session_test.dart: PiP開始中のinactiveでも同じdecoderを保ち、通常画面へ同じpositionで戻る
+03:40 +466: /workspace/r2-validation-0738bee/flutter/test/playback_session_test.dart: PiP拒否を成功とせず、別playerを起動しない
+03:40 +467: /workspace/r2-validation-0738bee/flutter/test/playback_session_test.dart: 音声割込み後の再開は、手動pauseが無い時にだけ許す
+03:40 +468: /workspace/r2-validation-0738bee/flutter/test/playback_session_test.dart: 再ロック猶予が尽きたら背景側でも停止・OS操作解放する
+03:40 +469: /workspace/r2-validation-0738bee/flutter/test/playback_session_test.dart: 通知シェードのinactiveを背景時刻未取得の即時ロックと取り違えない
+03:40 +470: /workspace/r2-validation-0738bee/flutter/test/playback_session_test.dart: 遅い音声focus取得よりも後に停止の解放を終える
+03:40 +471: /workspace/r2-validation-0738bee/flutter/test/playback_session_test.dart: focus取得中の割込みは遅いplayを止め、割込み終了まで再生しない
+03:40 +472: /workspace/r2-validation-0738bee/flutter/test/playback_session_test.dart: 完了はOS操作とfocusを解放し、明示replayだけ先頭から始める
+03:40 +473: /workspace/r2-validation-0738bee/flutter/test/playback_session_test.dart: 接続の取消し・画面破棄は同じ停止経路でdecoderを破棄する
+03:40 +474: loading /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart
+03:41 +474: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: 動画の初回再生では講評を先行取得せず、情報を開いた時に一度だけ取得する
+03:43 +475: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: 動画の講評取得エラーと再試行は再生器の初期化・再生をやり直さない
+meta failed: HTTP 500: synthetic failure
+03:43 +476: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: 動画のページ変更は古い講評を失効させ、次の動画も情報を開くまで取得しない
+03:44 +477: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: V3: 上バーに日時と「N件目」、写真のメモを出し、スワイプで次の件に変わる
+03:44 +478: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: P3/V1: 動画のページでは操作バーが隠れると上下バーも隠れ、隣の動画へ送ると前の動画を止める
+03:44 +479: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: V1: 外部書き出しを出さず、情報/アルバムへ/ゴミ箱へを保つ
+03:44 +480: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: V1: オフライン保存の口を渡すとボタンが出て、保存後は「保存済み」になる
+03:45 +481: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: V1: 読み取り専用ライブラリではアルバムへ・ゴミ箱へを出さない
+03:45 +482: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: V1: ゴミ箱へは確認なしで移し、閉じた先で「元に戻す」で戻せる
+03:45 +483: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: V1: 元に戻す時に同名が元の場所にあれば、その旨を出す
+03:45 +484: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: V1: ゴミ箱への移動に失敗したらビューワーに留まって知らせる
+trash failed: HTTP 500: boom
+03:46 +485: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: V2: 情報シートに種別・サイズ・追加日時・保存場所・メモ・講評を出す
+03:46 +486: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: V2: 講評を取れなかった時は理由と再読み込みを出し、押すと取り直して出す
+meta failed: HTTP 500: d1 down
+03:46 +487: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: V2: 講評が届く前に情報を開いても、届いたらそのシートに出す
+03:47 +488: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: V2: API の評価基準コメントと両方のスコアを情報シートに出す
+03:47 +489: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: V2: A→B→A の後に古い成功が届いても最新の講評を保つ
+03:47 +490: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: V2: A→B→A の後に古い失敗が届いても最新の講評を保つ
+meta failed: HTTP 503: stale response
+03:47 +491: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: V2: 講評の無い件では空状態を出し、前の件の講評も混ざらない
+03:48 +492: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: V4: 書き込めるアルバムだけを出し、選ぶと追加して知らせる
+03:48 +493: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: V4: 新しいアルバム名を入れると作ってから追加する。失敗は知らせる
+album add failed: HTTP 500: boom
+03:49 +494: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: X1: 保存はアプリ内だけで、外部への書き出しを出さない
+03:49 +495: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: X1: 古い外部保存APIも画像/動画/その他をダウンロードせず拒否する
+03:49 +496: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: 保存待ちは保存済みと区別し、暗号化保存の通知後だけ確定する
+03:49 +497: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: 保存済みからの個別削除は確認し、取り消しでは何も消さない
+03:50 +498: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: 開いたViewerの保存操作はアカウント切替後の同名作品に引き継がない
+03:50 +499: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: 整形: サイズと MIME は KMP 版と同じ
+03:50 +500: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: ガード: 書けないライブラリの項目はゴミ箱へ送らず、ビューワーに留まって理由を出す
+03:50 +501: /workspace/r2-validation-0738bee/flutter/test/viewer_test.dart: V1: 一覧から開いたビューワーの「オフライン」は #149 のオフライン保存に積む
+03:50 +502: loading /workspace/r2-validation-0738bee/flutter/test/grid_test.dart
+03:51 +502: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H1 並び替え 4種の並びと、同点は元の順を保つ
+03:51 +503: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H1 並び替え メニューで「サイズ順」を選ぶと並びが変わり、日付見出しが消える
+03:54 +504: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H2 日付見出し 今日・昨日・今年は曜日つき・去年は年つき・無ければ日付不明
+03:54 +505: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H2 日付見出し 写真タブに日ごとの見出しが出る
+03:54 +506: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H3/H14 選択 見出しの丸でその日をまとめて選択・解除できる
+03:55 +507: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H3/H14 選択 選択中は見出しが「N件を選択」になり、すべて選択/すべて解除を切り替えられる
+03:56 +508: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H3/H14 選択 選択中の端末の戻るは選択を解くだけで、写真タブに残る
+03:56 +509: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H3/H14 選択 閉じるボタンで選択を抜ける
+03:57 +510: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す 文字付きの操作が並び、オフライン保存できない環境ではオフラインを出さない
+03:58 +511: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す 下端にジェスチャー帯がある端末でも、操作バーは帯の上に収まって押せる
+03:58 +512: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す オフライン保存できる環境なら、選んだ分をライブラリごとに #149 のオフライン保存へ積む
+03:59 +513: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す ライブラリ間の保存待ち中にアカウントを切り替えたら後続を保存しない
+03:59 +514: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す ライブラリ間の保存待ち中にロックしたら後続を保存しない
+04:00 +515: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す ゴミ箱へ送ると「元に戻す」が出て、押すと trashKey で戻す
+04:02 +516: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す 元の場所に同じ名前があると戻せなかった旨を出す
+04:03 +517: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す 「元に戻す」は6秒で消える
+04:03 +518: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す 送れなかった件数を知らせる
+04:37 +519: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H5 アルバムへ 200件ずつに分けて送り、別ライブラリが混ざったら送らない
+04:37 +520: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H5 アルバムへ 書き込めるアルバムだけ選べて、選ぶと選択分を追加する
+04:38 +521: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H5 アルバムへ 新しい名前を入れると作成してから追加する
+04:39 +522: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H7 長押しの個別メニュー 選択中の長押しで個別メニュー。ゴミ箱へはすぐ送って元に戻すを出す
+04:39 +523: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H7 長押しの個別メニュー 読み取り専用でもアプリ内オフラインだけ保存でき、外部へ書き出さない
+04:40 +524: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H10 読み取り専用 鍵を付け、追加ボタンを出さず、長押しでも選択に入らない
+04:40 +525: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H10 読み取り専用 空の読み取り専用ライブラリでは「写真・動画を追加」を出さない
+04:40 +526: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H12 グリッド スマホの幅で4列
+04:40 +527: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H12 グリッド 見出しの無い並びでも、末尾9件手前まで見えたら続きを取る
+04:40 +528: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H12 グリッド 選択中は丸のチェックが出て、選んだタイルだけ選択中になる
+04:41 +529: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H13 空・エラー 読み込めない時は理由と「再試行」「接続先を確認する」を出す
+04:41 +530: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H13 空・エラー 一覧が出ている時の更新失敗は、一覧を残したまま帯で知らせる
+04:41 +531: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H13 空・エラー 空なら案内と「写真・動画を追加」を出す
+04:41 +532: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H15 フォルダ 末尾のフォルダカードから下の階層へ辿れる
+04:42 +533: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H15 フォルダ 空のフォルダは空と出す
+04:42 +534: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: 書き込みガード 長押しの「ゴミ箱へ」も、書けないライブラリなら送らず理由を出す
+04:42 +535: All tests passed!
+
+EXIT: 0

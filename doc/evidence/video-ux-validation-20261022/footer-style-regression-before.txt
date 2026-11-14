@@ -1,0 +1,108 @@
+UTC: 2026-10-22T16:05:29.824711+00:00
+CWD: /workspace/r2-validation-0738bee/flutter
+ARGV: ["flutter", "test", "--no-pub", "--reporter", "expanded", "test/footer_ux_test.dart", "--dart-define=FOOTER_EVIDENCE_DIR=/workspace/r2-validation-evidence/footer-before-style-fix"]
+
+00:00 +0: loading /workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart
+00:00 +0: (setUpAll)
+00:00 +0: 一覧→動画→情報→ロック解除→元一覧 narrow-1.3
+player getBrightness missing: MissingPluginException(No implementation found for method getBrightness on channel app.r2gallery/player)
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: 'R2GalleryJP'
+  Actual: 'monospace'
+   Which: is different.
+          Expected: R2GalleryJ ...
+            Actual: monospace
+                    ^
+           Differ at offset 0
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart:212:9)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1952:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart line 212
+The test description was:
+  一覧→動画→情報→ロック解除→元一覧 narrow-1.3
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:05 +0 -1: 一覧→動画→情報→ロック解除→元一覧 narrow-1.3 [E]
+  Test failed. See exception logs above.
+  The test description was: 一覧→動画→情報→ロック解除→元一覧 narrow-1.3
+
+00:05 +0 -1: 一覧→動画→情報→ロック解除→元一覧 narrow-2.0
+player getBrightness missing: MissingPluginException(No implementation found for method getBrightness on channel app.r2gallery/player)
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: 'R2GalleryJP'
+  Actual: 'monospace'
+   Which: is different.
+          Expected: R2GalleryJ ...
+            Actual: monospace
+                    ^
+           Differ at offset 0
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart:212:9)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1952:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart line 212
+The test description was:
+  一覧→動画→情報→ロック解除→元一覧 narrow-2.0
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:06 +0 -2: 一覧→動画→情報→ロック解除→元一覧 narrow-2.0 [E]
+  Test failed. See exception logs above.
+  The test description was: 一覧→動画→情報→ロック解除→元一覧 narrow-2.0
+
+00:06 +0 -2: 一覧→動画→情報→ロック解除→元一覧 landscape
+player getBrightness missing: MissingPluginException(No implementation found for method getBrightness on channel app.r2gallery/player)
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: 'R2GalleryJP'
+  Actual: 'monospace'
+   Which: is different.
+          Expected: R2GalleryJ ...
+            Actual: monospace
+                    ^
+           Differ at offset 0
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart:212:9)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1952:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart line 212
+The test description was:
+  一覧→動画→情報→ロック解除→元一覧 landscape
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:07 +0 -3: 一覧→動画→情報→ロック解除→元一覧 landscape [E]
+  Test failed. See exception logs above.
+  The test description was: 一覧→動画→情報→ロック解除→元一覧 landscape
+
+00:07 +0 -3: (tearDownAll)
+00:07 +0 -3: Some tests failed.
+
+Failing tests:
+  /workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart: 一覧→動画→情報→ロック解除→元一覧 landscape
+  /workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart: 一覧→動画→情報→ロック解除→元一覧 narrow-1.3
+  /workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart: 一覧→動画→情報→ロック解除→元一覧 narrow-2.0
+
+EXIT: 1

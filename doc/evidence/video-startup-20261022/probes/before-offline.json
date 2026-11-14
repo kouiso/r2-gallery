@@ -1,0 +1,72 @@
+{
+  "scope": "Real Dart crypto and temporary fixture I/O; fresh reader object; filesystem cache warmed by setup writes; no codec/native/Keychain timing",
+  "variant": "before",
+  "samples": [
+    {
+      "bytes": 1048576,
+      "fixture_sha256": "631b84027d6b9e52b539c4e8373622d23032dfadc64d60af87339c9037e4f769",
+      "sample": 0,
+      "ciphertext_read_and_authenticated_decrypt_us": 273614,
+      "playback_cache_write_us": 37050,
+      "local_preparation_us": 310664,
+      "maximum_main_isolate_timer_gap_us": 266626,
+      "timer_ticks": 8,
+      "first_frame_us": null
+    },
+    {
+      "bytes": 1048576,
+      "fixture_sha256": "631b84027d6b9e52b539c4e8373622d23032dfadc64d60af87339c9037e4f769",
+      "sample": 1,
+      "ciphertext_read_and_authenticated_decrypt_us": 197238,
+      "playback_cache_write_us": 11386,
+      "local_preparation_us": 208624,
+      "maximum_main_isolate_timer_gap_us": 198158,
+      "timer_ticks": 5,
+      "first_frame_us": null
+    },
+    {
+      "bytes": 1048576,
+      "fixture_sha256": "631b84027d6b9e52b539c4e8373622d23032dfadc64d60af87339c9037e4f769",
+      "sample": 2,
+      "ciphertext_read_and_authenticated_decrypt_us": 195524,
+      "playback_cache_write_us": 12405,
+      "local_preparation_us": 207929,
+      "maximum_main_isolate_timer_gap_us": 196506,
+      "timer_ticks": 5,
+      "first_frame_us": null
+    },
+    {
+      "bytes": 8388608,
+      "fixture_sha256": "bdf23837181f5808331800c1ae2b4f7d7a839536b10d58491471c50dde23833a",
+      "sample": 0,
+      "ciphertext_read_and_authenticated_decrypt_us": 1480675,
+      "playback_cache_write_us": 41111,
+      "local_preparation_us": 1521786,
+      "maximum_main_isolate_timer_gap_us": 1462671,
+      "timer_ticks": 7,
+      "first_frame_us": null
+    },
+    {
+      "bytes": 8388608,
+      "fixture_sha256": "bdf23837181f5808331800c1ae2b4f7d7a839536b10d58491471c50dde23833a",
+      "sample": 1,
+      "ciphertext_read_and_authenticated_decrypt_us": 1213656,
+      "playback_cache_write_us": 17954,
+      "local_preparation_us": 1231610,
+      "maximum_main_isolate_timer_gap_us": 1201189,
+      "timer_ticks": 7,
+      "first_frame_us": null
+    },
+    {
+      "bytes": 8388608,
+      "fixture_sha256": "bdf23837181f5808331800c1ae2b4f7d7a839536b10d58491471c50dde23833a",
+      "sample": 2,
+      "ciphertext_read_and_authenticated_decrypt_us": 1128500,
+      "playback_cache_write_us": 25819,
+      "local_preparation_us": 1154319,
+      "maximum_main_isolate_timer_gap_us": 1114882,
+      "timer_ticks": 7,
+      "first_frame_us": null
+    }
+  ]
+}

@@ -28,8 +28,8 @@ KMP 版（`1ae3879^:kmp/`）にあって Flutter 版に無かった、利用者�
 | H4 | 選択バーを「アルバムへ／オフライン／ゴミ箱へ」の文字付き3操作に | ☑ | `grid_test.dart` H4/H9、本物の Worker に対しては `test_live/live_trash_test.dart`（`doc/evidence/r2-4-bulk-trash-live/`）。「オフライン」は #149 のオフライン保存につないだ |
 | H5 | 一括「アルバムへ」（既存か新規、200件ずつ、ライブラリ混在は送らない） | ☑ | `grid_test.dart` H5 |
 | H6 | オフライン保存（選択 → 暗号化キューに追加） | ☑ | `grid_test.dart` H4、`transfers_ui_test.dart` オフライン保存 |
-| H7 | 長押しの個別メニュー（アルバムに追加／端末に保存／ゴミ箱へ、読み取り専用表示） | ☑ | `grid_test.dart` H7。「端末に保存」は #147 の `AppState.exportToDevice` |
-| H8 | 端末の Photos/Downloads への書き出し | ◐ | 長押しからの経路は `grid_test.dart` H7、取得と署名切れの取り直しは `viewer_test.dart` X1。MediaStore への書き込みは Kotlin で、実機未確認 |
+| H7 | 長押しの個別メニュー（アルバムに追加／オフライン保存・保存済み削除／ゴミ箱へ、読み取り専用表示） | ◐ | 長押しメニューから「端末に保存」を外した。この廃止は**オーナー承認待ち**。`grid_test.dart` H7。Flutter全614件で実行済み。native実機の範囲は別記 |
+| H8 | アプリ内のオフライン保存へ一本化（「端末に保存」の廃止はオーナー承認待ち） | ◐ | 接続別の永続暗号文を維持し、旧Dart/native書き出しを拒否。Android内部保存・backup/端末移行の除外、iOS sandbox/backup属性/端末限定Keychainを設定。保存削除で再生用平文も解放。Webは非対応を明示。Flutter/mock・静的点検のみ実施で、native/実機は未実施。旧exportや旧保存を自動削除しない |
 | H9 | ゴミ箱へ送った後の「元に戻す」（6秒） | ☑ | `grid_test.dart` H4/H9、`trash_test.dart` T1、本物の Worker に対しては `test_live/live_trash_test.dart`（`doc/evidence/r2-4-bulk-trash-live/`）。#148 の `offerTrashUndo` に一本化 |
 | H10 | 読み取り専用ライブラリの扱い（鍵、削除・追加を隠す） | ☑ | `grid_test.dart` H10、`settings_port_test.dart` S4、本物の Worker に対しては `test_live/live_trash_test.dart`（`doc/evidence/r2-4-bulk-trash-live/`） |
 | H11 | アップロード前の確認シート | ☑ | `transfers_ui_test.dart` アップロード確認 |
@@ -67,14 +67,17 @@ KMP 版（`1ae3879^:kmp/`）にあって Flutter 版に無かった、利用者�
 
 | ID | 機能 | 状態 | 確かめているテスト・補足 |
 |---|---|---|---|
-| V1 | 下部の操作バー（情報／オフライン／端末に保存／アルバムへ／ゴミ箱へ） | ☑ | `viewer_test.dart` V1。「オフライン」は #149 のオフライン保存 |
+| V1 | 下部の作品操作（情報／オフライン保存／アルバムへ／ゴミ箱へ） | ◐ | ナビゲーション4タブとは役割を分ける。可変高・安全領域・折返し、保存待ちと保存済みを分離。`viewer_test.dart` / `footer_ux_test.dart` を追加・更新、Flutter全614件PASS。Android release APK内のJP font一致を確認。実機画面は未確認。下部操作から「端末に保存」を外した件は**オーナー承認待ち** |
 | V2 | 情報シート（種別・サイズ・日時・保存場所・メモ・講評） | ☑ | `viewer_test.dart` V2。講評は取得中・取れなかった（理由と再読み込み）・講評なしを分けて出し、開いた後に届いても出す（#113） |
 | V3 | メモと上部バーの日時・N件目 | ☑ | `viewer_test.dart` V3 |
 | V4 | ビューワー内のアルバム追加ピッカー | ☑ | `viewer_test.dart` V4 |
-| X1 | 端末に保存（ギャラリーへ） | ◐ | H8 と同じ。Kotlin の MediaStore と保存許可は実機未確認 |
-| P1 | 左半分で明るさ、右半分で音量 | ◐ | ドラッグの扱いは `video_view_test.dart`。明るさと音量を変える所は Kotlin で、実機未確認 |
+| X1 | 外部書き出しの拒否 | ◐ | H8 と同じく「端末に保存」の廃止はオーナー承認待ち。保存操作はアプリ内だけに統一し、古い API も外部書き出しを拒否する。未関連付けの既存内部保存は隔離し、外部保存済みファイルも勝手に変更しない |
+| P1 | 明示した「明るさ・音量」パネル | ◐ | #198。mainの縦スワイプによる明るさ・音量調整は残したまま（何も削除していない）、明示パネルを追加した。パネルはこの画面の明るさとこの動画の音量をラベル・現在値付きで調整し、未知の明るさを書き換えない。`video_view_test.dart` を追加、Flutter全614件PASS、Android release build確認。実機の変更量と前後動画は未確認 |
 | P2 | 操作ロック、±10秒、リプレイ、リトライ、読み込み中、一時停止アイコン | ☑ | `video_view_test.dart` |
 | P3 | 3.5秒で操作バーを隠す | ☑ | `video_view_test.dart`、`viewer_test.dart` P3/V1 |
+| P4 | 前景の動画再生中だけ画面保持 | ◐ | Android窓フラグ/Web Screen Wake Lockを実装。`screen_awake_test.dart` 18件とオフライン復帰操作回帰を追加。Android release build確認、実機/ブラウザ未検証 |
+| P5 | バックグラウンド再生・ロック画面の操作・PiP | ◐ | #196/#197。Android/iOSの同一playerへsession・OS操作・PiPを接続。背景再生は動画ごとの明示許可。Dart/mock/widgetの回帰614件PASS。Android release build・APK設定/DEX検査PASS（Media3の不正な定数参照1行を修正）。iOS native build・両OS実機は未実施。最新範囲は `doc/evidence/android-build-20261023/README.md`、設計は `doc/evidence/mobile-playback-20261022/README.md` |
+| P6 | 初回動画の付加情報取得と保存動画の復号負荷 | ◐ | 動画講評は情報シートまで遅延し、256KiB以上の保存復号は別isolate。mock/合成fixture前後比較と全614件PASS。実機first frameは未測定。`doc/evidence/video-startup-20261022/README.md` |
 
 ビューワーには #141 の動きも入っている（スワイプ、原本のキャッシュと縮小 decode、拡大した端からのページ送り、
 表示中の動画だけがコントローラを持つ、背面で止めて戻ったら再開、ロック中は鳴らさない）。
@@ -84,8 +87,8 @@ KMP 版（`1ae3879^:kmp/`）にあって Flutter 版に無かった、利用者�
 
 | ID | 機能 | 状態 | 確かめているテスト・補足 |
 |---|---|---|---|
-| O1 | 選択中のオフライン保存 | ☑ | `transfers_ui_test.dart`、`grid_test.dart` H4 |
-| O1-2 | オフライン保存（暗号化端末保存・保存済み表示・全削除） | ☑ | `offline_store_test.dart`、`transfers_ui_test.dart` |
+| O1 | 選択中のオフライン保存 | ◐ | 接続切替・ロック中の後続保存を止める回帰を追加。`transfers_ui_test.dart`、`grid_test.dart` H4。Flutter全614件で実行済み。native実機の範囲は別記。☑→◐への変更は実機確認待ち・**オーナー承認待ち** |
+| O1-2 | オフライン保存（アプリ専用の暗号化保存・接続認可・保存済み表示・容量・削除） | ◐ | `offline_store_test.dart`、`offline_privacy_test.dart`、`private_offline_app_test.dart`、`transfers_ui_test.dart`。旧保存と外部ファイルは移動・削除しない。ただし更新前のオフライン保存は接続先を確認できないため隔離して一覧に出さない（`offline_screen.dart:157`、移行なし）。この隔離は**オーナー承認待ち**。Flutter全614件で実行済み。native実機の範囲は別記。☑→◐への変更は実機確認待ち・**オーナー承認待ち** |
 | T1-2 | 転送キュー（一時停止・再開・再試行・取り消し・消す） | ☑ | `transfer_queue_test.dart`、`transfers_ui_test.dart` |
 | T2-2 | 画面下の転送バー | ☑ | `transfers_ui_test.dart` 転送バーと転送シート。転送が何件あってもバーは1行で、取り込みの URL 欄をキーボード表示中も塞がない（#106）。先頭の失敗行の「やり直す」は 360x640・文字1.3倍でも画面内で押せ、その行だけやり直す（#111） |
 | T3-2 | アップロードの再開耐性と自動再開 | ☑ | `transfer_queue_test.dart` |
@@ -105,7 +108,7 @@ KMP 版（`1ae3879^:kmp/`）にあって Flutter 版に無かった、利用者�
 | S4 | 読み取り専用ライブラリへの書き込み禁止 | ☑ | `settings_port_test.dart` S4、`grid_test.dart`・`viewer_test.dart`・`albums_test.dart` の「書き込みガード」 |
 | S5 | ゴミ箱の保持日数の案内 | ☑ | `trash_test.dart` T3/S5 |
 | S6 | ロックの切り替えと再ロック時間 | ☑ | `settings_port_test.dart` S6、`lock_test.dart` |
-| S7 | オフライン保存の件数表示と全削除 | ☑ | `transfers_ui_test.dart` |
+| S7 | オフライン保存の件数・容量表示と全削除 | ◐ | 現在の接続で認可された保存のみ。`transfers_ui_test.dart`。Flutter全614件で実行済み。native実機の範囲は別記。☑→◐への変更は実機確認待ち・**オーナー承認待ち** |
 | S8 | 接続状態の表示 | ☑ | `settings_port_test.dart` S8 |
 | S9 | 起動失敗バナー | ☑ | `settings_port_test.dart` S9 |
 | S10 | 接続画面の「スキップ」 | ☑ | `settings_port_test.dart` S10 |

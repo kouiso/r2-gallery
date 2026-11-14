@@ -1,0 +1,212 @@
+{
+  "variant": "after",
+  "resource_contended": false,
+  "scope": "Virtual-clock delay injection; transport/controller/OS bridge are mocks, no native decode or first frame",
+  "injected_ms": {
+    "review": 240,
+    "range": 300,
+    "decoder": 60,
+    "bind": 40,
+    "focus": 10
+  },
+  "samples": [
+    {
+      "sample": 0,
+      "play_accepted_mock_ms": 410,
+      "review_requests_before_play": 0,
+      "range_requests_mock": 1,
+      "range_bytes_mock": 4096,
+      "fixture_total_bytes": 262144,
+      "extra_url_requests": 0,
+      "whole_file_downloads": 0,
+      "first_frame_ms": null,
+      "events": [
+        {
+          "event": "open_play_action",
+          "ms": 0
+        },
+        {
+          "event": "listed_url_passed_to_controller",
+          "ms": 0
+        },
+        {
+          "event": "controller_initialize_started",
+          "ms": 0
+        },
+        {
+          "event": "range_mock_requested",
+          "ms": 0
+        },
+        {
+          "event": "range_mock_started",
+          "ms": 0
+        },
+        {
+          "event": "range_mock_completed",
+          "ms": 300
+        },
+        {
+          "event": "container_metadata_mock_ready",
+          "ms": 300,
+          "bytes": 4096
+        },
+        {
+          "event": "controller_initialize_completed",
+          "ms": 360
+        },
+        {
+          "event": "system_bind_mock_started",
+          "ms": 360
+        },
+        {
+          "event": "system_bind_mock_completed",
+          "ms": 400
+        },
+        {
+          "event": "focus_mock_started",
+          "ms": 400
+        },
+        {
+          "event": "focus_mock_completed",
+          "ms": 410
+        },
+        {
+          "event": "play_request_accepted_mock",
+          "ms": 410
+        }
+      ]
+    },
+    {
+      "sample": 1,
+      "play_accepted_mock_ms": 410,
+      "review_requests_before_play": 0,
+      "range_requests_mock": 1,
+      "range_bytes_mock": 4096,
+      "fixture_total_bytes": 262144,
+      "extra_url_requests": 0,
+      "whole_file_downloads": 0,
+      "first_frame_ms": null,
+      "events": [
+        {
+          "event": "open_play_action",
+          "ms": 0
+        },
+        {
+          "event": "listed_url_passed_to_controller",
+          "ms": 0
+        },
+        {
+          "event": "controller_initialize_started",
+          "ms": 0
+        },
+        {
+          "event": "range_mock_requested",
+          "ms": 0
+        },
+        {
+          "event": "range_mock_started",
+          "ms": 0
+        },
+        {
+          "event": "range_mock_completed",
+          "ms": 300
+        },
+        {
+          "event": "container_metadata_mock_ready",
+          "ms": 300,
+          "bytes": 4096
+        },
+        {
+          "event": "controller_initialize_completed",
+          "ms": 360
+        },
+        {
+          "event": "system_bind_mock_started",
+          "ms": 360
+        },
+        {
+          "event": "system_bind_mock_completed",
+          "ms": 400
+        },
+        {
+          "event": "focus_mock_started",
+          "ms": 400
+        },
+        {
+          "event": "focus_mock_completed",
+          "ms": 410
+        },
+        {
+          "event": "play_request_accepted_mock",
+          "ms": 410
+        }
+      ]
+    },
+    {
+      "sample": 2,
+      "play_accepted_mock_ms": 410,
+      "review_requests_before_play": 0,
+      "range_requests_mock": 1,
+      "range_bytes_mock": 4096,
+      "fixture_total_bytes": 262144,
+      "extra_url_requests": 0,
+      "whole_file_downloads": 0,
+      "first_frame_ms": null,
+      "events": [
+        {
+          "event": "open_play_action",
+          "ms": 0
+        },
+        {
+          "event": "listed_url_passed_to_controller",
+          "ms": 0
+        },
+        {
+          "event": "controller_initialize_started",
+          "ms": 0
+        },
+        {
+          "event": "range_mock_requested",
+          "ms": 0
+        },
+        {
+          "event": "range_mock_started",
+          "ms": 0
+        },
+        {
+          "event": "range_mock_completed",
+          "ms": 300
+        },
+        {
+          "event": "container_metadata_mock_ready",
+          "ms": 300,
+          "bytes": 4096
+        },
+        {
+          "event": "controller_initialize_completed",
+          "ms": 360
+        },
+        {
+          "event": "system_bind_mock_started",
+          "ms": 360
+        },
+        {
+          "event": "system_bind_mock_completed",
+          "ms": 400
+        },
+        {
+          "event": "focus_mock_started",
+          "ms": 400
+        },
+        {
+          "event": "focus_mock_completed",
+          "ms": 410
+        },
+        {
+          "event": "play_request_accepted_mock",
+          "ms": 410
+        }
+      ]
+    }
+  ]
+}

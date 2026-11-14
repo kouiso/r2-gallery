@@ -1,0 +1,126 @@
+diff --git a/flutter/test/transfers_ui_test.dart b/flutter/test/transfers_ui_test.dart
+index d379b47..35a9e17 100644
+--- a/flutter/test/transfers_ui_test.dart
++++ b/flutter/test/transfers_ui_test.dart
+@@ -50,0 +51,40 @@ class _Api extends ApiClient {
++class _RetryUploadApi extends _Api {
++  final Map<String, int> attempts = {};
++  final Map<String, Uint8List> saved = {};
++
++  _RetryUploadApi() {
++    setConnection(const Connection('https://w.example', 'tok'));
++  }
++
++  @override
++  Future<void> putObject(String libId, String key, Uint8List bytes,
++      String contentType,
++      {void Function(int sent, int total)? onProgress,
++      CancelToken? cancelToken,
++      bool verifyStorage = false}) async {
++    final n = attempts.update(key, (n) => n + 1, ifAbsent: () => 1);
++    if (key == 'retry.jpg' && n == 1) throw const ApiError(500, 'try again');
++    saved[key] = Uint8List.fromList(bytes);
++  }
++}
++
++class _QueueApp extends AppState {
++  _QueueApp({
++    required ApiClient api,
++    required this.queue,
++    required TransferPlatform platform,
++    required OfflineStore offline,
++  }) : super(
++          api: api,
++          bakedEndpoint: '',
++          bakedToken: '',
++          transferPlatform: platform,
++          offline: offline,
++        );
++
++  final TransferQueue queue;
++
++  @override
++  TransferQueue get transfers => queue;
++}
++
+@@ -298,0 +339,80 @@ void main() {
++
++    testWidgets('完了行が消えた後も失敗だけのバーから開いて再試行し、成功した行は再送しない',
++        (tester) async {
++      _smallPhone(tester, textScale: 1.3);
++      final api = _RetryUploadApi();
++      // キューは本物の非同期の側で作り、台帳は端末の口を通らんメモリ台帳にする。端末の口を通る台帳だと、
++      // 完了行を消す時の書き込みがテストの時計の側で止まったままになり、やり直しの完了が待たされ続ける
++      late final TransferQueue queue;
++      await tester.runAsync(() async {
++        queue = TransferQueue(
++          api: ApiClientTransferApi(api),
++          offline: OfflineStore(
++              kv: MemKv(), dir: () async => Directory('${tmp.path}/off')),
++          ledger: MemLedger(),
++          stageDir: () async => Directory('${tmp.path}/stage'),
++          configured: () => true,
++        );
++        await queue.restore();
++      });
++      final app = _QueueApp(
++        api: api,
++        queue: queue,
++        platform: platform,
++        offline: OfflineStore(
++            kv: MemKv(), dir: () async => Directory('${tmp.path}/off')),
++      )
++        ..connected = true
++        ..libraries = const [Library(id: 'lib', title: 'Lib')];
++      addTearDown(() {
++        queue.dispose();
++        app.webQueue.dispose();
++        app.dispose();
++      });
++      await tester.runAsync(() async {
++        await app.upload('lib', [
++          _src('done.jpg', 4, 'image/jpeg'),
++          _src('retry.jpg', 5, 'image/jpeg'),
++        ]);
++        await app.transfers.idle();
++      });
++      expect(app.transfers.tasks.map((t) => t.status),
++          [TransferStatus.done, TransferStatus.error]);
++      await tester.pumpWidget(_wrap(Align(
++        alignment: Alignment.bottomCenter,
++        child: TransfersDock(app: app, child: const SizedBox(height: 10)),
++      )));
++      await tester.pump(TransfersStrip.finishedRowLife);
++      await tester.pump();
++      expect(app.transfers.tasks.single.name, 'retry.jpg');
++
++      final entry = find.text('転送に失敗したものがあります');
++      expect(entry.hitTestable(), findsOneWidget);
++      await tester.tap(entry);
++      // 進行中の行は進み具合が不定のバーを回し続けるので、settle を待たずにシートが開くまで進める
++      await tester.pump();
++      await tester.pump(const Duration(seconds: 1));
++      expect(find.text('要対応 1'), findsOneWidget);
++      expect(find.text('retry.jpg'), findsOneWidget);
++      final retry = find.byTooltip('やり直す');
++      expect(retry.hitTestable(), findsOneWidget);
++      _expectOnScreen(tester, retry);
++
++      await tester.runAsync(() => tester.tap(retry));
++      // 送信は本物の非同期で進み、台帳の書き込みはテストの時計の側の続きも待つ。
++      // 本物の時間を少し進めては pump して続きを流す
++      for (var i = 0;
++          i < 200 && app.transfers.tasks.single.status != TransferStatus.done;
++          i++) {
++        await tester.runAsync(
++            () => Future<void>.delayed(const Duration(milliseconds: 10)));
++        await tester.pump();
++      }
++      await tester.pump(const Duration(seconds: 1));
++      expect(app.transfers.tasks.single.status, TransferStatus.done);
++      expect(api.attempts, {'done.jpg': 1, 'retry.jpg': 2});
++      expect(api.saved['retry.jpg'], Uint8List(5));
++      expect(find.text('要対応 1'), findsNothing);
++      expect(entry, findsNothing);
++      await tester.pumpWidget(const SizedBox.shrink());
++    });

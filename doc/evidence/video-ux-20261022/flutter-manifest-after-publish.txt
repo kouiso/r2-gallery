@@ -1,0 +1,11 @@
+Source: tool response transcript, one request after confirmation that the saved host setting was published.
+Target: https://storage.googleapis.com/flutter_infra_release/flutter/releases/releases_linux.json
+Action: curl --fail --show-error --silent --connect-timeout 15 --max-time 30 --output /tmp/r2-flutter-manifest-after-publish.json --write-out '%{http_code}\n' <target>
+Exit code: 22
+Returned output:
+curl: (22) The requested URL returned error: 403
+000
+
+Follow-up local file check: No manifest payload was saved.
+Outcome: FAILED. SDK retrieval did not occur. Application of the published host setting to this existing workspace is UNCONFIRMED.
+No retry, alternate host/route, TLS change, or SDK download followed this failed request.

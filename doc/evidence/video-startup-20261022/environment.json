@@ -1,0 +1,25 @@
+{
+  "flutter": {
+    "frameworkVersion": "3.44.6",
+    "channel": "stable",
+    "repositoryUrl": "https://github.com/flutter/flutter.git",
+    "frameworkRevision": "ee80f08bbf97172ec030b8751ceab557177a34a6",
+    "frameworkCommitDate": "2026-07-08 15:02:06 -0700",
+    "engineRevision": "83675ed27633283e7fc296c8bca22e841224c096",
+    "engineCommitDate": "2026-06-30 16:59:03.000Z",
+    "engineContentHash": "d3a3293399556a85388faf8c6f0723a7a5597aa8",
+    "engineBuildDate": "2026-06-30 11:58:16.871",
+    "dartSdkVersion": "3.12.2",
+    "devToolsVersion": "2.57.0",
+    "flutterVersion": "3.44.6"
+  },
+  "lockfile_sha256": {
+    "flutter/pubspec.lock": "6310628ae9142d84ecfd4f10ad56014b22f8996753f5dc682001623e66552066",
+    "pnpm-lock.yaml": "20d670ff513e32c69475815f02ae22ad278b557ae890bda1849209d9d9804c05"
+  },
+  "baseline_lockfiles_equal": true,
+  "worker_route_sha256": "2a31b982f1fa060bd147d2983c701e7a66a000f058cf51b1b8674e839536cd61",
+  "worker_route_matches_baseline": true,
+  "reviewed_workers_types_version": "5.20261022.1",
+  "reviewed_workers_types_archive_sha256": "f413851dcbfd94881ee71782e9972710a5856a3192e716b832a3665ba7feaa64"
+}

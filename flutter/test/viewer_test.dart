@@ -8,8 +8,6 @@ import 'package:r2_gallery/src/api/client.dart';
 import 'package:r2_gallery/src/api/models.dart';
 import 'package:r2_gallery/src/api/review_meta.dart';
 import 'package:r2_gallery/src/state/app_state.dart';
-import 'package:r2_gallery/src/store/device_auth.dart';
-import 'package:r2_gallery/src/store/lock_platform.dart';
 import 'package:r2_gallery/src/ui/viewer_screen.dart';
 import 'package:r2_gallery/src/viewer/device_export.dart';
 import 'package:r2_gallery/src/grid/day_label.dart';
@@ -93,25 +91,6 @@ class _Api extends ApiClient {
       FolderPage(items: folderItems);
 }
 
-/// ダウンロードの途中でアプリが裏へ回る
-class _BackgroundingApi extends _Api {
-  _BackgroundingApi(this.app, this.clock);
-  final AppState app;
-  final _Clock clock;
-  @override
-  Future<void> downloadToFile(String url, String path) async {
-    app.onBackground();
-    clock.now += 30000;
-    await super.downloadToFile(url, path);
-  }
-}
-
-class _Clock implements LockClock {
-  int now = 0;
-  @override
-  Future<ClockReading> read() async => (boot: now, mono: now, wall: now);
-}
-
 /// 原本を取りに行かず、すぐ「取れなかった」にするキャッシュ。
 /// 実物はテストでは応答せず読み込み中の表示が回り続け、画面が落ち着かないため。
 class _NoCache extends Fake implements BaseCacheManager {
@@ -119,13 +98,6 @@ class _NoCache extends Fake implements BaseCacheManager {
   Stream<FileResponse> getFileStream(String url,
           {String? key, Map<String, String>? headers, bool withProgress = false}) =>
       Stream.error(Exception('no network in tests'));
-}
-
-class _Auth implements DeviceAuth {
-  @override
-  Future<bool> isAvailable() async => true;
-  @override
-  Future<bool> verify(String reason) async => true;
 }
 
 class _Store implements MediaStoreBridge {
@@ -170,6 +142,7 @@ class _TestApp extends AppState {
 }
 
 _TestApp _app(_Api api, {bool readOnly = false, _Store? store}) {
+  api.setConnection(const Connection('https://fixture.invalid', 'fixture-only'));
   final app = _TestApp(api);
   // 書き込みのガード（#145）は未接続だと止めるので、接続済みから始める
   app.connected = true;
@@ -202,6 +175,96 @@ Future<void> _open(WidgetTester tester, AppState app, List<MediaItem> items,
 }
 
 void main() {
+  testWidgets('動画の初回再生では講評を先行取得せず、情報を開いた時に一度だけ取得する', (tester) async {
+    final gate = Completer<ReviewMeta?>();
+    final api = _Api()..metaGate = gate;
+    final app = _app(api);
+    final video = FakeVideo();
+    await tester.pumpWidget(MaterialApp(home: ViewerScreen(app: app,
+      lib: 'review', items: const [MediaItem(key: 'clip.mp4', type: 'video',
+        url: 'https://fixture.invalid/clip.mp4')], videoFactory: (_) => video)));
+    await tester.pump();
+    expect(video.value.isPlaying, isTrue);
+    expect(api.metaCalls, 0);
+    await tester.tap(find.text('情報'));
+    await tester.pumpAndSettle();
+    expect(api.metaCalls, 1);
+    expect(find.text('講評を確認中…'), findsOneWidget);
+    gate.complete(const ReviewMeta(verdict: 'pass', round: 1, label: '動画'));
+    await tester.pumpAndSettle();
+    expect(find.text('動画 · pass · 1回目'), findsOneWidget);
+    expect(video.value.isPlaying, isTrue);
+    Navigator.of(tester.element(find.byType(ViewerInfoSheet))).pop();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('情報'));
+    await tester.pumpAndSettle();
+    expect(api.metaCalls, 1);
+    expect(video.plays, 1);
+    await tester.pumpWidget(const SizedBox.shrink());
+    app.dispose();
+  });
+
+  testWidgets('動画の講評取得エラーと再試行は再生器の初期化・再生をやり直さない', (tester) async {
+    final api = _Api()..metaError = const ApiError(500, 'synthetic failure');
+    final app = _app(api);
+    final video = FakeVideo();
+    var created = 0;
+    await tester.pumpWidget(MaterialApp(home: ViewerScreen(app: app,
+      lib: 'review', items: const [MediaItem(key: 'clip.mp4', type: 'video',
+        url: 'https://fixture.invalid/clip.mp4')], videoFactory: (_) { created++; return video; })));
+    await tester.pump();
+    expect(api.metaCalls, 0);
+    await tester.tap(find.text('情報'));
+    await tester.pumpAndSettle();
+    expect(find.text('講評を取得できませんでした'), findsOneWidget);
+    api..metaError = null..review = const ReviewMeta(verdict: 'pass', round: 1, label: '回復');
+    await tester.tap(find.text('再読み込み'));
+    await tester.pumpAndSettle();
+    expect(find.text('回復 · pass · 1回目'), findsOneWidget);
+    expect(video.value.isPlaying, isTrue);
+    expect(video.plays, 1);
+    expect(created, 1);
+    expect(api.metaCalls, 2);
+    await tester.pumpWidget(const SizedBox.shrink());
+    app.dispose();
+  });
+
+  testWidgets('動画のページ変更は古い講評を失効させ、次の動画も情報を開くまで取得しない', (tester) async {
+    final old = Completer<ReviewMeta?>();
+    final current = Completer<ReviewMeta?>();
+    final api = _Api()..metaResponses.addAll([old.future, current.future]);
+    final app = _app(api);
+    final videos = <FakeVideo>[];
+    await tester.pumpWidget(MaterialApp(home: ViewerScreen(app: app,
+      lib: 'review', items: const [
+        MediaItem(key: 'a.mp4', type: 'video', url: 'https://fixture.invalid/a.mp4'),
+        MediaItem(key: 'b.mp4', type: 'video', url: 'https://fixture.invalid/b.mp4'),
+      ], videoFactory: (_) { final video = FakeVideo(); videos.add(video); return video; })));
+    await tester.pump();
+    await tester.tap(find.text('情報'));
+    await tester.pumpAndSettle();
+    expect(api.metaCalls, 1);
+    Navigator.of(tester.element(find.byType(ViewerInfoSheet))).pop();
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(PageView), const Offset(-700, 0));
+    await tester.pumpAndSettle();
+    expect(videos.first.disposed, isTrue);
+    expect(videos.last.value.isPlaying, isTrue);
+    expect(api.metaCalls, 1);
+    await tester.tap(find.text('情報'));
+    await tester.pumpAndSettle();
+    expect(api.metaCalls, 2);
+    old.complete(const ReviewMeta(verdict: 'pass', round: 1, label: '古い動画'));
+    await tester.pump();
+    expect(find.text('古い動画 · pass · 1回目'), findsNothing);
+    expect(find.text('講評を確認中…'), findsOneWidget);
+    current.complete(const ReviewMeta(verdict: 'pass', round: 1, label: '次の動画'));
+    await tester.pumpAndSettle();
+    expect(find.text('次の動画 · pass · 1回目'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    app.dispose();
+  });
+
   testWidgets('V3: 上バーに日時と「N件目」、写真のメモを出し、スワイプで次の件に変わる', (tester) async {
     final api = _Api();
     await _open(tester, _app(api), [
@@ -260,13 +323,14 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('V1: 下の操作バーに 情報/端末に保存/アルバムへ/ゴミ箱へ。オフラインは口が無ければ出さない',
+  testWidgets('V1: 外部書き出しを出さず、情報/アルバムへ/ゴミ箱へを保つ',
       (tester) async {
     await _open(tester, _app(_Api()), [_img('a.jpg')]);
-    for (final l in ['情報', '端末に保存', 'アルバムへ', 'ゴミ箱へ']) {
+    for (final l in ['情報', 'アルバムへ', 'ゴミ箱へ']) {
       expect(find.text(l), findsOneWidget, reason: l);
     }
-    expect(find.text('オフライン'), findsNothing);
+    expect(find.text('オフライン保存'), findsNothing);
+    expect(find.text('端末に保存'), findsNothing);
   });
 
   testWidgets('V1: オフライン保存の口を渡すとボタンが出て、保存後は「保存済み」になる', (tester) async {
@@ -285,11 +349,11 @@ void main() {
       ),
     ));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('オフライン'));
+    await tester.tap(find.text('オフライン保存'));
     await tester.pumpAndSettle();
     expect(saved, {'a.jpg'});
     expect(find.text('保存済み'), findsOneWidget);
-    expect(find.text('オフライン保存に追加しました'), findsOneWidget);
+    expect(find.text('このアプリ内に保存しました'), findsOneWidget);
   });
 
   testWidgets('V1: 読み取り専用ライブラリではアルバムへ・ゴミ箱へを出さない', (tester) async {
@@ -537,85 +601,108 @@ void main() {
     expect(find.text('アルバムへの追加に失敗しました'), findsOneWidget);
   });
 
-  testWidgets('X1: 端末に保存を押すと原本を落として端末のギャラリーへ登録する', (tester) async {
+  testWidgets('X1: 保存はアプリ内だけで、外部への書き出しを出さない', (tester) async {
     final api = _Api();
     final store = _Store();
-    await _open(tester, _app(api, store: store), [_img('2026/a.jpg')]);
-    await tester.runAsync(() async {
-      await tester.tap(find.text('端末に保存'));
-      // 一時ファイルの読み書きは実時間で進む
-      for (var i = 0; i < 50 && store.saved.isEmpty; i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-      }
-      // 登録の後に一時ファイルを片付け終えるまで待つ
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-    });
-    await tester.pumpAndSettle();
-    expect(store.saved.single.name, 'a.jpg');
-    expect(store.saved.single.mime, 'image/jpeg');
-    expect(store.saved.single.body, 'bytes-of-https://w.example/m/2026/a.jpg');
-    expect(find.text('端末に保存しました'), findsOneWidget);
+    final app = _app(api, store: store)..offlineOn = true;
+    await _open(tester, app, [_img('2026/a.jpg')]);
+    expect(find.text('端末に保存'), findsNothing);
+    expect(find.text('オフライン保存'), findsOneWidget);
+    expect(store.saved, isEmpty);
+    expect(api.downloads, isEmpty);
   });
 
-  test('X1: 署名URLが切れていたら一覧から取り直して一度だけ再試行する', () async {
-    final api = _Api()
-      ..expiredUrl = 'https://w.example/m/old'
-      ..folderItems = [
-        const MediaItem(key: 'd/a.mp4', type: 'video', url: 'https://w.example/m/new'),
-      ];
-    final store = _Store();
-    final app = _app(api, store: store);
-    await app.exportToDevice(
-        const MediaItem(key: 'd/a.mp4', type: 'video', url: 'https://w.example/m/old'));
-    expect(api.downloads, ['https://w.example/m/old', 'https://w.example/m/new']);
-    expect(store.saved.single.mime, 'video/mp4');
-    expect(store.saved.single.body, 'bytes-of-https://w.example/m/new');
-  });
-
-  test('X1: 許可ダイアログが出る登録の間だけ外部画面として扱い、ダウンロード中の裏回りは普通にロックする',
-      () async {
-    final clock = _Clock();
-    final api = _Api();
-    final store = _Store();
-    final app = AppState(
-        api: api, bakedEndpoint: '', bakedToken: '', clock: clock, deviceAuth: _Auth())
-      ..connected = true
-      ..hasPin = true
-      ..relockGraceMs = 0
-      ..activeLib = 'review';
-    app.deviceExporter = DeviceExporter(api: api, store: store);
-    const item = MediaItem(key: 'a.jpg', type: 'image', url: 'https://w.example/m/a.jpg');
-
-    // 登録中（古い Android の許可ダイアログ）に裏へ回っても「毎回ロック」で即ロックしない
-    store.onSave = () async {
-      app.onBackground();
-      clock.now += 30000;
-    };
-    await app.exportToDevice(item);
-    await app.onForeground();
-    expect(app.locked, isFalse);
-
-    // ダウンロードの間はアプリの画面のまま。ここで裏へ回ったら猶予を延ばさない
-    store.onSave = null;
-    final dl = _BackgroundingApi(app, clock);
-    app.deviceExporter = DeviceExporter(api: dl, store: store);
-    await app.exportToDevice(item);
-    await app.onForeground();
-    expect(app.locked, isTrue);
-  });
-
-  test('X1: 画像・動画以外は書き出さず、理由を返す', () async {
+  test('X1: 古い外部保存APIも画像/動画/その他をダウンロードせず拒否する', () async {
     final api = _Api();
     final store = _Store();
     final app = _app(api, store: store);
-    await expectLater(
-      app.exportToDevice(
-          const MediaItem(key: 'a.pdf', type: 'file', url: 'https://w.example/m/a.pdf')),
-      throwsA(isA<DeviceExportError>()
-          .having((e) => e.message, 'message', 'この形式は端末に保存できません')),
-    );
+    for (final type in ['image', 'video', 'file']) {
+      await expectLater(
+        app.exportToDevice(MediaItem(key: '$type.bin', type: type,
+            url: 'https://fixture.invalid/$type')),
+        throwsA(isA<DeviceExportError>().having((e) => e.message, 'message',
+            '外部への書き出しは利用できません。オフライン保存を使ってください')),
+      );
+    }
+    expect(app.deviceExportSupported, isFalse);
     expect(api.downloads, isEmpty);
     expect(store.saved, isEmpty);
+    expect(PlatformMediaStore().supported, isFalse);
+    await expectLater(PlatformMediaStore().save('/never-read', 'x.jpg', 'image/jpeg'),
+        throwsA(isA<DeviceExportError>()));
+  });
+
+  testWidgets('保存待ちは保存済みと区別し、暗号化保存の通知後だけ確定する', (tester) async {
+    final changes = ChangeNotifier();
+    addTearDown(changes.dispose);
+    var saved = false;
+    var pending = false;
+    await tester.pumpWidget(MaterialApp(home: ViewerScreen(
+      app: _app(_Api()), lib: 'review', items: [_img('a.jpg')],
+      imageCacheManager: _NoCache(),
+      offline: OfflineHooks(
+        changes: changes,
+        isSaved: (_, _) => saved,
+        isPending: (_, _) => pending,
+        save: (_, _) async { pending = true; changes.notifyListeners(); },
+      ),
+    )));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('オフライン保存'));
+    await tester.pumpAndSettle();
+    expect(find.text('保存待ち'), findsOneWidget);
+    expect(find.text('保存済み'), findsNothing);
+    saved = true;
+    pending = false;
+    changes.notifyListeners();
+    await tester.pumpAndSettle();
+    expect(find.text('保存済み'), findsOneWidget);
+    expect(find.text('保存待ち'), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('保存済みからの個別削除は確認し、取り消しでは何も消さない', (tester) async {
+    final changes = ChangeNotifier();
+    addTearDown(changes.dispose);
+    var saved = true;
+    var removed = 0;
+    await tester.pumpWidget(MaterialApp(home: ViewerScreen(
+      app: _app(_Api()), lib: 'review', items: [_img('a.jpg')],
+      imageCacheManager: _NoCache(),
+      offline: OfflineHooks(
+        changes: changes, isSaved: (_, _) => saved, save: (_, _) async {},
+        remove: (_, _) async { removed++; saved = false; changes.notifyListeners(); },
+      ),
+    )));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('保存済み'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('キャンセル'));
+    await tester.pumpAndSettle();
+    expect(removed, 0);
+    expect(saved, isTrue);
+    await tester.tap(find.text('保存済み'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('削除'));
+    await tester.pumpAndSettle();
+    expect(removed, 1);
+    expect(find.text('オフライン保存'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  test('開いたViewerの保存操作はアカウント切替後の同名作品に引き継がない', () async {
+    final app = _app(_Api())..offlineOn = true;
+    addTearDown(app.dispose);
+    final item = _img('a.jpg');
+    app.saved.add('review:a.jpg');
+    final hooks = offlineHooksFor(app)!;
+    expect(hooks.isSaved('review', item), isTrue);
+    app.api.setConnection(const Connection('https://fixture.invalid', 'other-fixture'));
+    expect(hooks.canUse!(), isFalse);
+    expect(hooks.isSaved('review', item), isFalse);
+    await expectLater(hooks.save('review', item), throwsA(isA<StateError>()));
+    await expectLater(hooks.remove!('review', item), throwsA(isA<StateError>()));
+    expect(app.saved, ['review:a.jpg']);
   });
 
   test('整形: サイズと MIME は KMP 版と同じ', () {
@@ -651,7 +738,7 @@ void main() {
       (tester) async {
     final app = _app(_Api())..offlineOn = true;
     await _open(tester, app, [_img('a.jpg')]);
-    await tester.tap(find.text('オフライン'));
+    await tester.tap(find.text('オフライン保存'));
     await tester.pumpAndSettle();
     expect(app.saved, ['review:a.jpg']);
     expect(find.text('保存済み'), findsOneWidget);

@@ -1,0 +1,16 @@
+UTC: 2026-10-22T15:58:14.479762+00:00
+CWD: /workspace/r2-validation-base/flutter
+ARGV: ["flutter", "analyze", "--no-pub"]
+
+Analyzing flutter...
+
+   info • Use the null-aware marker '?' rather than a null check via an 'if'. Try using '?' • lib/src/api/client.dart:133:7 • use_null_aware_elements
+   info • Use the null-aware marker '?' rather than a null check via an 'if'. Try using '?' • lib/src/api/client.dart:215:7 • use_null_aware_elements
+   info • Use the null-aware marker '?' rather than a null check via an 'if'. Try using '?' • lib/src/api/client.dart:301:7 • use_null_aware_elements
+   info • The type name 'Page_' isn't an UpperCamelCase identifier. Try changing the name to follow the UpperCamelCase style • lib/src/api/models.dart:107:7 • camel_case_types
+   info • The import of 'dart:typed_data' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/foundation.dart'. Try removing the import directive • lib/src/state/app_state.dart:2:8 • unnecessary_import
+   info • The parameter name 'o' doesn't match the name 'other' in the overridden method. Try changing the name to 'other' • lib/src/state/app_state.dart:576:27 • avoid_renaming_method_parameters
+
+6 issues found. (ran in 28.5s)
+
+EXIT: 1

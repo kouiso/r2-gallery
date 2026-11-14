@@ -1,0 +1,6 @@
+UTC: 2026-10-22T18:21:07.729867+00:00
+CWD: /workspace/r2-validation-0738bee
+ARGV: ["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", "/workspace/r2-video-startup-evidence/fixtures/tail.mp4", "-map_metadata", "-1", "-c", "copy", "-movflags", "+faststart", "-y", "/workspace/r2-video-startup-evidence/fixtures/front.mp4"]
+
+
+EXIT: 0

@@ -1,4 +1,41 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+/// OS の CJK fallback による地域別の字形差を避け、同梱の日本語字形を優先する。
+class AppTypography {
+  static const fontFamily = 'R2GalleryJP';
+  static const locale = Locale('ja', 'JP');
+  static const fallback = ['sans-serif'];
+
+  static void registerLicense() {
+    LicenseRegistry.addLicense(() async* {
+      final license = await rootBundle.loadString('assets/fonts/OFL.txt');
+      yield LicenseEntryWithLineBreaks(['R2 Gallery JP (Noto Sans CJK JP)'], license);
+    });
+  }
+}
+
+TextTheme _japaneseTextTheme(TextTheme base) {
+  TextStyle? ja(TextStyle? style) => style?.copyWith(locale: AppTypography.locale);
+  return base.copyWith(
+    displayLarge: ja(base.displayLarge),
+    displayMedium: ja(base.displayMedium),
+    displaySmall: ja(base.displaySmall),
+    headlineLarge: ja(base.headlineLarge),
+    headlineMedium: ja(base.headlineMedium),
+    headlineSmall: ja(base.headlineSmall),
+    titleLarge: ja(base.titleLarge),
+    titleMedium: ja(base.titleMedium),
+    titleSmall: ja(base.titleSmall),
+    bodyLarge: ja(base.bodyLarge),
+    bodyMedium: ja(base.bodyMedium),
+    bodySmall: ja(base.bodySmall),
+    labelLarge: ja(base.labelLarge),
+    labelMedium: ja(base.labelMedium),
+    labelSmall: ja(base.labelSmall),
+  );
+}
 
 /// ダーク基調のギャラリー向けテーマ。アクセントは暖かいゴールド。
 /// 「夜に見るプライベートな金庫」をイメージした落ち着いた配色。
@@ -25,8 +62,10 @@ ThemeData buildAppTheme() {
     surfaceContainerHighest: AppColors.surfaceHigh,
     outline: AppColors.border,
   );
-  return ThemeData(
+  final theme = ThemeData(
     useMaterial3: true,
+    fontFamily: AppTypography.fontFamily,
+    fontFamilyFallback: AppTypography.fallback,
     brightness: Brightness.dark,
     colorScheme: scheme,
     scaffoldBackgroundColor: AppColors.bg,
@@ -36,6 +75,9 @@ ThemeData buildAppTheme() {
       elevation: 0,
       centerTitle: false,
       titleTextStyle: TextStyle(
+        fontFamily: AppTypography.fontFamily,
+        fontFamilyFallback: AppTypography.fallback,
+        locale: AppTypography.locale,
         color: AppColors.textPrimary,
         fontSize: 20,
         fontWeight: FontWeight.w700,
@@ -56,7 +98,12 @@ ThemeData buildAppTheme() {
     ),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: AppColors.surfaceHigh,
-      contentTextStyle: const TextStyle(color: AppColors.textPrimary),
+      contentTextStyle: const TextStyle(
+        color: AppColors.textPrimary,
+        fontFamily: AppTypography.fontFamily,
+        fontFamilyFallback: AppTypography.fallback,
+        locale: AppTypography.locale,
+      ),
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     ),
@@ -101,5 +148,9 @@ ThemeData buildAppTheme() {
     ),
     progressIndicatorTheme:
         const ProgressIndicatorThemeData(color: AppColors.accent),
+  );
+  return theme.copyWith(
+    textTheme: _japaneseTextTheme(theme.textTheme),
+    primaryTextTheme: _japaneseTextTheme(theme.primaryTextTheme),
   );
 }

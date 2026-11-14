@@ -1,0 +1,108 @@
+
+ RUN  v3.2.7 /workspace/r2-gallery/worker
+
+Proxy environment variables detected. We'll use your proxy for fetch requests.
+[vpw:debug] Adding `enable_nodejs_tty_module` compatibility flag during tests as this feature is needed to support the Vitest runner.
+[vpw:debug] Adding `enable_nodejs_fs_module` compatibility flag during tests as this feature is needed to support the Vitest runner.
+[vpw:debug] Adding `enable_nodejs_http_modules` compatibility flag during tests as this feature is needed to support the Vitest runner.
+[vpw:debug] Adding `enable_nodejs_perf_hooks_module` compatibility flag during tests as this feature is needed to support the Vitest runner.
+[vpw:info] Starting single runtime for vitest.config.ts...
+[mf:warn] The latest compatibility date supported by the installed Cloudflare Workers Runtime is "2026-03-10",
+but you've requested "2026-09-01". Falling back to "2026-03-10"...
+[mf:warn] The latest compatibility date supported by the installed Cloudflare Workers Runtime is "2026-03-10",
+but you've requested "2026-09-01". Falling back to "2026-03-10"...
+stdout | src/media_startup.test.ts > signed video startup HTTP probes > returns only the requested suffix with one ranged R2 read
+{"probe":"suffix-4","status":206,"bytes":4,"original":[{"method":"get","key":"startup-probe/clip.mp4","options":{"range":{"suffix":4}}}],"meta":[]}
+
+stdout | src/media_startup.test.ts > signed video startup HTTP probes > answers HEAD from metadata without creating an R2 body stream
+{"probe":"head","status":200,"original":[{"method":"head","key":"startup-probe/clip.mp4"}],"meta":[]}
+
+ ✓ src/media_startup.test.ts > signed video startup HTTP probes > returns only the requested suffix with one ranged R2 read 4ms
+ ✓ src/media_startup.test.ts > signed video startup HTTP probes > answers HEAD from metadata without creating an R2 body stream 1ms
+ ✓ src/media_startup.test.ts > signed video startup HTTP probes > ignores Range on HEAD and retains the full representation metadata 1ms
+ ✓ src/media_startup.test.ts > signed video startup HTTP probes > retains the same ETag and representation length for GET and HEAD 2ms
+ ✓ src/media_startup.test.ts > signed video startup HTTP probes > clamps valid range bytes=0-3 to actual returned bytes 2ms
+ ✓ src/media_startup.test.ts > signed video startup HTTP probes > clamps valid range bytes=262140- to actual returned bytes 2ms
+ ✓ src/media_startup.test.ts > signed video startup HTTP probes > clamps valid range bytes=262140-262244 to actual returned bytes 2ms
+ ✓ src/media_startup.test.ts > signed video startup HTTP probes > clamps valid range bytes=-262244 to actual returned bytes 569ms
+workerd/api/r2-rpc.c++:130: warning: R2 error response does not contain the CF-R2-Error header.; response.statusCode = 500
+[mf:error] AssertionError: false == true
+    at new AssertionError (node-internal:internal_assertionerror:427:15)
+    at assert (node-internal:internal_assert:49:15)
+    at fetchSingleRange (file:///workspace/r2-gallery/node_modules/.pnpm/miniflare@4.20260310.0/node_modules/miniflare/src/workers/shared/blob.worker.ts:48:2)
+    at async #get (file:///workspace/r2-gallery/node_modules/.pnpm/miniflare@4.20260310.0/node_modules/miniflare/src/workers/r2/bucket.worker.ts:764:12)
+    at async R2BucketObject.get (file:///workspace/r2-gallery/node_modules/.pnpm/miniflare@4.20260310.0/node_modules/miniflare/src/workers/r2/bucket.worker.ts:1025:13)
+    at async R2BucketObject.fetch (file:///workspace/r2-gallery/node_modules/.pnpm/miniflare@4.20260310.0/node_modules/miniflare/src/workers/shared/router.worker.ts:45:32)
+    at async R2BucketObject.fetch (file:///workspace/r2-gallery/node_modules/.pnpm/miniflare@4.20260310.0/node_modules/miniflare/src/workers/shared/object.worker.ts:148:11)
+ ✓ src/media_startup.test.ts > signed video startup HTTP probes > returns 416 for unsatisfiable bytes=-0 on startup-probe/clip.mp4 3ms
+ ✓ src/media_startup.test.ts > signed video startup HTTP probes > returns 416 for unsatisfiable bytes=262144- on startup-probe/clip.mp4 1ms
+ ✓ src/media_startup.test.ts > signed video startup HTTP probes > returns 416 for unsatisfiable bytes=0-3 on startup-probe/empty.mp4 3ms
+ ✓ src/media_startup.test.ts > signed video startup HTTP probes > keeps unsupported multi-range requests as a full streamed response 435ms
+ ✓ src/index.test.ts > auth > rejects requests without a bearer token 7ms
+ ✓ src/media_startup.test.ts > signed video startup HTTP probes > uses metadata reads for thumbnail HEAD and fallback too 4ms
+ ✓ src/media_startup.test.ts > signed video startup HTTP probes > validates the signature before any R2 HEAD or GET
+ ✓ src/media_startup.test.ts > signed video startup HTTP probes > does not turn an unrelated R2 failure for a valid range into 416 2ms
+workerd/io/worker.c++:1150: info: console warning; message = Called .text() on an HTTP body which does not appear to be text. The body's Content-Type is "image/webp". The result will probably be corrupted. Consider checking the Content-Type header before interpreting entities as text.
+ ✓ src/index.test.ts > auth > rejects a wrong token 1047ms
+ ✓ src/index.test.ts > auth > lists configured libraries with the right token 6ms
+ ✓ src/index.test.ts > auth > does not require a token for media routes (signature only) 3ms
+ ✓ src/index.test.ts > signed media urls > serves an object with a valid signature 5ms
+ ✓ src/index.test.ts > signed media urls > rejects a tampered signature 2ms
+ ✓ src/index.test.ts > signed media urls > rejects a signature minted for a different kind or key 3ms
+ ✓ src/index.test.ts > signed media urls > rejects expired urls 1ms
+ ✓ src/index.test.ts > signed media urls > serves byte ranges with 206 3ms
+ ✓ src/index.test.ts > signed media urls > serves a stored thumbnail when present, else falls back to the original 8ms
+ ✓ src/index.test.ts > albums > returns the album list with signed covers 4ms
+ ✓ src/index.test.ts > albums > exposes unassigned index items as the __other__ album 6ms
+ ✓ src/index.test.ts > albums > returns a null thumbUrl for videos until a generated thumb exists 9ms
+ ✓ src/index.test.ts > albums > paginates album items and signs media urls 8ms
+ ✓ src/index.test.ts > albums > 404s for an unknown album or library 4ms
+ ✓ src/index.test.ts > folders > lists media items and folders, excluding .system and .trash 9ms
+ ✓ src/index.test.ts > folders > order=recent returns the freshest upload first regardless of key order 5ms
+ ✓ src/index.test.ts > folders > order=recent paginates by position cursor, not offset 12ms
+ ✓ src/index.test.ts > folders > recursive=1 returns all media under the prefix and no folder list 8ms
+ ✓ src/index.test.ts > writes > uploads a small object and refuses overwrite 10ms
+ ✓ src/index.test.ts > writes > rejects bad keys 5ms
+ ✓ src/index.test.ts > writes > returns 403 for every write against a readOnly library 14ms
+ ✓ src/index.test.ts > writes > copies and moves objects inside a library 14ms
+ ✓ src/index.test.ts > writes > copies large objects via multipart upload 14125ms
+ ✓ src/index.test.ts > writes > runs a multipart upload: create, parts, complete; and abort 99ms
+ ✓ src/index.test.ts > writes > rejects multipart create on existing keys and on read-only libraries 4ms
+ ✓ src/index.test.ts > writes > never replaces a key created after the existence check > simple upload 4ms
+ ✓ src/index.test.ts > writes > never replaces a key created after the existence check > copy and move keep both the destination and the move source 9ms
+ ✓ src/index.test.ts > writes > never replaces a key created after the existence check > multipart copy re-checks the destination before completing 8ms
+ ✓ src/index.test.ts > writes > never replaces a key created after the existence check > multipart complete aborts instead of replacing 10ms
+ ✓ src/index.test.ts > writes > stores a webp thumbnail in META and serves it via /t/ 10ms
+ ✓ src/index.test.ts > writes > stores a JPEG thumbnail and serves it via /t/ as image/jpeg 6ms
+ ✓ src/index.test.ts > writes > records the real format when an older app labels a JPEG thumbnail as webp 6ms
+ ✓ src/index.test.ts > writes > refuses thumbnail bytes that are neither JPEG nor WEBP 3ms
+ ✓ src/index.test.ts > writes > rejects an empty thumbnail body with 411 2ms
+ ✓ src/index.test.ts > writes > rejects a non-image content type with 415 and stores nothing 3ms
+ ✓ src/index.test.ts > writes > flips a video to thumbUrl once its thumbnail is uploaded 11ms
+ ✓ src/index.test.ts > writes > mkdir creates a browsable folder 8ms
+stdout | src/index.test.ts > trash > scheduled purge removes trash older than the retention period
+trash purge 2
+
+ ✓ src/index.test.ts > trash > moves objects to .trash, lists them, and restores 26ms
+ ✓ src/index.test.ts > trash > scheduled purge removes trash older than the retention period 6ms
+ ✓ src/index.test.ts > url import > forbiddenHost flags loopback, private ranges, and literals 1ms
+ ✓ src/index.test.ts > url import > imports a remote image into the library 7ms
+ ✓ src/index.test.ts > url import > follows a redirect while re-validating each hop 5ms
+ ✓ src/index.test.ts > url import > rejects a redirect to a private address 3ms
+ ✓ src/index.test.ts > url import > rejects private IP urls before fetching 10ms
+ ✓ src/index.test.ts > url import > rejects non-media content types and oversized bodies 8ms
+ ✓ src/index.test.ts > url import > refuses to replace an existing key, even if it appears after the existence check 7ms
+ ✓ src/index.test.ts > url import > rejects non-http schemes and credentialed URLs 13ms
+ ✓ src/index.test.ts > GET /v1/:lib/meta > joins the latest review row plus its criteria 6ms
+ ✓ src/index.test.ts > GET /v1/:lib/meta > returns meta:null for libraries outside REVIEW_LIBS 3ms
+ ✓ src/index.test.ts > GET /v1/:lib/meta > returns meta:null for keys with no review row 3ms
+ ✓ src/index.test.ts > GET /v1/:lib/meta > validates the key parameter 12ms
+ ✓ src/index.test.ts > GET /v1/:lib/meta > requires authorization 3ms
+
+ Test Files  2 passed (2)
+      Tests  68 passed (68)
+   Start at  14:52:57
+   Duration  17.26s (transform 195ms, setup 0ms, collect 592ms, tests 16.68s, environment 1ms, prepare 394ms)
+
+[vpw:debug] Shutting down runtimes...
+[vpw:debug] Disposing remote proxy sessions...

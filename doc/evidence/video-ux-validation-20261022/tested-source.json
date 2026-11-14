@@ -1,0 +1,16 @@
+{
+  "parent_commit": "0738bee990d4ff80b24dd17bec8e75a3065c125d",
+  "branch": "fix/video-ux-validation-20261022",
+  "files_sha256": {
+    "flutter/lib/src/offline/offline_playback_files.dart": "7b8036256ed8c50ac83d387b11ed05f5619b469aadc2e8bb82844b3e5a21c87d",
+    "flutter/lib/src/offline/offline_screen.dart": "7b87863a84d2d5999c7aea0cf495b68df8f4b2f846dfd119d93dd93577f9c8dd",
+    "flutter/lib/src/offline/offline_store.dart": "478a33f0e327858c8db10f21ed7a18807984d2e8581adfb5f53eafaa192200b9",
+    "flutter/lib/src/ui/video_view.dart": "6c78a906c90c14b6f61f1757a0e7d09064fb226998b4f13ab2c583751a68d409",
+    "flutter/lib/src/ui/viewer_screen.dart": "8d01f18da1fe57e2d6f47cfc34473fd50bc1078e338cbc854dff510aa56c2d72",
+    "flutter/test/footer_ux_test.dart": "545c2a846a0bc0e81c7fbd0b2e72f8496cfd176345e054bbe13691ae0892d322",
+    "flutter/test/grid_test.dart": "8f49c2ca3aaf07c60060431b33735c3c75cd68da15034ab71f275e12934d6fd0",
+    "flutter/test/offline_privacy_test.dart": "58d5d6af48786e6ebe267494a39c5827b942ef4c81624a2a283f4025a6f81f5e",
+    "flutter/test/screen_awake_test.dart": "d90ce5a7843de3877e4188c537343d5b5447e192942634fbd38f74875285f797",
+    "flutter/test/video_view_test.dart": "d6e447c19a5b6a6603b156f4797b011f409c245eba7edfe85d3258d0b872185e"
+  }
+}

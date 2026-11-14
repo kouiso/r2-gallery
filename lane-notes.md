@@ -71,6 +71,7 @@ DECIDED 12:58Z | container has 4 CPUs / 15 GB; load avg hit ~40 with 8 members +
 #122 stacked | branch fix/rg20-thumb-hardening head 27de2cd (4 tests fail on c0437cf, 66/66 pass) | PR creation queued
 stream D | #74 branch feat/folders-above-photos-74 31eb486; #60 branch fix/web-manifest-60 0ef025c (description wording invented — reviewer to check vs #60) | PRs queued
 OBS | transfer_queue_test.dart fails intermittently under load in several worktrees (also untouched branch wt-d-2) -> flaky-under-load; open an issue / fix timing after merges settle
+#118 | re-review FAIL must2 (docs vs diff: P1 swipe actually KEPT; approval status incomplete H7/V1/O1/O1-2/S7/quarantine, app_state.dart:694 comment) want1 nit2 (queued 118-review-9e1170f.md) | code slices OK: exitPip fixed + Kotlin built in CI, iOS fork verified, media.ts OK, font OFL no RFN | doc fix member resumed
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)
@@ -97,7 +98,7 @@ OBS | transfer_queue_test.dart fails intermittently under load in several worktr
 - #29 アプリ独自の PIN を撤去し端末の画面ロックに一本化してよいか（機能の撤去）（はい／いいえ）
 - #32 設定タブのライブラリ切替チップを隠すか、課題を閉じるか（隠す／閉じる）
 - #104 重複一覧 API のために本番 Worker の CPU 上限で読み取り量を測ってよいか（本番での計測・読み取りのみ）（はい／いいえ）
-- #118 feature changes (separate from RG-12; blocks #118): ①「端末に保存」(端末ギャラリーへの書き出し) を廃止しアプリ内オフライン保存だけにする ②明るさ・音量のスワイプを明示パネルに置き換える ③更新後、以前のオフライン保存は隔離され表示されない（消えはしないが移行手段なし）④O1・O1-2・S7 を実機確認待ちで ☑→◐ — それぞれ OK か（はい／いいえ）。推奨: ①② は既に作られた変更なので はい、③ は移行を足すまで いいえ
+- #118 feature changes (separate from RG-12; blocks #118): ①「端末に保存」(端末ギャラリーへの書き出し) を廃止しアプリ内オフライン保存だけにする ③更新後、以前のオフライン保存は隔離され表示されない（消えはしないが移行手段なし）④O1・O1-2・S7 を実機確認待ちで ☑→◐ — それぞれ OK か（はい／いいえ）。推奨: ① はい、③ は移行を足すまで いいえ（訂正 13:05Z: 明るさ・音量のスワイプは残っており撤去ではないので問いから外した）
 - ASK | Is kouiso/r2-gallery-archive's main still watched by any deploy lane (equus r2-web-deploy) so that a merge there would change production? yes/no/don't know | read: archive .github/workflows/ci.yml:7-8, archive CLAUDE.md:49, r2-gallery CLAUDE.md:49 ("retired in #10") | the retirement note covers the relay, not the external lane | on "don't know": never merge in the archive (only closes planned anyway)
 - ひなたの 4 枚: ごみ箱から元のアルバムへ戻してよいか（期限 ~12-12）（はい／いいえ）
 

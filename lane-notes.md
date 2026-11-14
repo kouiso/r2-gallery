@@ -243,3 +243,4 @@ HANDOFF 2026-11-14T15:26Z
 RESUME 2026-11-14T20:18Z | rules tightened: 1 subagent alive, land closest item first, no new PRs before existing land, push NOTES per landed item
 PROD #122: fad-dist-state .source-sha == 04dc5d8 confirmed 20:18Z
 MERGED #136 (RG-20 follow-up) 2026-11-14T20:20Z | head 0bdc006 == GATE head https://github.com/kouiso/r2-gallery/pull/136#issuecomment-6883615809 | merge c089e5e | base retargeted to main before merge | worker-only, effective after RG-24 | prod confirm pending
+PROD #136 confirmed 20:20Z: main tree == checked tree 1109573; pages-dist .source-sha == c089e5e. Merge scope for tonight exhausted (#127 #122 #136 all landed); remaining PRs -> gate-ready then OWNER. #145 implementer running (race fix + checks).

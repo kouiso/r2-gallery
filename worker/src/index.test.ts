@@ -8,6 +8,7 @@ import {
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import worker, { forbiddenHost, type Env } from "./index";
+import { ALLOWED_METHODS } from "./lib/http";
 
 declare module "cloudflare:test" {
   interface ProvidedEnv extends Env {
@@ -160,6 +161,41 @@ beforeAll(async () => {
   await env.LIB_A.put("seed/hls.ts", PNG, { httpMetadata: { contentType: "video/MP2T" } });
   await env.LIB_B.put("ro/keep.jpg", PNG, { httpMetadata: { contentType: "image/jpeg" } });
   await env.LIB_A.put("hidden/.system/x.jpg", PNG);
+});
+
+describe("CORS preflight", () => {
+  // 本番の Pages オリジンはリポジトリに無く、worker は allow-origin を "*" で返す設計。
+  // よって任意のオリジンで検証する（特定オリジンは作り話になるため置かない）。
+  const preflight = (method: string) =>
+    SELF.fetch(`${ORIGIN}/v1/lib-a/albums/x`, {
+      method: "OPTIONS",
+      headers: {
+        origin: "https://web.example.test",
+        "access-control-request-method": method,
+        "access-control-request-headers": "authorization, content-type",
+      },
+    });
+  const list = (v: string | null) => (v ?? "").split(",").map((m) => m.trim().toLowerCase());
+
+  // クライアントが実際に使う全メソッドを許可しないと、Web 版でブラウザが本リクエスト自体を送らない（#54）
+  it.each(["GET", "POST", "PUT", "PATCH", "DELETE"])("allows %s", async (method) => {
+    const res = await preflight(method);
+    expect(res.status).toBe(204);
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+    const allowed = list(res.headers.get("access-control-allow-methods"));
+    expect(allowed).toContain(method.toLowerCase());
+    expect(allowed).toContain("options");
+    const headers = list(res.headers.get("access-control-allow-headers"));
+    expect(headers).toContain("authorization");
+    expect(headers).toContain("content-type");
+  });
+
+  // 入口の方法拒否が通すメソッドは全部 CORS にも出ること（一覧を二重管理しない回帰防止）。
+  // GET/HEAD/POST は単純メソッドで事前確認は不要だが、一覧を一本化しているので全て並ぶのが正。
+  it("lists every method the entry guard accepts", async () => {
+    const allowed = list((await preflight("PATCH")).headers.get("access-control-allow-methods"));
+    for (const m of ALLOWED_METHODS) expect(allowed).toContain(m.toLowerCase());
+  });
 });
 
 describe("auth", () => {

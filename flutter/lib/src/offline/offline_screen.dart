@@ -8,6 +8,7 @@ import 'package:video_player/video_player.dart';
 import '../state/app_state.dart';
 import '../transfer/transfer_rows.dart';
 import '../ui/app_lock_layer.dart';
+import '../ui/settings_tab.dart' show SettingsGroup;
 import '../ui/theme.dart';
 import 'offline_store.dart';
 
@@ -70,32 +71,29 @@ class _OfflineSettingsCardState extends State<OfflineSettingsCard> {
   Widget build(BuildContext context) {
     if (!widget.app.offlineSupported) return const SizedBox.shrink();
     final n = _count;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Card(
-        child: Column(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.download_done, color: AppColors.accent),
-              title: const Text('オフライン保存'),
-              subtitle: Text(n == null ? '…' : '$n件',
-                  style:
-                      const TextStyle(color: AppColors.textDim, fontSize: 12)),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                  builder: (_) => OfflineListScreen(app: widget.app))),
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_sweep_outlined,
-                  color: AppColors.danger),
-              title: const Text('オフライン保存をすべて削除'),
-              enabled: (n ?? 0) > 0,
-              onTap: _deleteAll,
-            ),
-          ],
-        ),
+    return SettingsGroup(children: [
+      ListTile(
+        leading: const Icon(Icons.download_done, color: AppColors.accent),
+        title: const Text('端末に暗号化して保存中'),
+        subtitle: Text(n == null ? '…' : '$n件',
+            style: const TextStyle(color: AppColors.textDim, fontSize: 12)),
+        // 一覧への入口だと分かるよう、デザインどおり文字も添える
+        trailing: const Row(mainAxisSize: MainAxisSize.min, children: [
+          Text('一覧',
+              style: TextStyle(color: AppColors.textDim, fontSize: 14)),
+          Icon(Icons.chevron_right, color: AppColors.textDim),
+        ]),
+        onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+            builder: (_) => OfflineListScreen(app: widget.app))),
       ),
-    );
+      ListTile(
+        leading:
+            const Icon(Icons.delete_sweep_outlined, color: AppColors.danger),
+        title: const Text('オフライン保存をすべて削除'),
+        enabled: (n ?? 0) > 0,
+        onTap: _deleteAll,
+      ),
+    ]);
   }
 }
 

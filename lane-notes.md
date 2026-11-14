@@ -57,6 +57,9 @@ CAPACITY 2026-11-14 (manager relay of owner): cloud lane may run up to 8 members
 #121 | all 5 checks green incl. emulator (12:36Z) | HOLD for stacked test PR
 #126 | CI `check` FAILURE: .github/ci/run.test.mjs:96 expected 37 actual 1 (5/8 fail) — member changed run.mjs fast phase | FIX after review returns
 #120 | CodeRabbit still open on write.ts:196: concurrent membership add + failed sidecar rewrite can lose that membership; re-review running
+#126 | FIX | review FAIL must1 (CI check red: run.mjs fast step breaks .github/ci/run.test.mjs) https://github.com/kouiso/r2-gallery/pull/126#issuecomment-6877448654 | fix: revert run.mjs change (drift already caught by tools/media-ext.test.mjs in test job), fix nit1 wording, add `node --test .github/ci/run.test.mjs` to LOCAL-CHECK | queued: resume RG-23 member at next free slot
+#128 stream C #86/#87 docs | Devin note: README:82 needs "clear site data / new profile" precondition | review after member report
+#123 | reworked head 91b67c1 (ALLOWED_METHODS single source; ACAO is "*", no prod origin in repo) | re-review running
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)

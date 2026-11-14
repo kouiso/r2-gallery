@@ -8,11 +8,14 @@ import 'package:r2_gallery/src/ui/gallery_tab.dart';
 import 'package:r2_gallery/src/ui/home_shell.dart';
 import 'package:r2_gallery/src/ui/media_tile.dart';
 import 'package:r2_gallery/src/ui/theme.dart';
+import 'package:r2_gallery/src/ui/trash_tab.dart';
 
 // 同じライブラリ id を持つ別の接続先へ切り替えた時の HomeShell の振る舞い
 class _Api extends ApiClient {
   final folderCalls = <String>[];
   final trashed = <String>[];
+  final albumCalls = <String>[];
+  final trashCalls = <String>[];
   String get _host => Uri.parse(conn!.endpoint).host.split('.').first;
 
   @override
@@ -33,6 +36,18 @@ class _Api extends ApiClient {
           type: 'video',
           url: 'https://$_host.example/m/x.mp4'),
     ]);
+  }
+
+  @override
+  Future<List<Album>> albums(String libId) async {
+    albumCalls.add('$_host/$libId');
+    return [Album(id: '$_host-album', title: '$_host のアルバム')];
+  }
+
+  @override
+  Future<TrashPage> trashList(String libId, {String? cursor}) async {
+    trashCalls.add('$_host/$libId');
+    return const TrashPage([], null);
   }
 
   @override
@@ -83,4 +98,34 @@ void main() {
       expect(api.trashed, isEmpty);
     });
   }
+
+  testWidgets('アルバムタブでゴミ箱を開いたまま別の接続先へ切り替えると、ゴミ箱は閉じアルバムを新しい接続先から取り直す',
+      (t) async {
+    FlutterSecureStorage.setMockInitialValues({});
+    t.view.physicalSize = const Size(390, 1000);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final api = _Api();
+    final app = AppState(api: api, bakedEndpoint: '', bakedToken: '');
+    expect(await app.connect('https://a.example', 'ta'), isNull);
+    await t.pumpWidget(MaterialApp(
+        theme: buildAppTheme(),
+        home: HomeShell(app: app, initialTab: HomeShell.albumsTab)));
+    await t.pumpAndSettle();
+    expect(find.text('a のアルバム'), findsOneWidget);
+    await t.tap(find.text('ゴミ箱'));
+    await t.pumpAndSettle();
+    expect(find.byType(TrashTab), findsOneWidget);
+    expect(api.trashCalls.last, 'a/photos');
+
+    // ゴミ箱は同じライブラリなら残す画面。接続先が替わった時は同じ id でも別物なので捨てる
+    expect(await app.saveConnection('https://b.example', 'tb'), isNull);
+    await t.pumpAndSettle();
+
+    expect(find.byType(TrashTab), findsNothing);
+    expect(api.albumCalls.last, 'b/photos');
+    expect(find.text('a のアルバム'), findsNothing);
+    expect(find.text('b のアルバム'), findsOneWidget);
+    expect(api.trashed, isEmpty);
+  });
 }

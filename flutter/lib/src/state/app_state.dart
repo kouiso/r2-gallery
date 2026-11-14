@@ -324,6 +324,14 @@ class AppState extends ChangeNotifier {
     String? err;
     final input = _validInput(endpoint, token, (e) => err = e);
     if (input == null) return err;
+    // 転送は送るたびに今の接続を読むので、切り替えると A に向けて積んだものが B へ送られる。
+    // 同じホスト（トークンの差し替えだけ）なら送り先は変わらないので止めない
+    final cur = api.conn;
+    if (cur != null &&
+        !isSameHost(cur.endpoint, input.endpoint) &&
+        hasUnsentTransfers) {
+      return unsentTransfersMessage;
+    }
     final r = await api
         .probeOutcome(input.endpoint, input.token)
         .timeout(_bakedProbeBudget, onTimeout: () => ProbeOutcome.unreachable);
@@ -331,6 +339,19 @@ class AppState extends ChangeNotifier {
     await _applyConnection(input.endpoint, input.token);
     return null;
   }
+
+  static const unsentTransfersMessage =
+      '送り終えていない転送があります。終わるか取り消してから切り替えてください。';
+
+  /// まだ送る可能性のある転送の行があるか。失敗の行も接続のたびに自動で再試行されるので数える。
+  /// ネット取り込みも同じ接続へ上げるので含める。
+  bool get hasUnsentTransfers =>
+      transfers.tasks.any((t) =>
+          t.status != TransferStatus.done &&
+          t.status != TransferStatus.cancelled) ||
+      webQueue.tasks.any((t) =>
+          t.status != WebTaskStatus.done &&
+          t.status != WebTaskStatus.cancelled);
 
   String _probeReason(ProbeOutcome r) => r.tokenRejected
       ? 'トークンが違います。確認してください。'

@@ -25,7 +25,7 @@ class _ConnectEditScreenState extends State<ConnectEditScreen> {
   @override
   void initState() {
     super.initState();
-    // 今の接続先を入れて開く。トークンは画面に出さないので空から入れ直す
+    // 今の接続先を入れて開く。トークンは画面に出さないので欄は空で開く
     _endpoint = TextEditingController(text: widget.app.api.conn?.endpoint ?? '');
     _endpoint.addListener(() => _takePairing(_endpoint));
     _token.addListener(() => _takePairing(_token));
@@ -43,15 +43,20 @@ class _ConnectEditScreenState extends State<ConnectEditScreen> {
     });
   }
 
+  static const _needTokenMessage = '接続先を変える時は、新しい接続先のトークンを入れてください。';
+
   // トークン欄が空なら今のトークンのまま（デザインの「変えない時は空のまま」）。
-  // 別のエンドポイントへ今のトークンを送ることになるが、確かめて通った時しか保存しない
-  String get _effectiveToken {
+  // ただし同じホストの時だけ。打ち間違えたよそのホストへ今のトークンを送らないため、null を返して止める
+  String? get _effectiveToken {
     final t = _token.text.trim();
-    return t.isNotEmpty ? t : (widget.app.api.conn?.token ?? '');
+    if (t.isNotEmpty) return t;
+    final conn = widget.app.api.conn;
+    if (conn == null || conn.token.isEmpty) return null;
+    return isSameHost(conn.endpoint, _endpoint.text) ? conn.token : null;
   }
 
-  bool get _canSubmit =>
-      _endpoint.text.trim().isNotEmpty && _effectiveToken.isNotEmpty;
+  // トークンの有無で押せなくすると、なぜ押せないかが伝わらない。押した時に理由を出す
+  bool get _canSubmit => _endpoint.text.trim().isNotEmpty;
 
   @override
   void dispose() {
@@ -67,12 +72,14 @@ class _ConnectEditScreenState extends State<ConnectEditScreen> {
 
   Future<void> _try() async {
     if (_busy) return;
+    final token = _effectiveToken;
+    if (token == null) return _refuseNoToken();
     setState(() {
       _busy = true;
       _error = null;
       _okDetail = null;
     });
-    final r = await widget.app.tryConnect(_endpoint.text, _effectiveToken);
+    final r = await widget.app.tryConnect(_endpoint.text, token);
     if (!mounted) return;
     setState(() {
       _busy = false;
@@ -85,14 +92,21 @@ class _ConnectEditScreenState extends State<ConnectEditScreen> {
     });
   }
 
+  void _refuseNoToken() => setState(() {
+        _error = _needTokenMessage;
+        _okDetail = null;
+      });
+
   Future<void> _save() async {
     if (_busy) return;
+    final token = _effectiveToken;
+    if (token == null) return _refuseNoToken();
     setState(() {
       _busy = true;
       _error = null;
     });
     // 確かめて成功した時だけ接続を差し替える。失敗では今の接続を触らず、理由（届かない／トークン）を出す
-    final err = await widget.app.saveConnection(_endpoint.text, _effectiveToken);
+    final err = await widget.app.saveConnection(_endpoint.text, token);
     if (!mounted) return;
     if (err == null) {
       Navigator.of(context).pop(true);
@@ -283,19 +297,18 @@ class _ConnectEditScreenState extends State<ConnectEditScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            // 失敗の理由はデザインどおりボタンの下の説明の位置に出す
-            if (_error != null) ...[
+            // 失敗の時はデザインどおり、下の説明と入れ替えて理由だけを出す
+            if (_error != null)
               Text(_error!,
                   key: const Key('errorNote'),
                   style: const TextStyle(
-                      color: AppColors.danger, fontSize: 12, height: 18 / 12)),
-              const SizedBox(height: 4),
-            ],
-            const Text(
-              'つながらなかった時は保存されず、今の接続のまま使えます。',
-              style: TextStyle(
-                  color: AppColors.textDim, fontSize: 12, height: 18 / 12),
-            ),
+                      color: AppColors.danger, fontSize: 12, height: 18 / 12))
+            else
+              const Text(
+                'つながらなかった時は保存されず、今の接続のまま使えます。',
+                style: TextStyle(
+                    color: AppColors.textDim, fontSize: 12, height: 18 / 12),
+              ),
           ],
         ),
       ),

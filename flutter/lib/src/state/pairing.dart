@@ -134,6 +134,10 @@ String buildPairingString(String endpoint, String token) {
   return (endpoint: ep, token: tk);
 }
 
+/// 2つのエンドポイントが同じホスト（ポート込み）を指すか。大文字小文字は区別しない。
+bool isSameHost(String a, String b) =>
+    hostOf(a).toLowerCase() == hostOf(b).toLowerCase();
+
 /// 表示用のホスト名。スキームとパスを落とし、トークンや userinfo は決して出さない。
 String hostOf(String endpoint) {
   final noScheme = endpoint.trim().replaceFirst(

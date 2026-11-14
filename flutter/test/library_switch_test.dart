@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -43,6 +44,7 @@ Finder _tileOf(String key) =>
     find.byWidgetPredicate((w) => w is MediaTile && w.item.key == key);
 
 void main() {
+  _backfillTests();
   testWidgets('ライブラリを切り替えて戻ると、取り直しを待たずに前の一覧をすぐ出す', (tester) async {
     final api = _LibApi();
     final app = AppState(api: api, bakedEndpoint: '', bakedToken: '');
@@ -99,4 +101,44 @@ void main() {
     await finished.future;
     expect(peak, 1);
   });
+}
+
+class _CountApi extends ApiClient {
+  int fetches = 0;
+  @override
+  Future<FolderPage> folder(String libId,
+          {String prefix = '', String? cursor, bool recursive = false}) async =>
+      FolderPage(items: [
+        MediaItem(
+            key: 'a.jpg',
+            type: 'image',
+            url: 'https://w.example/m/a.jpg',
+            thumbStored: false),
+      ]);
+  @override
+  Future<Uint8List> fetchBytes(String url) async {
+    fetches++;
+    return Uint8List(0);
+  }
+}
+
+void _backfillTests() {
+  // Web では端末側のサムネ補完を回さない（#58）。回すと原本を毎回落として必ず失敗する
+  for (final (enabled, expected) in [(false, 0), (true, 1)]) {
+    testWidgets('サムネ補完 enabled=$enabled のとき原本の取得は $expected 回', (tester) async {
+      final api = _CountApi();
+      // 書き込める接続でないと補完は元々回らないので、対照が成り立つよう接続済みにしておく
+      final app = AppState(api: api, bakedEndpoint: '', bakedToken: '')
+        ..connected = true
+        ..libraries = const [Library(id: 'review', title: 'R')];
+      await tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+              body: GalleryTab(
+                  app: app, lib: 'review', backfillThumbs: enabled))));
+      await tester.pumpAndSettle();
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      expect(api.fetches, expected);
+    });
+  }
 }

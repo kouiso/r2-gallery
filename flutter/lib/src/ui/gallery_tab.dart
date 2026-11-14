@@ -27,8 +27,16 @@ class GalleryTab extends StatefulWidget {
 
   /// エラー画面の「接続先を確認する」。設定タブへ移る。
   final VoidCallback? onOpenSettings;
+
+  /// 端末側でサムネを補完するか。Web ではエンジンの ImageDescriptor が使えず、
+  /// 原本を取っても必ず失敗するので既定で止める（テストから差し替えるために引数にしてある）
+  final bool backfillThumbs;
   const GalleryTab(
-      {super.key, required this.app, required this.lib, this.onOpenSettings});
+      {super.key,
+      required this.app,
+      required this.lib,
+      this.onOpenSettings,
+      this.backfillThumbs = !kIsWeb});
 
   @override
   State<GalleryTab> createState() => _GalleryTabState();
@@ -186,8 +194,11 @@ class _GalleryTabState extends State<GalleryTab> {
         final sorted = g.ordered();
         final readOnly = _c.readOnly;
         // サムネ未生成分は開いた一覧のついでに裏で補完する。
-        // 書き戻せないライブラリでは原本を取りに行くだけ無駄なので回さない
-        if (sorted.isNotEmpty && widget.app.canWriteTo(widget.lib)) {
+        // 書き戻せないライブラリでは原本を取りに行くだけ無駄なので回さない。
+        // Web は作れないサムネのために原本を落とし続けるだけなので回さない（#58）
+        if (widget.backfillThumbs &&
+            sorted.isNotEmpty &&
+            widget.app.canWriteTo(widget.lib)) {
           g.backfillThumbs(widget.lib,
               makeThumb: _makeThumb, onThumbStored: _dropOrigCache);
         }

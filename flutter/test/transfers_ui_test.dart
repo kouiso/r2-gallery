@@ -125,6 +125,11 @@ class _StuckApi implements TransferApi {
   }
 
   @override
+  Future<bool> storedMatches(
+          String lib, String key, int size, Stream<List<int>> Function() local,
+          {CancelToken? cancelToken}) =>
+      throw UnimplementedError();
+  @override
   Future<String> multipartCreate(String lib, String key, String contentType) =>
       throw UnimplementedError();
   @override

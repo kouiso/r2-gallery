@@ -34,7 +34,7 @@ import { Hono } from "hono";
 
 import type { Env } from "./lib/env";
 import { bucketFor } from "./lib/env";
-import { corsHeaders, HttpError, isAuthorized, json } from "./lib/http";
+import { ALLOWED_METHODS, corsHeaders, HttpError, isAuthorized, json } from "./lib/http";
 import { purgeTrash } from "./lib/objects";
 import { handleMedia } from "./routes/media";
 import {
@@ -82,7 +82,7 @@ app.use("*", async (c, next) => {
   if (c.req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders() });
   }
-  if (!["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"].includes(c.req.method)) {
+  if (!(ALLOWED_METHODS as readonly string[]).includes(c.req.method)) {
     return json({ error: "method" }, 405);
   }
   return next();

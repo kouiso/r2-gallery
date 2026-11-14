@@ -32,7 +32,10 @@ class FakeWorker {
   final Completer<void> holdPutSeen = Completer<void>();
   final Completer<void> holdPutRelease = Completer<void>();
   // multipart の完了要求を受け取ったまま返さずに止めておく
+  // 保存済みの中身を返す口を 500 にする（照合の読み出しが失敗する場面）
+  bool failOpen = false;
   bool holdComplete = false;
+  int completesSeen = 0;
   final Completer<void> holdCompleteSeen = Completer<void>();
   final Completer<void> holdCompleteRelease = Completer<void>();
   int _upload = 0;
@@ -79,6 +82,24 @@ class FakeWorker {
       await r.response.close();
       return;
     }
+    if (p.startsWith('/o/')) {
+      // objects の中身を署名URL越しに返す（保存済みの照合用）
+      final data = objects[Uri.decodeComponent(p.substring(3))];
+      if (failOpen) {
+        r.response.statusCode = 500;
+        await r.response.close();
+        return;
+      }
+      if (data == null) {
+        r.response.statusCode = 404;
+        await r.response.close();
+        return;
+      }
+      r.response.contentLength = data.length;
+      r.response.add(data);
+      await r.response.close();
+      return;
+    }
     if (r.headers.value('authorization') != 'Bearer tok') {
       r.response.statusCode = 401;
       await r.response.close();
@@ -97,6 +118,13 @@ class FakeWorker {
         'items': [
           for (final n in media.keys)
             {'key': n, 'type': 'image', 'url': '$base/m/$n?sig=fresh'},
+          for (final e in objects.entries)
+            {
+              'key': e.key,
+              'type': 'video',
+              'size': e.value.length,
+              'url': '$base/o/${Uri.encodeComponent(e.key)}',
+            },
         ],
       });
     }
@@ -139,10 +167,13 @@ class FakeWorker {
     }
     if (p.endsWith('/objects/multipart/complete')) {
       final b = jsonDecode(utf8.decode(await _body(r))) as Map<String, dynamic>;
+      completesSeen++;
       if (holdComplete) {
         if (!holdCompleteSeen.isCompleted) holdCompleteSeen.complete();
         await holdCompleteRelease.future;
       }
+      // 本物の completeCreateOnly と同じく、完了の直前に同名があれば 409
+      if (objects.containsKey(b['key'])) return _json(r, {'error': 'exists'}, 409);
       final parts = _parts[b['uploadId']]!;
       final all = BytesBuilder();
       for (final e in (b['parts'] as List)) {
@@ -533,6 +564,168 @@ void main() {
       q.wake();
       await until(() => q.tasks.single.status == TransferStatus.done);
       expect(w.objects['a.jpg'], bytesOf(3));
+    });
+
+    test('同名の大きいファイルを同時に上げても、2つとも保存される', () async {
+      // 両方とも分割の開始は通り、完了の時に先着だけが残る（完了時の 409）
+      w.holdComplete = true;
+      final q = make();
+      await q.restore();
+      final a = bytesOf(2000, 1), b = bytesOf(2000, 9);
+      await q.enqueueUploads('lib', [
+        UploadSource(
+            name: 'v.mp4', size: 2000, mime: 'video/mp4',
+            path: await source('a-v.mp4', a)),
+        UploadSource(
+            name: 'v.mp4', size: 2000, mime: 'video/mp4',
+            path: await source('b-v.mp4', b)),
+      ]);
+      await until(() => w.completesSeen >= 2, what: 'both complete requests');
+      w.holdCompleteRelease.complete();
+      await until(() => q.tasks.every((t) => t.status == TransferStatus.done),
+          what: 'all done');
+      await q.idle();
+      expect(w.objects.keys.toSet(), {'v.mp4', 'v (2).mp4'});
+      expect(w.objects.values.map((v) => v[0]).toSet(),
+          {a[0], b[0]});
+    });
+
+    test('再開で、同名の別の中身がサーバーにあれば名前を変えて上げる', () async {
+      w.objects['v.mp4'] = bytesOf(2000, 9);
+      // 台帳には前回決めたキーと uploadId がある行（アプリが落ちた後を真似る）
+      await ledger.write(jsonEncode([
+        {
+          'id': 't1', 'kind': 'up', 'lib': 'lib', 'name': 'v.mp4',
+          'size': 2000, 'mime': 'video/mp4', 'status': 'running',
+          'key': 'v.mp4', 'uploadId': 'gone',
+          'stagedPath': await source('stage-v.mp4', bytesOf(2000, 1)),
+        }
+      ]));
+      final q2 = make();
+      await q2.restore();
+      await until(
+          () => q2.tasks.isNotEmpty &&
+              q2.tasks.single.status == TransferStatus.done,
+          what: 'done');
+      await q2.idle();
+      expect(w.objects['v.mp4'], bytesOf(2000, 9));
+      expect(w.objects['v (2).mp4'], bytesOf(2000, 1));
+    });
+
+    test('再開で、サーバーにある物が手元と同じ中身なら重ねて上げずに完了にする', () async {
+      w.objects['v.mp4'] = bytesOf(2000, 1);
+      await ledger.write(jsonEncode([
+        {
+          'id': 't1', 'kind': 'up', 'lib': 'lib', 'name': 'v.mp4',
+          'size': 2000, 'mime': 'video/mp4', 'status': 'running',
+          'key': 'v.mp4',
+          'stagedPath': await source('stage-v.mp4', bytesOf(2000, 1)),
+        }
+      ]));
+      final q = make();
+      await q.restore();
+      await until(
+          () => q.tasks.isNotEmpty && q.tasks.single.status == TransferStatus.done,
+          what: 'done');
+      await q.idle();
+      expect(w.objects.keys.toList(), ['v.mp4']);
+    });
+
+    /// 台帳に残った1行（アプリが落とされた後）を作る。
+    Future<void> ledgerRow({
+      required String name,
+      required int size,
+      required String mime,
+      required String staged,
+      String? uploadId,
+      int partCount = 0,
+    }) =>
+        ledger.write(jsonEncode([
+          {
+            'id': 't1', 'kind': 'up', 'lib': 'lib', 'name': name,
+            'size': size, 'mime': mime, 'status': 'running',
+            'key': name,
+            'uploadId': ?uploadId,
+            if (partCount > 0)
+              'parts': [
+                for (var n = 1; n <= partCount; n++)
+                  {'partNumber': n, 'etag': 'e$n'}
+              ],
+            'stagedPath': staged,
+          }
+        ]));
+
+    Future<TransferQueue> restored() async {
+      final q = make();
+      await q.restore();
+      return q;
+    }
+
+    test('完了は通っていたが応答が落ちた行は、完了の 409 を中身の照合で完了にする', () async {
+      // 前回の complete は R2 に届いて保存済み。全パート確定の台帳が残っている
+      w.objects['v.mp4'] = bytesOf(2000, 1);
+      await ledgerRow(
+          name: 'v.mp4', size: 2000, mime: 'video/mp4', uploadId: 'up1',
+          partCount: 2, staged: await source('stage-v.mp4', bytesOf(2000, 1)));
+      final q = await restored();
+      await until(() => q.tasks.single.status == TransferStatus.done, what: 'done');
+      await q.idle();
+      expect(w.objects.keys.toList(), ['v.mp4']);
+      expect(w.creates, 0);
+      expect(w.partsRequested, isEmpty);
+    });
+
+    test('完了の 409 で、サーバーの中身が別物なら名前を変えて最初から上げる', () async {
+      w.objects['v.mp4'] = bytesOf(2000, 9);
+      await ledgerRow(
+          name: 'v.mp4', size: 2000, mime: 'video/mp4', uploadId: 'up1',
+          partCount: 2, staged: await source('stage-v.mp4', bytesOf(2000, 1)));
+      final q = await restored();
+      await until(() => q.tasks.single.status == TransferStatus.done, what: 'done');
+      await q.idle();
+      expect(w.objects['v.mp4'], bytesOf(2000, 9));
+      expect(w.objects['v (2).mp4'], bytesOf(2000, 1));
+      expect(w.aborts, contains('up1'));
+    });
+
+    test('小さいファイルの再開で PUT が 409、同じ中身なら重ねずに完了にする', () async {
+      w.objects['a.jpg'] = bytesOf(500, 1);
+      await ledgerRow(
+          name: 'a.jpg', size: 500, mime: 'image/jpeg',
+          staged: await source('stage-a.jpg', bytesOf(500, 1)));
+      final q = await restored();
+      await until(() => q.tasks.single.status == TransferStatus.done, what: 'done');
+      await q.idle();
+      expect(w.objects.keys.toList(), ['a.jpg']);
+    });
+
+    test('小さいファイルの再開で PUT が 409、別の中身なら名前を変えて保存する', () async {
+      w.objects['a.jpg'] = bytesOf(500, 9);
+      await ledgerRow(
+          name: 'a.jpg', size: 500, mime: 'image/jpeg',
+          staged: await source('stage-a.jpg', bytesOf(500, 1)));
+      final q = await restored();
+      await until(() => q.tasks.single.status == TransferStatus.done, what: 'done');
+      await q.idle();
+      expect(w.objects['a.jpg'], bytesOf(500, 9));
+      expect(w.objects['a (2).jpg'], bytesOf(500, 1));
+    });
+
+    test('照合の読み出しが失敗したら、完了にせず失敗の行として残す', () async {
+      w.objects['v.mp4'] = bytesOf(2000, 1);
+      w.failOpen = true;
+      await ledgerRow(
+          name: 'v.mp4', size: 2000, mime: 'video/mp4', uploadId: 'up1',
+          partCount: 2, staged: await source('stage-v.mp4', bytesOf(2000, 1)));
+      final q = await restored();
+      await until(() => q.tasks.single.status == TransferStatus.error, what: 'error');
+      expect(q.tasks.single.status, isNot(TransferStatus.done));
+      expect(w.objects.keys.toList(), ['v.mp4']);
+      // 退避ファイルは残り、読み出しが直れば再試行で完了にできる
+      w.failOpen = false;
+      q.retryAllFailed();
+      await until(() => q.tasks.single.status == TransferStatus.done, what: 'retry done');
+      expect(w.objects.keys.toList(), ['v.mp4']);
     });
 
     test('失敗した行は復帰時の再試行でまとめて積み直す', () async {

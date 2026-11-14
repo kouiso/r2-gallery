@@ -1,6 +1,6 @@
 STATE RUNNING 2026-11-14T12:16:14Z | counts pending
 mission: それぞれのプロジェクトに書いてあるプランに書いてある作業をやること / どのプロジェクトもまず既存のPRを本質的に対処することを作業を優先してください。そうしないと溜まってばっかりなので
-model claude-opus-5-5 (lead) | advisor absent (no advisor tool in this session) | github via connector (gh: GH_TOKEN invalid) | push via git | png ok (playwright chromium)
+model claude-opus-5-5 (lead) | advisor present (fable, set 2026-11-14 by owner) | github via connector (gh: GH_TOKEN invalid) | push via git | png ok (playwright chromium)
 goal: work plan r2-gallery until cycle DONE or DONE-WAITING (set 2026-11-14) | DONE-WAITING satisfies it: yes
 rules read: r2-gallery CLAUDE.md/AGENTS.md (same content), .github/scrum-board.yml (project 43), .github/ci/README; archive CLAUDE.md. Stricter: comments Japanese why-only; PR titles Japanese; never edit pages-dist; feature-parity (never drop a feature without owner OK); run `node .github/ci/run.mjs fast` and `node tools/sync-ai-rules.mjs --check` before push; no PR template in either repo.
 DEPLOY | kouiso/r2-gallery merge to main -> production | evidence .github/workflows/web-deploy.yml:4-6,33-48 (push main -> pages-dist = Pages production, CLAUDE.md:49) + CLAUDE.md:48 / .agents/skills/fad-distribute/SKILL.md:8 (merge to main ships APK to FAD testers)
@@ -14,6 +14,11 @@ worktree /home/user/notes notes/r2-gallery (this file)
 worktree /home/user/r2-gallery-archive main (shallow, 13bddde) clean
 DECIDED | every kouiso/r2-gallery merge to main is G5-excluded (production web + FAD) -> merges go to OWNER (RG-12 + bug-fix merge question); lane takes PRs to GATE-ready | reason DEPLOY line 1 | revert: owner says yes to RG-12 question
 DECIDED | Mac-only items (APK build, Pixel recording RG-09, RG-31, #43 device test) -> DEVICE | reason cloud lane, 5.4 | revert: n/a
+MANAGER agent a9b29b434b520f613 (fable high) | policy 2026-11-14:
+  order: RG-17 > RG-19 > RG-20 > RG-22 > RG-18 > RG-21 > RG-23; #118 rework in parallel; then Project 43 iteration items > issues w/o claude-cloud > with claude-cloud; archive #207/#208/#220 open until #118 merges
+  PASS LINE: all checks green on head (emulator incl.; red needs root cause, editing Maestro flow just to pass does not count); run.mjs fast + sync-ai-rules --check on that SHA; bug fix has fail-on-main/pass-on-head test; independent review PASS on that SHA; evidence image + GATE comment; no doc/feature-parity.md row removed/downgraded without linked owner OK. Issue "done" in lane = gate-ready + ledger row OWNER with exact remaining steps; issue stays open until owner merges.
+  #118: keep one PR, review in 4 slices (Dart / Android / iOS fork via tools/verify-video-player-fork.py / worker); needs: full-scope title+body (whole #208 series), linked owner OK for removing 端末に保存 (H7/H8/X1) and P1 gesture-to-panel change (else OWNER question), GATE states whether worker/src/routes/media.ts must deploy first, emulator fixed, 6-scene device evidence listed as OWNER step.
+RG-26 | しない: RG-Q3 = 2 (manager decision: record here only) | done
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)
@@ -29,7 +34,7 @@ DECIDED | Mac-only items (APK build, Pixel recording RG-09, RG-31, #43 device te
 | RG-21 | todo | agent | #54 via #55 |
 | RG-22 | todo | agent | #57 via #58 |
 | RG-23 | todo | agent | #63 via #64 #65 |
-| RG-26 | todo | agent | write しない: RG-Q3 = 2 |
+| RG-26 | done | agent | しない: RG-Q3 = 2 |
 | RG-24 | blocked | owner | worker prod deploy / prod test / delete thumbs |
 | RG-09 | blocked | wait | DEVICE: APK + Pixel 7 Pro recording |
 | RG-31 | blocked | wait | DEVICE |
@@ -40,6 +45,5 @@ DECIDED | Mac-only items (APK build, Pixel recording RG-09, RG-31, #43 device te
 - ひなたの 4 枚: ごみ箱から元のアルバムへ戻してよいか（期限 ~12-12）（はい／いいえ）
 
 ## for main session
-- advisor tool absent in this session (/advisor fable not visible); cannot set it from inside
 - gh CLI token (GH_TOKEN) invalid in this container; using GitHub connector
 - ledger owner column for RG-17..23, RG-26, RG-31 still 'wait' (plan.md:98 rewrite)

@@ -1,5 +1,5 @@
 // 一覧が拾う拡張子の表（worker/src/lib/media-ext.json）から Dart 側の表を生成する。
-// `--check` は生成物が最新かだけ確かめる（CI の fast で回す）。
+// `--check` は生成物が最新かだけ確かめる。CI では tools/media-ext.test.mjs（vitest）がこの差分を検出する。
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 

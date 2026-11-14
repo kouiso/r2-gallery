@@ -99,6 +99,7 @@ OWNER INSTRUCTION 2026-11-14 (relayed): 「…デザイン通りになるよう�
 stream B | #115 no repro (300 upload/export/offline OK in Dart VM + web; web tab crashed ~400MB heap; Android not tested) -> comment https://github.com/kouiso/r2-gallery/issues/115#issuecomment-6877981401 asks owner which save; #116/#117 blocked | PRs #133 (#39 detected thumb, 099833f, Refs), #134 (#83 analyze 7->0, 337a5ae, Closes), #132 (#36 duration, 7f054ef, Refs) — reviews next
 CONFIRMED #124 in production: pages-dist .source-sha = 0b43385 at ~13:31Z (FAD state follows on its 15-min poll)
 MERGED #123 RG-21 ~13:32Z | head 91b67c1 == GATE head https://github.com/kouiso/r2-gallery/pull/123#issuecomment-6877996800 | merge 0ea40e0 | Closes #55; #54 #56 open (RG-24 worker deploy)
+DESIGN LINK confirmed by owner 2026-11-14 (relayed): 「https://claude.ai/artifact/6NsgHfP9kH9whED6j4ec26 これr2ギャラリー」 — same link already opened from this container at ~12:25Z (Artifact read OK; 31 boards byte-identical to doc/design/project). Design parity audit member running.
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)

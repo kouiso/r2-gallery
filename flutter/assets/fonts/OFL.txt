@@ -1,6 +1,7 @@
 Noto Sans CJK JP
 Copyright © 2014-2021 Adobe (http://www.adobe.com/).
 Copyright 2010-2012 Google Corporation.
+Noto is a trademark of Google Inc.
 
 Modified subset: R2 Gallery JP. Original copyright and SIL OFL are retained.
 Source: Debian fonts-noto-cjk / https://github.com/notofonts/noto-cjk

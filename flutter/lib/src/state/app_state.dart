@@ -692,7 +692,7 @@ class AppState extends ChangeNotifier {
 
   bool get deviceExportSupported => false;
 
-  /// 旧保存導線からも、本人が廃止した外部への書き出しを再開しない。
+  /// 外部への書き出しの廃止はオーナー承認待ちで、承認まで旧保存導線からも既定で拒否する。
   Future<void> exportToDevice(MediaItem item, {String? lib}) {
     return Future.error(const DeviceExportError(
         '外部への書き出しは利用できません。オフライン保存を使ってください'));

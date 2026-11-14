@@ -23,6 +23,9 @@ CYCLE 1 T=2026-11-14T12:18:56Z | PRs 3 (r2-gallery #118; archive #207 #208; excl
   skipped: owner's rule (-ux): 0 (no item assigned to/authored by i4zhdk-ux)
   iteration (Project 43): NOT READABLE — no ProjectV2 tool in this container (connector has no projects op; gh token invalid) -> rule 1(a) moved 0 to front
   pre-sort: OWNER (prod worker deploy SBIs) #47 #50 #53 #56; OWNER (owner-decision) #96 #97 #98 #99 archive#220; OWNER (prod data delete) archive#184 #185 #186; DEVICE (Android real device SBIs) #43 #68 #75 #80 #94 #107 #110 #113 #115
+JUDGE b1 (manager): #118 emulator flow update accepted (intentional tested rename of same control viewer_screen.dart:513); gate-ready needs emulator green on 6454563, rename listed in PR body, fresh re-review vs 6454563 + CI Kotlin build green, "PiP closes" named device scene. Feature-parity: BLOCKED on owner (own question, separate from RG-12); PR must reword 本人承認済み -> 承認待ち, drop dead link doc/evidence/private-storage-20261022/README.md, note exportToDevice stub (app_state.dart:696).
+#120 RG-19 | FIX->review | PR opened head f78bbf4 | local-check posted | reviewer running
+#118 | FIX | member pushed 6454563 (03-play flow 閉じる->一覧に戻る) | emulator rerun in progress | local flutter test 614/0
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)
@@ -44,11 +47,13 @@ CYCLE 1 T=2026-11-14T12:18:56Z | PRs 3 (r2-gallery #118; archive #207 #208; excl
 | RG-31 | blocked | wait | DEVICE |
 
 ## needs owner
+- #118 feature changes (separate from RG-12; blocks #118): ①「端末に保存」(端末ギャラリーへの書き出し) を廃止しアプリ内オフライン保存だけにする ②明るさ・音量のスワイプを明示パネルに置き換える ③更新後、以前のオフライン保存は隔離され表示されない（消えはしないが移行手段なし）④O1・O1-2・S7 を実機確認待ちで ☑→◐ — それぞれ OK か（はい／いいえ）。推奨: ①② は既に作られた変更なので はい、③ は移行を足すまで いいえ
 - ASK | Is kouiso/r2-gallery-archive's main still watched by any deploy lane (equus r2-web-deploy) so that a merge there would change production? yes/no/don't know | read: archive .github/workflows/ci.yml:7-8, archive CLAUDE.md:49, r2-gallery CLAUDE.md:49 ("retired in #10") | the retirement note covers the relay, not the external lane | on "don't know": never merge in the archive (only closes planned anyway)
 - RG-12 (+ bug-fix merges): 審査が通り証跡が付いた PR を、あなたの OK を待たずにマージしてよいか（マージすると本番の Web と FAD が新しくなる）。壊れたら戻し PR も即取り込んでよいか。（はい／いいえ） — recommend: はい
 - ひなたの 4 枚: ごみ箱から元のアルバムへ戻してよいか（期限 ~12-12）（はい／いいえ）
 
 ## for main session
+- second review identity: Codex review bot (chatgpt-codex-connector) hits usage limits on #118 and #120 ("You have reached your Codex usage limits") -> no route to its review; CodeRabbit runs (skips >100-file PRs)
 - Project 43 iteration field unreadable from this cloud container (no ProjectV2 tool, gh token invalid): please send this/next week iteration issue numbers for r2-gallery, or give the lane a working gh token route
 - gh CLI token (GH_TOKEN) invalid in this container; using GitHub connector
 - ledger owner column for RG-17..23, RG-26, RG-31 still 'wait' (plan.md:98 rewrite)

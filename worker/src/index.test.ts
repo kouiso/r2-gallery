@@ -889,44 +889,119 @@ describe("trash", () => {
     expect(after.items.map((i) => i.key)).toContain("gone/pic.png");
   });
 
-  it("restores album membership (at the original position) when restoring from trash", async () => {
+  describe("album membership", () => {
     const post = (path: string, body: unknown) =>
       api(path, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-    const albumItems = async (id: string) =>
+    const trash = async (key: string) =>
+      ((await (await post("/v1/a/ops/trash", { key })).json()) as { trashKey: string }).trashKey;
+    const restore = (trashKey: string) => post("/v1/a/ops/restore", { trashKey });
+    const items = async (id: string) =>
       ((await (await api("/v1/a/albums/" + id)).json()) as { items: { key: string }[] }).items.map(
         (i) => i.key,
       );
-    await putObject("a", "alb/one.png");
-    await putObject("a", "alb/two.png");
-    const created = (await (await post("/v1/a/albums", { title: "restore me" })).json()) as {
-      id: string;
-    };
-    await post(`/v1/a/albums/${created.id}/items`, { keys: ["alb/one.png", "alb/two.png"] });
-    expect(await albumItems(created.id)).toEqual(["alb/one.png", "alb/two.png"]);
+    // 各テストが固有のプレフィックスを使い、他のテストのアルバムと混ざらないようにする
+    async function mkAlbum(prefix: string, names: string[]) {
+      const keys = names.map((n) => `${prefix}/${n}.png`);
+      for (const k of keys) await putObject("a", k);
+      const { id } = (await (await post("/v1/a/albums", { title: prefix })).json()) as {
+        id: string;
+      };
+      await post(`/v1/a/albums/${id}/items`, { keys });
+      return { id, keys };
+    }
 
-    const { trashKey } = (await (await post("/v1/a/ops/trash", { key: "alb/one.png" })).json()) as {
-      trashKey: string;
-    };
-    expect(await albumItems(created.id)).toEqual(["alb/two.png"]);
-
-    expect((await post("/v1/a/ops/restore", { trashKey })).status).toBe(200);
-    expect(await albumItems(created.id)).toEqual(["alb/one.png", "alb/two.png"]);
-  });
-
-  it("restores a trashed object trashed before album tracking (no record) without touching albums", async () => {
-    await putObject("a", "old/legacy.png");
-    await env.LIB_A.put(".trash/123/old/legacy.png", PNG);
-    await env.LIB_A.delete("old/legacy.png");
-    const res = await api("/v1/a/ops/restore", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ trashKey: ".trash/123/old/legacy.png" }),
+    it("restores the album membership when restoring from trash", async () => {
+      const { id, keys } = await mkAlbum("m1", ["one", "two"]);
+      const tk = await trash(keys[0]!);
+      expect(await items(id)).toEqual([keys[1]]);
+      expect((await restore(tk)).status).toBe(200);
+      expect(await items(id)).toEqual(keys);
     });
-    expect(res.status).toBe(200);
+
+    it("keeps the album order when several items are trashed then restored one by one", async () => {
+      const { id, keys } = await mkAlbum("m2", ["1", "2", "3"]);
+      const tks = [await trash(keys[0]!), await trash(keys[1]!), await trash(keys[2]!)];
+      expect(await items(id)).toEqual([]);
+      for (const tk of tks) expect((await restore(tk)).status).toBe(200);
+      expect(await items(id)).toEqual(keys);
+    });
+
+    it("keeps the album order for non-adjacent items and for concurrent trash batches", async () => {
+      const { id, keys } = await mkAlbum("m3", ["A", "B", "C", "D"]);
+      const tks = await Promise.all([trash(keys[0]!), trash(keys[2]!)]);
+      expect(await items(id)).toEqual([keys[1], keys[3]]);
+      for (const tk of tks) expect((await restore(tk)).status).toBe(200);
+      expect(await items(id)).toEqual(keys);
+      // 逆順で戻しても同じ並びになる
+      const again = await Promise.all([trash(keys[0]!), trash(keys[2]!)]);
+      for (const tk of [...again].reverse()) await restore(tk);
+      expect(await items(id)).toEqual(keys);
+    });
+
+    it("restores into every album the item was in", async () => {
+      const x = await mkAlbum("m4", ["p", "q"]);
+      const y = (await (await post("/v1/a/albums", { title: "m4b" })).json()) as { id: string };
+      await post(`/v1/a/albums/${y.id}/items`, { keys: [x.keys[1]] });
+      const tk = await trash(x.keys[1]!);
+      expect(await items(x.id)).toEqual([x.keys[0]]);
+      expect(await items(y.id)).toEqual([]);
+      await restore(tk);
+      expect(await items(x.id)).toEqual(x.keys);
+      expect(await items(y.id)).toEqual([x.keys[1]]);
+    });
+
+    it("skips an album deleted between trash and restore", async () => {
+      const { id, keys } = await mkAlbum("m5", ["a", "b"]);
+      const tk = await trash(keys[0]!);
+      expect((await api(`/v1/a/albums/${id}`, { method: "DELETE" })).status).toBeLessThan(300);
+      const res = await restore(tk);
+      expect(res.status).toBe(200);
+      const after = await folders("a", "m5/");
+      expect(after.items.map((i) => i.key)).toContain(keys[0]);
+      expect((await api(`/v1/a/albums/${id}`)).status).toBe(404);
+    });
+
+    it("does not duplicate an item that is already back in the album at restore", async () => {
+      const { id, keys } = await mkAlbum("m6", ["a", "b"]);
+      const tk = await trash(keys[0]!);
+      // 戻す前に同じ物が入り直した状態：実体を戻し、手動でアルバムへ追加する
+      await env.LIB_A.put(keys[0]!, PNG);
+      await env.LIB_A.delete(tk);
+      await post(`/v1/a/albums/${id}/items`, { keys: [keys[0]] });
+      expect((await restore(tk)).status).toBe(200);
+      expect((await items(id)).filter((k) => k === keys[0])).toHaveLength(1);
+    });
+
+    it("leaves albums untouched when restoring an item trashed without a record", async () => {
+      const { id, keys } = await mkAlbum("m7", ["a", "b"]);
+      // 修正前にゴミ箱へ送った物：実体だけ .trash にあり、控えは無い。アルバムには別の物が入っている
+      await env.LIB_A.put(".trash/123/m7/legacy.png", PNG);
+      const before = await items(id);
+      const res = await restore(".trash/123/m7/legacy.png");
+      expect(res.status).toBe(200);
+      expect(await items(id)).toEqual(before);
+      expect(await items(id)).toEqual(keys);
+      expect(await env.LIB_A.head("m7/legacy.png")).not.toBeNull();
+      expect(await env.LIB_A.head(".trash/123/m7/legacy.png")).toBeNull();
+    });
+
+    it("resumes a restore whose file move already happened", async () => {
+      const { id, keys } = await mkAlbum("m8", ["a", "b"]);
+      const tk = await trash(keys[0]!);
+      // 前回はファイルを戻した後にアルバム更新で失敗した状態を作る
+      await env.LIB_A.put(keys[0]!, PNG);
+      await env.LIB_A.delete(tk);
+      expect(await items(id)).toEqual([keys[1]]);
+      expect((await restore(tk)).status).toBe(200);
+      expect(await items(id)).toEqual(keys);
+      expect(
+        await env.META.head(`.system/trash-albums/a/${tk.slice(".trash/".length)}.json`),
+      ).toBeNull();
+    });
   });
 
   it("scheduled purge removes trash older than the retention period", async () => {

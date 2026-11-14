@@ -4,18 +4,71 @@ import { readable, writable } from "../lib/env";
 import { assertUserKey, HttpError, json, readJson, ref } from "../lib/http";
 import { handleImport } from "../lib/import";
 import { completeCreateOnly, copyObject, createOnly, moveObject } from "../lib/objects";
-import { loadIndex, mutateAlbums } from "../lib/store";
+import { loadAlbums, loadIndex, mutateAlbums } from "../lib/store";
 import type { AlbumsFile, GlobalAlbum, GlobalAlbumItem } from "../lib/store";
 
 // ゴミ箱へ送る時に外したアルバムの控え。復元で元のアルバムへ戻すために、
-// 外した項目そのものと位置を META に置く（R2 のゴミ箱には載せない）。
+// 外した項目そのものを META に置く（R2 のゴミ箱には載せない）。
 interface TrashAlbumMembership {
   albumId: string;
-  position: number;
   item: GlobalAlbumItem;
 }
 const trashAlbumsPath = (lib: string, trashKey: string) =>
   `${SYSTEM_PREFIX}trash-albums/${lib}/${trashKey.slice(TRASH_PREFIX.length)}.json`;
+const refKey = (i: { lib: string; key: string }) => `${i.lib}:${i.key}`;
+
+// 位置の控えは index ではなく「ゴミ箱の物も含めた並び」を albums.json 側に持つ。
+// index だと、複数枚を送った時に後の物の位置が先に抜けた物の分ずれて、戻すと逆順になる。
+function foldGhostsIntoOrder(album: GlobalAlbum) {
+  const order = album.items.map(refKey);
+  const seen = new Set(order);
+  const prev = album.trashOrder ?? [];
+  prev.forEach((id, i) => {
+    if (seen.has(id)) return;
+    // 手前にいた物のうち残っている最寄りの後ろへ。無ければ先頭
+    let at = 0;
+    for (let j = i - 1; j >= 0; j--) {
+      const k = order.indexOf(prev[j]!);
+      if (k >= 0) {
+        at = k + 1;
+        break;
+      }
+    }
+    order.splice(at, 0, id);
+    seen.add(id);
+  });
+  album.trashOrder = order;
+}
+
+function insertByTrashOrder(album: GlobalAlbum, item: GlobalAlbumItem) {
+  const id = refKey(item);
+  const order = album.trashOrder ?? [];
+  const idx = order.indexOf(id);
+  const present = (k: string) => album.items.findIndex((i) => refKey(i) === k);
+  let at = album.items.length;
+  if (idx >= 0) {
+    // 最寄りの手前の物の後ろ → 無ければ最寄りの後ろの物の前 → 無ければ先頭
+    at = 0;
+    let found = false;
+    for (let j = idx - 1; j >= 0 && !found; j--) {
+      const k = present(order[j]!);
+      if (k >= 0) {
+        at = k + 1;
+        found = true;
+      }
+    }
+    for (let j = idx + 1; j < order.length && !found; j++) {
+      const k = present(order[j]!);
+      if (k >= 0) {
+        at = k;
+        found = true;
+      }
+    }
+  }
+  album.items.splice(at, 0, item);
+  // ゴミ箱の物が残っていなければ並びの控えは要らない
+  if (order.every((k) => present(k) >= 0)) delete album.trashOrder;
+}
 
 /** PUT /v1/:lib/objects?key= — small object upload; refuses to overwrite. */
 export async function handlePutObject(req: Request, env: Env, lib: string, url: URL) {
@@ -178,24 +231,41 @@ export async function handleLibOps(
   if (action === "trash") {
     const key = assertUserKey(body.key);
     const trashKey = `${TRASH_PREFIX}${Date.now()}/${key}`;
-    await moveObject(env, bucket, key, bucket, trashKey);
+    const sidecar = trashAlbumsPath(lib, trashKey);
+    // 外す前に控えを書く。ここで失敗すれば何も動かないので、所属が失われない。
+    const snapshot = (data: AlbumsFile): TrashAlbumMembership[] =>
+      data.albums.flatMap((a) => {
+        const item = a.items.find((i) => i.lib === lib && i.key === key);
+        return item ? [{ albumId: a.id, item }] : [];
+      });
+    const planned = snapshot(await loadAlbums(env));
+    const putSidecar = (m: TrashAlbumMembership[]) =>
+      env.META.put(sidecar, JSON.stringify(m), {
+        httpMetadata: { contentType: "application/json" },
+      });
+    if (planned.length) await putSidecar(planned);
+    try {
+      await moveObject(env, bucket, key, bucket, trashKey);
+    } catch (e) {
+      if (planned.length) await env.META.delete(sidecar);
+      throw e;
+    }
     // Shared albums must not keep pointing at an object that no longer
     // exists — drop the key from every album that lists it.
-    // 復元で戻せるよう、外す前にどのアルバムのどの位置にいたかを控える。
-    const removedFrom: TrashAlbumMembership[] = [];
+    let removed: TrashAlbumMembership[] = [];
     await mutateAlbums(env, (data) => {
-      // etag 競合で再実行されるので、控えは毎回作り直す
-      removedFrom.length = 0;
+      // etag 競合で再実行されるので、毎回作り直す
+      removed = snapshot(data);
       for (const a of data.albums) {
-        const position = a.items.findIndex((i) => i.lib === lib && i.key === key);
-        if (position >= 0) removedFrom.push({ albumId: a.id, position, item: a.items[position]! });
+        if (!a.items.some((i) => i.lib === lib && i.key === key)) continue;
+        foldGhostsIntoOrder(a);
         a.items = a.items.filter((i) => !(i.lib === lib && i.key === key));
       }
     });
-    if (removedFrom.length) {
-      await env.META.put(trashAlbumsPath(lib, trashKey), JSON.stringify(removedFrom), {
-        httpMetadata: { contentType: "application/json" },
-      });
+    // 控えを書いてから所属が増減していたら（並行操作）、実際に外した分で書き直す
+    if (JSON.stringify(removed) !== JSON.stringify(planned)) {
+      if (removed.length) await putSidecar(removed);
+      else await env.META.delete(sidecar);
     }
     return json({ ok: true, trashKey });
   }
@@ -204,18 +274,20 @@ export async function handleLibOps(
   const tm = /^\.trash\/(\d+)\/(.+)$/.exec(trashKey);
   if (!tm) throw new HttpError(400, "bad_trash_key");
   const original = assertUserKey(tm[2]);
-  await moveObject(env, bucket, trashKey, bucket, original);
-  // 控えがあれば、まだ存在するアルバムへ元の位置で戻す。控えが無い（この修正より前に
+  // 控えがあれば、まだ存在するアルバムへ元の並びで戻す。控えが無い（この修正より前に
   // 捨てた）物は従来どおりファイルだけ戻る。
   const sidecar = trashAlbumsPath(lib, trashKey);
   const saved = await env.META.get(sidecar);
+  // 前回、ファイルは戻ったのにアルバムの更新で失敗した場合のやり直し：移動は済んでいるので飛ばす
+  const resumed = saved && !(await bucket.head(trashKey)) && !!(await bucket.head(original));
+  if (!resumed) await moveObject(env, bucket, trashKey, bucket, original);
   if (saved) {
     const memberships = await saved.json<TrashAlbumMembership[]>();
     await mutateAlbums(env, (data) => {
       for (const m of memberships) {
         const album = data.albums.find((a) => a.id === m.albumId);
         if (!album || album.items.some((i) => i.lib === lib && i.key === original)) continue;
-        album.items.splice(Math.min(m.position, album.items.length), 0, m.item);
+        insertByTrashOrder(album, m.item);
       }
     });
     await env.META.delete(sidecar);

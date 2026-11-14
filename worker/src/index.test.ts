@@ -5,8 +5,9 @@ import {
   SELF,
   waitOnExecutionContext,
 } from "cloudflare:test";
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { purgeTrash } from "./lib/objects";
 import worker, { forbiddenHost, type Env } from "./index";
 
 declare module "cloudflare:test" {
@@ -975,6 +976,85 @@ describe("stale thumbnails", () => {
     expect(done.status).toBe(201);
     expect(await env.META.head(thumbKey("re/mp.mp4"))).toBeNull();
   });
+
+  const post = (path: string, body: unknown) =>
+    api(path, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+  it("copy drops a stale thumbnail of the destination name", async () => {
+    await env.LIB_A.put("cp/src.png", PNG);
+    await env.META.put(thumbKey("cp/dst.png"), "OLD");
+    const res = await post("/v1/ops/copy", {
+      from: { lib: "a", key: "cp/src.png" },
+      to: { lib: "a", key: "cp/dst.png" },
+    });
+    expect(res.status).toBe(200);
+    expect(await env.META.head(thumbKey("cp/dst.png"))).toBeNull();
+  });
+
+  it("move drops a stale thumbnail of the destination name", async () => {
+    await env.LIB_A.put("mv/src.png", PNG);
+    await env.META.put(thumbKey("mv/dst.png"), "OLD");
+    const res = await post("/v1/ops/move", {
+      from: { lib: "a", key: "mv/src.png" },
+      to: { lib: "a", key: "mv/dst.png" },
+    });
+    expect(res.status).toBe(200);
+    expect(await env.META.head(thumbKey("mv/dst.png"))).toBeNull();
+  });
+
+  it("purge keeps the thumbnail when an expired and a fresh trash entry share a name", async () => {
+    const oldKey = `.trash/${Date.now() - 31 * 86_400_000}/dup/pic.png`;
+    const freshKey = `.trash/${Date.now()}/dup/pic.png`;
+    await env.LIB_A.put(oldKey, PNG);
+    await env.LIB_A.put(freshKey, PNG);
+    await env.META.put(thumbKey("dup/pic.png"), "FRESH");
+    await trashPurge();
+    expect(await env.META.head(thumbKey("dup/pic.png"))).not.toBeNull();
+    expect(await env.LIB_A.head(oldKey)).toBeNull();
+    expect(await env.LIB_A.head(freshKey)).not.toBeNull();
+  });
+
+  it("purge deletes thumbnails before objects, so an interrupted run can be retried", async () => {
+    const dieKey = `.trash/${Date.now() - 31 * 86_400_000}/die/pic.png`;
+    await env.LIB_A.put(dieKey, PNG);
+    await env.META.put(thumbKey("die/pic.png"), "OLD");
+    const spy = vi.spyOn(env.LIB_A, "delete").mockRejectedValueOnce(new Error("boom"));
+    try {
+      await expect(purgeTrash(env)).rejects.toThrow();
+    } finally {
+      spy.mockRestore();
+    }
+    // 本体の削除で落ちても、サムネは先に消えている（孤児にならない）
+    expect(await env.META.head(thumbKey("die/pic.png"))).toBeNull();
+    await trashPurge();
+    expect(await env.LIB_A.head(dieKey)).toBeNull();
+  });
+
+  it("a thumbnail delete failure does not turn a stored upload into a 5xx", async () => {
+    const spy = vi.spyOn(env.META, "delete").mockRejectedValue(new Error("meta down"));
+    try {
+      const up = await putObject("a", "ok/up.png");
+      expect(up.status).toBe(201);
+      await env.LIB_A.put("ok/src.png", PNG);
+      const cp = await post("/v1/ops/copy", {
+        from: { lib: "a", key: "ok/src.png" },
+        to: { lib: "a", key: "ok/cp.png" },
+      });
+      expect(cp.status).toBe(200);
+      const mv = await post("/v1/ops/move", {
+        from: { lib: "a", key: "ok/src.png" },
+        to: { lib: "a", key: "ok/mv.png" },
+      });
+      expect(mv.status).toBe(200);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(await env.LIB_A.head("ok/up.png")).not.toBeNull();
+  });
 });
 
 describe("url import", () => {
@@ -1028,6 +1108,27 @@ describe("url import", () => {
     const obj = await env.LIB_A.get("imports/img.png");
     expect(new Uint8Array(await obj!.arrayBuffer())).toEqual(PNG);
     expect(obj?.httpMetadata?.contentType).toBe("image/png");
+  });
+
+  it("import drops a stale thumbnail and survives a thumbnail delete failure", async () => {
+    await env.META.put(".system/thumbs/a/imports/th.png.webp", "OLD");
+    fetchMock
+      .get(REMOTE)
+      .intercept({ path: "/th.png" })
+      .reply(200, PNG, { headers: { "content-type": "image/png" } });
+    expect((await importUrl(`${REMOTE}/th.png`)).status).toBe(201);
+    expect(await env.META.head(".system/thumbs/a/imports/th.png.webp")).toBeNull();
+
+    fetchMock
+      .get(REMOTE)
+      .intercept({ path: "/th2.png" })
+      .reply(200, PNG, { headers: { "content-type": "image/png" } });
+    const spy = vi.spyOn(env.META, "delete").mockRejectedValue(new Error("meta down"));
+    try {
+      expect((await importUrl(`${REMOTE}/th2.png`)).status).toBe(201);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("follows a redirect while re-validating each hop", async () => {

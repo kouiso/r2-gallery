@@ -108,6 +108,18 @@ export function trashRetentionDays(env: Env): number {
   return Number(env.TRASH_RETENTION_DAYS ?? "30") || 30;
 }
 
+/**
+ * 作成・移動が成功した後のサムネ掃除。ここで失敗を 5xx にすると、保存済みなのに
+ * クライアントが再送して 409 になり、別名で二重保存される。なので握りつぶして記録だけ残す。
+ */
+export async function dropThumbBestEffort(env: Env, lib: string, key: string): Promise<void> {
+  try {
+    await deleteThumb(env, lib, key);
+  } catch (e) {
+    console.error("thumb_delete_failed", lib, key, e);
+  }
+}
+
 export async function purgeTrash(env: Env): Promise<number> {
   const days = trashRetentionDays(env);
   const cutoff = Date.now() - days * 86_400_000;
@@ -115,24 +127,40 @@ export async function purgeTrash(env: Env): Promise<number> {
   for (const lib of libraries(env)) {
     const bucket = env[lib.binding] as R2Bucket | undefined;
     if (!bucket || lib.readOnly) continue;
+    // サムネは元のキー単位なので、期限切れと同名の「まだ新しい」ゴミ箱エントリが
+    // 1つでもあれば（restore で必要）消せない。全件を先に数えてから判定する。
+    const expired: string[] = [];
+    const liveOriginals = new Set<string>();
     let cursor: string | undefined;
     do {
       const listed = await bucket.list({ prefix: TRASH_PREFIX, cursor, limit: 1000 });
-      const expired = listed.objects
-        .filter((o) => Number(/^\.trash\/(\d+)\//.exec(o.key)?.[1] ?? Infinity) < cutoff)
-        .map((o) => o.key);
-      if (expired.length) {
-        await bucket.delete(expired);
-        // 完全削除で本体が無くなるので、残るサムネも消す。ただし同名で上げ直された
-        // 新しい物が居る間は、そのサムネなので触らない。
-        for (const tk of expired) {
-          const original = /^\.trash\/\d+\/(.+)$/.exec(tk)?.[1];
-          if (original && !(await bucket.head(original))) await deleteThumb(env, lib.id, original);
-        }
-        removed += expired.length;
+      for (const o of listed.objects) {
+        const m = /^\.trash\/(\d+)\/(.*)$/.exec(o.key);
+        if (!m) continue;
+        if (Number(m[1]) < cutoff) expired.push(o.key);
+        else liveOriginals.add(m[2] ?? "");
       }
       cursor = listed.truncated ? listed.cursor : undefined;
     } while (cursor);
+    if (!expired.length) continue;
+
+    // 本体より先にサムネを消す。途中で落ちても本体（期限切れ）が残るので次回また
+    // ここを通り、サムネだけが永久に孤児になることはない。何度走っても同じ結果になる。
+    const originals = new Set<string>();
+    for (const tk of expired) {
+      const original = /^\.trash\/\d+\/(.+)$/.exec(tk)?.[1];
+      if (original) originals.add(original);
+    }
+    for (const original of originals) {
+      if (liveOriginals.has(original)) continue;
+      // 同名で上げ直された新しい物が居る間は、そのサムネなので触らない
+      if (await bucket.head(original)) continue;
+      await deleteThumb(env, lib.id, original);
+    }
+    for (let i = 0; i < expired.length; i += 1000) {
+      await bucket.delete(expired.slice(i, i + 1000));
+    }
+    removed += expired.length;
   }
   return removed;
 }

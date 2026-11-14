@@ -1,17 +1,17 @@
-# r2_gallery
+# r2_gallery (Flutter client)
 
-A new Flutter project.
+R2 Gallery の Flutter クライアント（Android APK と Web ビルド）。プロジェクト全体の説明・
+ビルドと配布の手順は、リポジトリルートの
+[README.md](../README.md) と [CLAUDE.md](../CLAUDE.md) を見る。
 
-## Getting Started
+```sh
+flutter pub get
+flutter analyze
+flutter test
+flutter build apk --release   # 配布用（AOT）。debug ビルドは配らない
+flutter build web --release
+```
 
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- 接続先とトークンは接続画面から入れるか、ビルド時に `--dart-define=R2_BAKED_ENDPOINT=...`
+  `--dart-define=R2_BAKED_TOKEN=...` で焼き込む（`lib/src/config/baked.dart`）。
+- 機能の対応は [`../doc/feature-parity.md`](../doc/feature-parity.md)。

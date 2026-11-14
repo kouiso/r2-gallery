@@ -25,6 +25,14 @@
  * - POST /v1/:lib/ops/trash   {key}           -> move to .trash/<epoch ms>/<key> (kept 30 days)
  * - POST /v1/:lib/ops/restore {trashKey}      -> move a trashed object back to its original key
  * - GET  /v1/:lib/trash?cursor=               -> list trashed objects
+ *
+ * Album edits (libraries with readOnly !== true only; they rewrite META/.system/index-<lib>.json):
+ * - POST   /v1/:lib/albums                   {title, subtitle?}    -> {id,title}  (201)
+ * - PATCH  /v1/:lib/albums/:id               {title?, subtitle?}   -> rename / retitle
+ * - DELETE /v1/:lib/albums/:id                                     -> {ok:true}  (the album only, media stays)
+ * - POST   /v1/:lib/albums/:id/items         {keys:[...]}          -> append media (max 500 per call)
+ * - POST   /v1/:lib/albums/:id/items/remove  {keys:[...]}          -> drop media from the album
+ * - POST   /v1/:lib/albums/:id/order         {items:[{key,lib}]}   -> reorder (must be the album's exact current set)
  * A daily cron permanently removes trash entries older than TRASH_RETENTION_DAYS (default 30).
  *
  * All API routes require `Authorization: Bearer <ACCESS_TOKEN>`.

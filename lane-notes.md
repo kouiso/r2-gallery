@@ -62,6 +62,8 @@ CAPACITY 2026-11-14 (manager relay of owner): cloud lane may run up to 8 members
 #123 | reworked head 91b67c1 (ALLOWED_METHODS single source; ACAO is "*", no prod origin in repo) | re-review running
 BLOCK 12:55Z | GitHub secondary rate limit on comment/PR creation ("retry after ~58m") | queue: /home/user/notes/pending-comments/*.md; scheduled check-in 13:56Z (trig_01JHmGeWwF9ubYWSGhRQZ1jc) posts them; git push unaffected
 #118 | head 9e1170f (feature-parity 承認待ち, dead link removed, body full scope; font OFL 1.1 Noto CJK subset w/ OFL.txt shipped; media.ts deploy-first recommended not required) | LOCAL-CHECK queued (rate limit) | re-review (4 slices) running
+DECIDED 12:58Z | container has 4 CPUs / 15 GB; load avg hit ~40 with 8 members + reviewers running flutter -> timeouts in run.mjs fast | cap active members at 5 until load < 8; no two full `flutter test` runs started at once when avoidable | revert: load stays low
+#121 stacked tests | branch test/rg17-resume-409 head 5e092d2 (5 new tests fail on main logic; live run vs local wrangler: put/complete/create/re-complete -> 409) | PR creation queued (rate limit) | run.mjs fast flaky under load -> rerun when load low
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)

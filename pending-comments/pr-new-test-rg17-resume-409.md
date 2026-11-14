@@ -13,7 +13,7 @@ draft: false
 - 照合の読み出し（保存済みの取得）が 500 → 完了にせず失敗の行で残り、直れば再試行で完了
 
 ## fail-before
-origin/main の `flutter/lib/src/transfer/*.dart` に差し替えたコピーで実行。コンパイルは通り、挙動で失敗します（タイムアウト・`Expected: <0> Actual: <1>`・`v (2).mp4` が無い、等。追加分で5件失敗）。ログは /home/user/wt-rg17b-failbefore.txt。
+origin/main の `flutter/lib/src/transfer/*.dart` に差し替えたコピーで実行。コンパイルは通り、挙動で失敗します（タイムアウト・`Expected: <0> Actual: <1>`・`v (2).mp4` が無い、等。合計 6 件失敗＝追加分 4 件＋#121 の 2 件。小さいファイル・同じ中身のテストは main でも通る：main は 409 を黙って「完了」にするため。その欠陥は「中身が違う」側のテストと照合失敗のテストが捕まえる）。ログは /home/user/wt-rg17b-failbefore.txt。
 
 ## 本物の Worker での確認（`flutter/test_live/live_conflict_test.dart`）
 `wrangler dev --local`（miniflare R2）に対し、既存キーへの単発 PUT・multipart 開始・multipart 完了（別 upload が先に完了／完了済み uploadId の再完了）がすべて 409 になることを確認（3件成功）。流し方は `flutter/test_live/README.md`。

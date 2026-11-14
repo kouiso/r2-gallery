@@ -2,7 +2,7 @@
 
 LOCAL-CHECK | head 5e092d228c367b51f8601c6cab762fec24d2a665 | flutter analyze; flutter test; flutter test_live/live_conflict_test.dart (real wrangler dev --local); pnpm test:worker; ci/run.mjs fast; sync-ai-rules --check | pass 5 fail 1 (analyze: 7 info, 0 error/warning, none in changed files; ci fast: tools tests timed out under load average ~40, different tests each run, index-upload passes 29/29 alone) | 2026-11-14T13:00Z
 
-- fail-before (new tests vs origin/main flutter/lib/src/transfer/*.dart in a scratch copy; compiles, fails on behaviour): 5 new tests fail ("timed out waiting for error", "Expected <0> Actual <1>", missing `v (2).mp4`, ...) plus the 2 from #121
+- fail-before (new tests vs origin/main flutter/lib/src/transfer/*.dart in a scratch copy; compiles, fails on behaviour): 6 tests fail = 4 new + 2 from #121; the small-file same-content test passes on main because main silently marks 409 as done — the mismatch and compare-failure tests catch that ("timed out waiting for error", "Expected <0> Actual <1>", missing `v (2).mp4`, ...)
 - flutter test: +482 All tests passed
 - LIVE (real worker via wrangler dev --local, port 8799; 8787 was held by another session):
   LIVE put existing key -> 409

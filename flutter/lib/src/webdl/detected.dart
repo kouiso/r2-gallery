@@ -25,15 +25,23 @@ class DetectedItem {
   /// ブラウザ側で canvas に描いて送ってもらう。無ければ空。
   final String frame;
 
+  /// ページの video 要素のメタデータが示す再生時間。長さが分からない（まだ読めていない・
+  /// 取れない・ライブ配信）時は null で、0 秒とは区別する。動画（[DetectedKind.video]）だけが持つ。
+  final Duration? duration;
+
   const DetectedItem(this.url, this.kind,
       [this.headers = const {},
       this.poster = '',
       this.label = '',
-      this.frame = '']);
+      this.frame = '',
+      this.duration]);
 
-  /// 後から分かった表紙・名前・実コマを足した物を返す。既にある値は上書きしない。
+  /// 後から分かった表紙・名前・実コマ・再生時間を足した物を返す。既にある値は上書きしない。
   DetectedItem withMeta(
-          {String poster = '', String label = '', String frame = ''}) =>
+          {String poster = '',
+          String label = '',
+          String frame = '',
+          Duration? duration}) =>
       DetectedItem(
         url,
         kind,
@@ -41,6 +49,7 @@ class DetectedItem {
         this.poster.isNotEmpty ? this.poster : poster,
         this.label.isNotEmpty ? this.label : label,
         this.frame.isNotEmpty ? this.frame : frame,
+        this.duration ?? duration,
       );
 
   /// 一覧とアップロード名に使う名前。URL の末尾セグメントを安全な文字だけにする。

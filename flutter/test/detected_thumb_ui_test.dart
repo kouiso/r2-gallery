@@ -22,6 +22,34 @@ void main() {
           ),
         );
 
+    testWidgets('動画の再生時間を分・秒で出し、不明な動画と画像には出さない', (tester) async {
+      await tester.pumpWidget(sheet(null, const [
+        DetectedItem('https://cdn.example.com/v/a.mp4', DetectedKind.video, {}, '', '',
+            '', Duration(seconds: 185)),
+        DetectedItem('https://cdn.example.com/v/b.mp4', DetectedKind.video, {}, '', '',
+            '', Duration(seconds: 5)),
+        DetectedItem('https://cdn.example.com/v/c.mp4', DetectedKind.video, {}, '', '',
+            '', Duration(seconds: 65 * 60 + 2)),
+        DetectedItem('https://cdn.example.com/v/unknown.mp4', DetectedKind.video),
+        DetectedItem('https://cdn.example.com/p/a.jpg', DetectedKind.image),
+      ]));
+      expect(find.textContaining('動画 3分05秒・cdn.example.com'), findsOneWidget);
+      expect(find.textContaining('動画 0分05秒・'), findsOneWidget);
+      expect(find.textContaining('動画 65分02秒・'), findsOneWidget);
+      // 長さが不明な動画は 0 秒と書かず、種類だけ。画像にも付けない
+      expect(find.textContaining('動画・cdn.example.com'), findsOneWidget);
+      expect(find.textContaining('画像・cdn.example.com'), findsOneWidget);
+      expect(find.textContaining('0分00秒'), findsNothing);
+    });
+
+    test('fmtDuration は秒を四捨五入して分・秒にする', () {
+      expect(fmtDuration(const Duration(seconds: 5)), '0分05秒');
+      expect(fmtDuration(const Duration(seconds: 185)), '3分05秒');
+      expect(fmtDuration(const Duration(seconds: 3902)), '65分02秒');
+      expect(fmtDuration(const Duration(milliseconds: 4600)), '0分05秒');
+      expect(fmtDuration(const Duration(milliseconds: 59600)), '1分00秒');
+    });
+
     testWidgets('画像と動画が混ざっても全件にサムネが出る', (tester) async {
       final t = DetectedThumbs(
           fetcher: _FakeFetcher(_png()),

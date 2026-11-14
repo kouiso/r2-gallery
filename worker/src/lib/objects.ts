@@ -120,7 +120,14 @@ export async function dropThumbBestEffort(env: Env, lib: string, key: string): P
   }
 }
 
-export async function purgeTrash(env: Env): Promise<number> {
+/**
+ * 1回の purge で「サムネ→本体」を済ませる期限切れエントリ数。1回の cron 呼び出しの
+ * subrequest 数・時間には上限があり、全件を先にサムネ処理すると毎回同じ所で落ちて
+ * 本体が一度も消えない恐れがある。小さな単位で完結させれば、落ちても済んだ分は残らない。
+ */
+export const PURGE_BATCH = 100;
+
+export async function purgeTrash(env: Env, batchSize = PURGE_BATCH): Promise<number> {
   const days = trashRetentionDays(env);
   const cutoff = Date.now() - days * 86_400_000;
   let removed = 0;
@@ -128,7 +135,7 @@ export async function purgeTrash(env: Env): Promise<number> {
     const bucket = env[lib.binding] as R2Bucket | undefined;
     if (!bucket || lib.readOnly) continue;
     // サムネは元のキー単位なので、期限切れと同名の「まだ新しい」ゴミ箱エントリが
-    // 1つでもあれば（restore で必要）消せない。全件を先に数えてから判定する。
+    // 1つでもあれば（restore で必要）消せない。list は軽いので全件を先に数えてから判定する。
     const expired: string[] = [];
     const liveOriginals = new Set<string>();
     let cursor: string | undefined;
@@ -142,25 +149,26 @@ export async function purgeTrash(env: Env): Promise<number> {
       }
       cursor = listed.truncated ? listed.cursor : undefined;
     } while (cursor);
-    if (!expired.length) continue;
 
-    // 本体より先にサムネを消す。途中で落ちても本体（期限切れ）が残るので次回また
-    // ここを通り、サムネだけが永久に孤児になることはない。何度走っても同じ結果になる。
-    const originals = new Set<string>();
-    for (const tk of expired) {
-      const original = /^\.trash\/\d+\/(.+)$/.exec(tk)?.[1];
-      if (original) originals.add(original);
+    for (let i = 0; i < expired.length; i += batchSize) {
+      const batch = expired.slice(i, i + batchSize);
+      // 本体より先にサムネを消す。途中で落ちてもその batch の本体（期限切れ）は残るので
+      // 次回また通り、サムネだけが孤児になることはない。済んだ batch の本体は消えているので
+      // 実行のたびに必ず先へ進む（META 障害が続く間は止まるが、再試行できる側に倒れる）。
+      const originals = new Set<string>();
+      for (const tk of batch) {
+        const original = /^\.trash\/\d+\/(.+)$/.exec(tk)?.[1];
+        if (original) originals.add(original);
+      }
+      for (const original of originals) {
+        if (liveOriginals.has(original)) continue;
+        // 同名で上げ直された新しい物が居る間は、そのサムネなので触らない
+        if (await bucket.head(original)) continue;
+        await deleteThumb(env, lib.id, original);
+      }
+      await bucket.delete(batch);
+      removed += batch.length;
     }
-    for (const original of originals) {
-      if (liveOriginals.has(original)) continue;
-      // 同名で上げ直された新しい物が居る間は、そのサムネなので触らない
-      if (await bucket.head(original)) continue;
-      await deleteThumb(env, lib.id, original);
-    }
-    for (let i = 0; i < expired.length; i += 1000) {
-      await bucket.delete(expired.slice(i, i + 1000));
-    }
-    removed += expired.length;
   }
   return removed;
 }

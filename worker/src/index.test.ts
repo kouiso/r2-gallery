@@ -1054,6 +1054,72 @@ describe("stale thumbnails", () => {
       spy.mockRestore();
     }
     expect(await env.LIB_A.head("ok/up.png")).not.toBeNull();
+    expect(await env.LIB_A.head("ok/cp.png")).not.toBeNull();
+    expect(await env.LIB_A.head("ok/mv.png")).not.toBeNull();
+    expect(await env.LIB_A.head("ok/src.png")).toBeNull();
+  });
+
+  it("multipart complete still returns 201 when the thumbnail delete fails", async () => {
+    const create = await post("/v1/a/objects/multipart", {
+      key: "ok/mp.mp4",
+      contentType: "video/mp4",
+    });
+    const { uploadId } = (await create.json()) as { uploadId: string };
+    const p = await api(
+      `/v1/a/objects/multipart/part?key=${encodeURIComponent("ok/mp.mp4")}&uploadId=${uploadId}&part=1`,
+      {
+        method: "PUT",
+        headers: { "content-type": "application/octet-stream" },
+        body: new Uint8Array([1, 2, 3]),
+      },
+    );
+    const part = (await p.json()) as { partNumber: number; etag: string };
+    const spy = vi.spyOn(env.META, "delete").mockRejectedValue(new Error("meta down"));
+    try {
+      const done = await post("/v1/a/objects/multipart/complete", {
+        key: "ok/mp.mp4",
+        uploadId,
+        parts: [part],
+      });
+      expect(done.status).toBe(201);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(await env.LIB_A.head("ok/mp.mp4")).not.toBeNull();
+  });
+
+  it("purge makes progress batch by batch even if a run dies midway", async () => {
+    // 他のテストの残りより必ず先に並ぶよう、十分古い時刻にする
+    const base = Date.now() - 90 * 86_400_000;
+    const names = [0, 1, 2, 3, 4].map((i) => `batch/p${i}.png`);
+    const trashKeys = names.map((n, i) => `.trash/${base + i}/${n}`);
+    for (const [i, tk] of trashKeys.entries()) {
+      await env.LIB_A.put(tk, PNG);
+      await env.META.put(thumbKey(names[i]!), "OLD");
+    }
+    const orig = env.META.delete.bind(env.META);
+    let calls = 0;
+    const spy = vi.spyOn(env.META, "delete").mockImplementation(async (k) => {
+      calls += 1;
+      // 2件ずつの batch の 2 つ目で落とす
+      if (calls === 3) throw new Error("subrequest limit");
+      return orig(k);
+    });
+    try {
+      await expect(purgeTrash(env, 2)).rejects.toThrow();
+    } finally {
+      spy.mockRestore();
+    }
+    // 済んだ batch は本体まで消え、落ちた batch 以降は残る
+    expect(await env.LIB_A.head(trashKeys[0]!)).toBeNull();
+    expect(await env.LIB_A.head(trashKeys[1]!)).toBeNull();
+    expect(await env.LIB_A.head(trashKeys[2]!)).not.toBeNull();
+    // 次の実行は残りだけを片付ける
+    await purgeTrash(env, 2);
+    for (const [i, tk] of trashKeys.entries()) {
+      expect(await env.LIB_A.head(tk)).toBeNull();
+      expect(await env.META.head(thumbKey(names[i]!))).toBeNull();
+    }
   });
 });
 

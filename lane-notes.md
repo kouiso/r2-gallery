@@ -1,4 +1,4 @@
-STATE PAUSED 2026-11-14T15:26Z (PAUSE from managing session: allowance guard; resume on RESUME)
+STATE RUNNING 2026-11-14T20:18Z | resumed (RESUME 05:07 JST); cap: 1 subagent alive
 mission: それぞれのプロジェクトに書いてあるプランに書いてある作業をやること / どのプロジェクトもまず既存のPRを本質的に対処することを作業を優先してください。そうしないと溜まってばっかりなので
 model fable (lead, night order 3) ; manager+reviewers fable, implementers opus, mechanical sonnet | advisor unknown | github via connector | push via git | png ok (playwright chromium)
 goal: lane r2-gallery [cloud] until cycle DONE or DONE-WAITING or PAUSE (set 2026-11-14 night) | DONE-WAITING satisfies it: yes
@@ -240,3 +240,6 @@ HANDOFF 2026-11-14T15:26Z
   owner/device lists: unchanged from handoff PR #146 (see needs owner / DEVICE above)
   #145 at PAUSE: branch pushed at ca71e15 (main merged, no conflicts, merge 8e8e7b8). HEAD IS RED ON PURPOSE: new test added for a real sibling race (pause then resume while the staged file is being deleted re-copies the staged file and leaves it on a completed row) fails 1/1; fix not written yet (idea: pause/cancel do nothing while a row is completing). Steps not started: analyze, 20x transfer_queue_test, 10x pin_test, full suite, node checks, fail-before/pass-after, LOCAL-CHECK, body. Nothing posted on GitHub for this head.
   all members stopped; no subagent running.
+RESUME 2026-11-14T20:18Z | rules tightened: 1 subagent alive, land closest item first, no new PRs before existing land, push NOTES per landed item
+PROD #122: fad-dist-state .source-sha == 04dc5d8 confirmed 20:18Z
+MERGED #136 (RG-20 follow-up) 2026-11-14T20:20Z | head 0bdc006 == GATE head https://github.com/kouiso/r2-gallery/pull/136#issuecomment-6883615809 | merge c089e5e | base retargeted to main before merge | worker-only, effective after RG-24 | prod confirm pending

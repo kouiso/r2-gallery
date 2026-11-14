@@ -78,6 +78,8 @@ HOUR 2026-11-14T13:08:55Z | merged 0 | closed 0 | output 0 | open PR 3->13 (r2-g
   members running now: 2 (stream A, stream B) + reviewers 6 (#120, #126, #125, #128, #127, stacked #121/#122) | items in flight: 17 | merges/closes since last line: 0/0
   rule 1(a) iteration moved 0 (board unreadable) | rule 1(b) non-claude-cloud first: PBI-level work ordered first; 0 labels changed | skipped (-ux): 0
   narrowest point: review verdicts (5 FAIL→rework rounds) + rate limit; capacity raised to 8 members then capped to 5 for 4-CPU load
+#126 RG-23 (#64) | re-review PASS must0 (queued 126-review-260d90f.md) | evidence evidence/126-260d90f.png | CI check/test/secrets green, emulator running | merge order: after #124, #123
+MERGE QUEUE (one at a time, after rate limit): #124 -> #123 -> #126 -> (#120 if PASS) -> #122 -> #122-stacked -> #121 -> #121-stacked(retarget) -> #127 (if PASS)
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)

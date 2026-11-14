@@ -97,6 +97,8 @@ MERGED #124 RG-22 13:27Z | head 989ca87 == GATE head https://github.com/kouiso/r
 stream A | PRs #129 (#33, 9e20f53) -> #130 (#92/#93, fbb6162) -> #131 (#66/#67, 3b748eb) stacked; evidence pr1/pr2/pr3 PNGs (goldens, Ahem font); #69/#70 OWNER-blocked on #29
 OWNER INSTRUCTION 2026-11-14 (relayed): 「…デザイン通りになるように全部作ること」 -> design page = reference for everything on screen; queue position: after existing open PRs + iteration items. Design link: https://claude.ai/artifact/6NsgHfP9kH9whED6j4ec26 (opened OK 12:2xZ; identical to repo doc/design/project). Pages: current (10/27, 11/11 修正), review (11/11 proposals), redesign (10/11 KMP record).
 stream B | #115 no repro (300 upload/export/offline OK in Dart VM + web; web tab crashed ~400MB heap; Android not tested) -> comment https://github.com/kouiso/r2-gallery/issues/115#issuecomment-6877981401 asks owner which save; #116/#117 blocked | PRs #133 (#39 detected thumb, 099833f, Refs), #134 (#83 analyze 7->0, 337a5ae, Closes), #132 (#36 duration, 7f054ef, Refs) — reviews next
+CONFIRMED #124 in production: pages-dist .source-sha = 0b43385 at ~13:31Z (FAD state follows on its 15-min poll)
+MERGED #123 RG-21 ~13:32Z | head 91b67c1 == GATE head https://github.com/kouiso/r2-gallery/pull/123#issuecomment-6877996800 | merge 0ea40e0 | Closes #55; #54 #56 open (RG-24 worker deploy)
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)
@@ -109,7 +111,7 @@ stream B | #115 no repro (300 upload/export/offline OK in Dart VM + web; web tab
 | RG-18 | todo | agent | #44 via #45 #46 |
 | RG-19 | todo | agent | #48 via #49 |
 | RG-20 | todo | agent | #51 via #52 |
-| RG-21 | todo | agent | #54 via #55 |
+| RG-21 | done | agent | #123 merged; #54 waits RG-24 |
 | RG-22 | done | agent | #124 merged 13:27Z |
 | RG-23 | todo | agent | #63 via #64 #65 |
 | RG-26 | done | agent | しない: RG-Q3 = 2 |

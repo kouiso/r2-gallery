@@ -44,6 +44,8 @@ DECIDED | G5 production exclusion lifted for r2-gallery main merges of #118 and 
 #124 RG-22 | review running | head 989ca87
 #125 #84/#85 (stream C) | PR opened | review after member report
 #120 | FIX in progress (RG-19 member resumed)
+JUDGE b3 (manager): evidence bar — worker-only #120 #122 #123 = LOCAL-CHECK image (#123 preflight must use production Pages Origin), issues stay open with RG-24 remaining; #124 = headless-Chromium recording vs local worker; #121 = LOCAL-CHECK + live run vs local wrangler dev showing real 409s (complete + put), test_live/ style; #121/#124 must not depend on undeployed worker changes. #121 HOLD: stacked test PR on #121 branch with want1+want2 tests, green+reviewed, then merge #121, retarget, merge tests; want3 -> follow-up issue named in GATE + confirm failure ends as error row. #118 still blocked (device video + export answer); after #121 merges #118 rebases (merge base) + PASS re-recorded.
+  fail-before behavioural for #121 confirmed by reviewer (timeout "waiting for all done", v (2).mp4 missing) — not compile errors.
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)

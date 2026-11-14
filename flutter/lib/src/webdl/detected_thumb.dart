@@ -164,7 +164,7 @@ class DetectedThumbs {
     try {
       // data: の表紙はページに埋め込まれた絵そのもの。通信できない（取得役は http(s) だけ）ので、その場で読む
       final bytes = d.poster.startsWith('data:')
-          ? _dataUrlBytes(d.poster)
+          ? dataUrlBytes(d.poster, maxImageBytes)
           : await _fetchBounded(d.poster, d.headers, maxImageBytes,
               origin: d.url);
       if (bytes.isNotEmpty) return _shrink(bytes);
@@ -172,18 +172,6 @@ class DetectedThumbs {
       // 表紙が取れなければ、従来の取り方に回る
     }
     return null;
-  }
-
-  Uint8List _dataUrlBytes(String url) {
-    final i = url.indexOf(',');
-    if (i < 0) return Uint8List(0);
-    final head = url.substring(0, i);
-    final body = url.substring(i + 1);
-    final bytes = head.endsWith(';base64')
-        ? base64Decode(body)
-        : Uint8List.fromList(utf8.encode(Uri.decodeComponent(body)));
-    // http(s) の表紙と同じ上限。巨大な埋め込みを縮小のために丸ごと展開しない
-    return bytes.length > maxImageBytes ? Uint8List(0) : bytes;
   }
 
   Future<Uint8List?> _video(DetectedItem d) async {
@@ -352,4 +340,22 @@ class DetectedThumbs {
 /// サムネのために取る物が上限を超えた。途中で受け取りをやめる合図
 class _TooLarge implements Exception {
   const _TooLarge();
+}
+
+/// data: URL の中身を返す。上限を超える物・読めない物は空にする。
+/// 上限は復号の前に本文の長さから見る（巨大な埋め込みを縮小のために丸ごと展開しない）。
+/// 読み取りは UriData に任せる。生のバイト列を `%89PNG` と書いたパーセント符号化も、
+/// `;BASE64` の大文字小文字違いも正しく読める（decodeComponent は UTF-8 前提で 0x89 などに失敗する）。
+@visibleForTesting
+Uint8List dataUrlBytes(String url, int maxBytes) {
+  final i = url.indexOf(',');
+  if (i < 0) return Uint8List(0);
+  final bodyLength = url.length - i - 1;
+  final base64 = url.substring(0, i).toLowerCase().endsWith(';base64');
+  // 復号後の大きさの下限（base64 は 4 文字で 3 バイト・末尾の詰めは最大 2 バイト、%XX は 3 文字で 1 バイト）。
+  // 下限で見るので、上限ちょうどの正しい物は弾かない
+  final lowerBound = base64 ? (bodyLength ~/ 4) * 3 - 2 : bodyLength ~/ 3;
+  if (lowerBound > maxBytes) return Uint8List(0);
+  final bytes = UriData.parse(url).contentAsBytes();
+  return bytes.length > maxBytes ? Uint8List(0) : bytes;
 }

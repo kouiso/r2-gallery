@@ -146,7 +146,7 @@ void main() {
       clock = clock.add(const Duration(seconds: 31));
       expect(await t.of(d), [9, 9]);
       expect(site.hits, ['/p/late.jpg', '/p/late.jpg']);
-      // 取れた後は覚えている
+      // 成功は期間に関係なく使い回す。失敗の再取得期間を成功にまで当てると、スクロールのたびに取り直してしまう
       expect(await t.of(d), [9, 9]);
       expect(site.hits, hasLength(2));
     });
@@ -161,6 +161,37 @@ void main() {
       // 本体の先頭は試すが、表紙のために別の通信はしない
       expect(site.hits, ['/v/clip.mp4']);
       expect(frames, isEmpty);
+    });
+
+    test('動画の表紙がパーセント符号化の data: URL でも、生のバイト列として読める', () async {
+      final t = make();
+      final d = DetectedItem('${site.base}/v/clip.mp4', DetectedKind.video,
+          const {}, 'data:image/png,%89PNG%0D%0A%1A%0A');
+      expect(await t.of(d), [9, 9]);
+      expect(shrunk.single, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    });
+
+    group('dataUrlBytes', () {
+      test('base64（大文字小文字違いも）とパーセント符号化を読む', () {
+        expect(dataUrlBytes('data:image/png;base64,iVBORw==', 100),
+            [0x89, 0x50, 0x4e, 0x47]);
+        expect(dataUrlBytes('data:image/png;BASE64,iVBORw==', 100),
+            [0x89, 0x50, 0x4e, 0x47]);
+        expect(dataUrlBytes('data:image/png,%89PNG', 100),
+            [0x89, 0x50, 0x4e, 0x47]);
+      });
+
+      test('上限を超える本文は復号せずに空にする（壊れた本文でも例外にならない）', () {
+        // 復号を試みれば FormatException になる本文。復号の前に弾けていれば例外は出ない
+        expect(dataUrlBytes('data:image/png;base64,${'!' * 400}', 100), isEmpty);
+        expect(dataUrlBytes('data:image/png,${'%89' * 400}', 100), isEmpty);
+      });
+
+      test('上限ちょうどの物は弾かない', () {
+        final exact = base64Encode(List<int>.filled(99, 7));
+        expect(dataUrlBytes('data:image/png;base64,$exact', 99), hasLength(99));
+        expect(dataUrlBytes('data:image/png;base64,$exact', 98), isEmpty);
+      });
     });
 
     test('動画は再生部品に URL を渡す。閲覧サイトの Cookie は渡さない', () async {

@@ -6,6 +6,7 @@ import '../state/app_state.dart';
 import '../state/pairing.dart';
 import '../store/lock_policy.dart';
 import '../store/pin.dart';
+import 'connect_edit_screen.dart';
 import 'lock_gate.dart';
 import 'theme.dart';
 
@@ -175,7 +176,17 @@ class _SettingsTabState extends State<SettingsTab> {
                         color: AppColors.textDim, fontSize: 12))
                 : const Text('タップして接続先を設定',
                     style: TextStyle(color: AppColors.textDim, fontSize: 12)),
-            onTap: host != null ? null : app.leaveBrowseOnly,
+            // 接続中は接続先の変更へ。切断せずに直せる道を作る
+            trailing: host != null
+                ? const Row(mainAxisSize: MainAxisSize.min, children: [
+                    Text('変更', style: TextStyle(color: AppColors.textDim)),
+                    Icon(Icons.chevron_right, color: AppColors.textDim),
+                  ])
+                : null,
+            onTap: host != null
+                ? () => Navigator.of(context).push(MaterialPageRoute<void>(
+                    builder: (_) => ConnectEditScreen(app: app)))
+                : app.leaveBrowseOnly,
           ),
         ),
         // 切断の置き場はデザインでは別画面だが、#66 で接続先の変更が入るまで今の場所に残す

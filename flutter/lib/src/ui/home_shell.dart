@@ -9,6 +9,7 @@ import '../grid/selection_widgets.dart';
 import '../state/app_state.dart';
 import '../transfer/transfers_strip.dart';
 import 'albums_tab.dart';
+import 'connect_edit_screen.dart';
 import 'connect_screen.dart';
 import 'folder_browse_screen.dart';
 import 'gallery_tab.dart';
@@ -326,7 +327,11 @@ class _HomeShellState extends State<HomeShell> {
                 _needsLibrary((lib) => GalleryTab(
                       app: app,
                       lib: lib,
-                      onOpenSettings: () => _goTab(_settingsTab),
+                      // 読み込み失敗の直し先は接続先の変更。接続中は切断せずに直せる
+                      onOpenSettings: () => app.connected
+                          ? Navigator.of(context).push(MaterialPageRoute<void>(
+                              builder: (_) => ConnectEditScreen(app: app)))
+                          : _goTab(_settingsTab),
                     )),
                 _opened.contains(_albumsTab)
                     ? _needsLibrary(_albumsSlot)

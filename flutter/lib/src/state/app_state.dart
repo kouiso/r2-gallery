@@ -301,6 +301,32 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
+  /// 接続先を保存せずに試す。今の接続・保存済みの値には一切触れない。
+  /// 返す文字列は失敗の理由、成功なら null（件数は取れた時だけ）。
+  Future<({String? error, int? libraryCount})> tryConnect(
+      String endpoint, String token) async {
+    final input = normalizeConnectInput(endpoint, token);
+    if (input == null) {
+      final ep = endpoint.trim();
+      return (
+        error: ep.contains('://') && !ep.startsWith('https://')
+            ? 'エンドポイントは https:// で始めてください'
+            : connectFailedMessage,
+        libraryCount: null,
+      );
+    }
+    final r = await api
+        .probeOutcome(input.endpoint, input.token)
+        .timeout(_bakedProbeBudget, onTimeout: () => ProbeOutcome.unreachable);
+    if (r.success) return (error: null, libraryCount: r.libraryCount);
+    return (
+      error: r.tokenRejected
+          ? 'トークンが違います。確認してください。'
+          : '接続先に届きません。URLとネットワークを確認してください。',
+      libraryCount: null,
+    );
+  }
+
   Future<void> _connectBaked() async {
     final ok = await api
         .probe(bakedEndpoint, bakedToken)

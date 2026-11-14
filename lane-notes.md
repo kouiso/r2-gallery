@@ -161,3 +161,6 @@ POSTER done: new PRs #135 (#121 stacked) #136 (#122 stacked) #137 (#74) #138 (#6
 PROD #141 confirmed: pages-dist == 9f14722 at 13:43Z (before #121 merge)
 MERGED #121 RG-17 (#114-ish same-name upload) ~13:49Z | head 4e24c2a == GATE https://github.com/kouiso/r2-gallery/pull/121#issuecomment-6878229434 | merge 8154862 | merge-result check 98bf444: flutter +481, fast 0, analyze 7 info (same as main)
 #135 retargeted to main; its earlier LOCAL-CHECK had fail 1 (ci fast timeouts under load) -> clean re-run on merge fbb248e (5e092d2 + main 8154862) running
+#135 Devin (after retarget): 3 analysis-only suggestions (completesSeen assert, live re-read, comment wording) — optional, no push; carry to follow-up
+#132 REVIEW FAIL must1 (v+d entries per video vs 200-entry receiver cap → >100 videos lose candidates permanently) https://github.com/kouiso/r2-gallery/pull/132#issuecomment-6878246909 | #133 PASS want2 (data: size check before decode; percent-encoded data: lost) https://github.com/kouiso/r2-gallery/pull/133#issuecomment-6878244654 | #134 PASS https://github.com/kouiso/r2-gallery/pull/134#issuecomment-6878242232 → fix member on #132+#133 running
+docs re-reviews PASS: #140 t3 69aad36 (want: stale 注意 in body), #142 v2 3572d44, #139 kmp b16b51e → posting; merges need owner scope extension

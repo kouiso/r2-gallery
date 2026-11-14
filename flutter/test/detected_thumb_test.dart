@@ -71,8 +71,12 @@ void main() {
 
   final shrunk = <Uint8List>[];
 
-  DetectedThumbs make({Uint8List? frame}) => DetectedThumbs(
+  DetectedThumbs make(
+          {Uint8List? frame, Duration? failureTtl, DateTime Function()? now}) =>
+      DetectedThumbs(
         fetcher: WebFetcher(),
+        failureTtl: failureTtl ?? const Duration(seconds: 30),
+        now: now,
         shrinkImage: (b) async {
           shrunk.add(b);
           return Uint8List.fromList([9, 9]);
@@ -128,6 +132,66 @@ void main() {
       expect(
           await t.of(DetectedItem('${site.base}/p/none.jpg', DetectedKind.image)),
           isNull);
+    });
+
+    test('一時的に取れなかった画像は、期間を置いた次の表示で取り直す（失敗が居座らない）', () async {
+      var clock = DateTime(2026, 11, 14);
+      final t = make(failureTtl: const Duration(seconds: 30), now: () => clock);
+      final d = DetectedItem('${site.base}/p/late.jpg', DetectedKind.image);
+      expect(await t.of(d), isNull);
+      // 期間内は行を作り直しても通信しない（一覧のスクロールで同じ失敗を叩き続けない）
+      site.files['/p/late.jpg'] = _png();
+      expect(await t.of(d), isNull);
+      expect(site.hits, ['/p/late.jpg']);
+      clock = clock.add(const Duration(seconds: 31));
+      expect(await t.of(d), [9, 9]);
+      expect(site.hits, ['/p/late.jpg', '/p/late.jpg']);
+      // 成功は期間に関係なく使い回す。失敗の再取得期間を成功にまで当てると、スクロールのたびに取り直してしまう
+      expect(await t.of(d), [9, 9]);
+      expect(site.hits, hasLength(2));
+    });
+
+    test('動画の表紙が data: URL の時は、通信せずその絵を縮小して使う', () async {
+      final t = make();
+      final png = _png();
+      final d = DetectedItem('${site.base}/v/clip.mp4', DetectedKind.video,
+          const {}, 'data:image/png;base64,${base64Encode(png)}');
+      expect(await t.of(d), [9, 9]);
+      expect(shrunk.single, png);
+      // 本体の先頭は試すが、表紙のために別の通信はしない
+      expect(site.hits, ['/v/clip.mp4']);
+      expect(frames, isEmpty);
+    });
+
+    test('動画の表紙がパーセント符号化の data: URL でも、生のバイト列として読める', () async {
+      final t = make();
+      final d = DetectedItem('${site.base}/v/clip.mp4', DetectedKind.video,
+          const {}, 'data:image/png,%89PNG%0D%0A%1A%0A');
+      expect(await t.of(d), [9, 9]);
+      expect(shrunk.single, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    });
+
+    group('dataUrlBytes', () {
+      test('base64（大文字小文字違いも）とパーセント符号化を読む', () {
+        expect(dataUrlBytes('data:image/png;base64,iVBORw==', 100),
+            [0x89, 0x50, 0x4e, 0x47]);
+        expect(dataUrlBytes('data:image/png;BASE64,iVBORw==', 100),
+            [0x89, 0x50, 0x4e, 0x47]);
+        expect(dataUrlBytes('data:image/png,%89PNG', 100),
+            [0x89, 0x50, 0x4e, 0x47]);
+      });
+
+      test('上限を超える本文は復号せずに空にする（壊れた本文でも例外にならない）', () {
+        // 復号を試みれば FormatException になる本文。復号の前に弾けていれば例外は出ない
+        expect(dataUrlBytes('data:image/png;base64,${'!' * 400}', 100), isEmpty);
+        expect(dataUrlBytes('data:image/png,${'%89' * 400}', 100), isEmpty);
+      });
+
+      test('上限ちょうどの物は弾かない', () {
+        final exact = base64Encode(List<int>.filled(99, 7));
+        expect(dataUrlBytes('data:image/png;base64,$exact', 99), hasLength(99));
+        expect(dataUrlBytes('data:image/png;base64,$exact', 98), isEmpty);
+      });
     });
 
     test('動画は再生部品に URL を渡す。閲覧サイトの Cookie は渡さない', () async {

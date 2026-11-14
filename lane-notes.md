@@ -104,6 +104,11 @@ docs reviews | run-locally-v2 189b77c PASS (want: LOCAL-CHECK timestamp 13:40Z w
 NOTE (for main session too): docs/run-locally branch (ac927b5, dummy token in curl) stays on origin — lane may not delete branches; without CI_SCAN_BASE, local `run.mjs fast` exits 2 in clones that have it. Owner may delete it after #128 is closed.
 #120-stacked (fix/rg19-trash-order-prune 38404d1) | re-review PASS must0 want1 (body test section corrected by lead, text only) nit2 (stale sidecar keeps key; parallel head race — follow-up) | PR to be created after #120 merges
 MERGED #126 RG-23 (#64) ~13:40Z | head 260d90f == GATE https://github.com/kouiso/r2-gallery/pull/126#issuecomment-6878060303 | merge c3dd80e | #64 closed; #63/#65 OWNER (#65 decision)
+PROD #126 confirmed 13:37Z: pages-dist .source-sha == c3dd80e; fad-dist-state still 5dfe918 (operator lane polls).
+MERGED #120 RG-19 (#48 #49) 13:41Z | head 01936fb == GATE https://github.com/kouiso/r2-gallery/pull/120#issuecomment-6878094387 | merge feda953 | worker-only, takes effect with RG-24
+PR #141 = #120 stacked (fix/rg19-trash-order-prune, head 38404d1, base main) | review PASS posted https://github.com/kouiso/r2-gallery/pull/141#issuecomment-6878109592 | LOCAL-CHECK on merge with main feda953 running
+#131 REVIEW FAIL at 3b748eb (must 1: same-lib endpoint switch keeps old state, trash sends A keys to B) https://github.com/kouiso/r2-gallery/pull/131#issuecomment-6878086868 → fix member running
+stream C done: t3 69aad36 / run-locally-v2 3572d44 / kmp-era b16b51e (fresh LOCAL-CHECKs in queue) → re-review running
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)

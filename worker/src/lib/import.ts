@@ -2,7 +2,7 @@ import { IMPORT_MAX_DEFAULT, MAX_REDIRECTS, MEDIA_EXT } from "./const";
 import type { Env } from "./env";
 import { HttpError, json, readJson, assertUserKey } from "./http";
 import { writable } from "./env";
-import { createOnly } from "./objects";
+import { createOnly, deleteThumb } from "./objects";
 
 /* ---------------- URL import (SSRF-guarded) ---------------- */
 
@@ -122,5 +122,6 @@ export async function handleImport(req: Request, env: Env, lib: string): Promise
     onlyIf: createOnly(),
   });
   if (!put) throw new HttpError(409, "destination_exists");
+  await deleteThumb(env, lib, key);
   return json({ key, size: put.size }, 201);
 }

@@ -1,4 +1,4 @@
-import { TRASH_PREFIX } from "./const";
+import { SYSTEM_PREFIX, TRASH_PREFIX } from "./const";
 import type { Env } from "./env";
 import { HttpError } from "./http";
 import { libraries } from "./env";
@@ -95,6 +95,14 @@ export async function moveObject(
   return put;
 }
 
+/**
+ * サムネは本体とは別の META に key 単位で置かれ、本体を消しても残る。
+ * 同名で別の物を上げ直した時に古い絵が出ないよう、本体が入れ替わる所で必ず消す。
+ */
+export async function deleteThumb(env: Env, lib: string, key: string): Promise<void> {
+  await env.META.delete(`${SYSTEM_PREFIX}thumbs/${lib}/${key}.webp`);
+}
+
 /** ゴミ箱の保持日数。削除する側と画面に出す側で同じ値を使うため1か所で読む */
 export function trashRetentionDays(env: Env): number {
   return Number(env.TRASH_RETENTION_DAYS ?? "30") || 30;
@@ -115,6 +123,12 @@ export async function purgeTrash(env: Env): Promise<number> {
         .map((o) => o.key);
       if (expired.length) {
         await bucket.delete(expired);
+        // 完全削除で本体が無くなるので、残るサムネも消す。ただし同名で上げ直された
+        // 新しい物が居る間は、そのサムネなので触らない。
+        for (const tk of expired) {
+          const original = /^\.trash\/\d+\/(.+)$/.exec(tk)?.[1];
+          if (original && !(await bucket.head(original))) await deleteThumb(env, lib.id, original);
+        }
         removed += expired.length;
       }
       cursor = listed.truncated ? listed.cursor : undefined;

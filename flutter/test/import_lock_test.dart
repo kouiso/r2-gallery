@@ -34,7 +34,7 @@ class _Api extends ApiClient {
       const [Library(id: 'lib', title: 'Lib')];
   @override
   Future<FolderPage> folder(String libId,
-          {String prefix = '', String? cursor, bool recursive = false}) async =>
+          {String prefix = '', String? cursor, bool recursive = false, String? sort}) async =>
       const FolderPage(items: []);
   @override
   Future<List<Album>> albums(String libId) async => const [];

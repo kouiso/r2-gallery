@@ -1176,6 +1176,17 @@ describe("stale thumbnails", () => {
     expect(await env.META.head(thumbKey("gone/old.png"))).toBeNull();
   });
 
+  it("purge removes an expired trash entry whose key contains a newline, and its thumbnail", async () => {
+    // assertUserKey は改行を許すので、`.` が改行に当たらない正規表現だと永久に消えない
+    const original = "nl/line1\nline2.png";
+    const tk = `.trash/${Date.now() - 31 * 86_400_000}/${original}`;
+    await env.LIB_A.put(tk, PNG);
+    await env.META.put(thumbKey(original), "OLD");
+    await trashPurge();
+    expect(await env.LIB_A.head(tk)).toBeNull();
+    expect(await env.META.head(thumbKey(original))).toBeNull();
+  });
+
   it("purge keeps the thumbnail while a same-name object has been re-uploaded", async () => {
     await env.LIB_A.put(`.trash/${Date.now() - 31 * 86_400_000}/again/pic.png`, PNG);
     await env.LIB_A.put("again/pic.png", PNG);

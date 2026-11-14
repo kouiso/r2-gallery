@@ -142,7 +142,7 @@ export async function purgeTrash(env: Env, batchSize = PURGE_BATCH): Promise<num
     do {
       const listed = await bucket.list({ prefix: TRASH_PREFIX, cursor, limit: 1000 });
       for (const o of listed.objects) {
-        const m = /^\.trash\/(\d+)\/(.*)$/.exec(o.key);
+        const m = /^\.trash\/(\d+)\/([\s\S]*)$/.exec(o.key);
         if (!m) continue;
         if (Number(m[1]) < cutoff) expired.push(o.key);
         else liveOriginals.add(m[2] ?? "");
@@ -157,7 +157,7 @@ export async function purgeTrash(env: Env, batchSize = PURGE_BATCH): Promise<num
       // 実行のたびに必ず先へ進む（META 障害が続く間は止まるが、再試行できる側に倒れる）。
       const originals = new Set<string>();
       for (const tk of batch) {
-        const original = /^\.trash\/\d+\/(.+)$/.exec(tk)?.[1];
+        const original = /^\.trash\/\d+\/([\s\S]+)$/.exec(tk)?.[1];
         if (original) originals.add(original);
       }
       for (const original of originals) {

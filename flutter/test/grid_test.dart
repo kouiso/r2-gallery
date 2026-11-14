@@ -643,6 +643,40 @@ void main() {
       expect(_tile('trip/day1/b.jpg'), findsOneWidget);
     });
 
+    testWidgets('下位フォルダは写真より上に出る（#74）', (tester) async {
+      final api = _Api({
+        'trip/': FolderPage(
+          items: [
+            for (var i = 0; i < 40; i++) _img('trip/p$i.jpg', at: _daysAgo(0)),
+          ],
+          folders: ['trip/day1/', 'trip/day2/'],
+        ),
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          home: FolderBrowseScreen(app: _app(api), lib: 'a', prefix: 'trip/'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final folderY = tester.getTopLeft(find.text('day1')).dy;
+      final photoY = tester.getTopLeft(_tile('trip/p0.jpg')).dy;
+      expect(folderY, lessThan(photoY));
+      expect(find.text('フォルダ 2'), findsOneWidget);
+    });
+
+    testWidgets('下位フォルダが無い時はフォルダの段ごと出ない（#74）', (tester) async {
+      final api = _Api({
+        'trip/': FolderPage(items: [_img('trip/a.jpg', at: _daysAgo(0))]),
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          home: FolderBrowseScreen(app: _app(api), lib: 'a', prefix: 'trip/'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('folderStrip')), findsNothing);
+    });
+
     testWidgets('空のフォルダは空と出す', (tester) async {
       await tester.pumpWidget(
         MaterialApp(

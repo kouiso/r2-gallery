@@ -71,8 +71,12 @@ void main() {
 
   final shrunk = <Uint8List>[];
 
-  DetectedThumbs make({Uint8List? frame}) => DetectedThumbs(
+  DetectedThumbs make(
+          {Uint8List? frame, Duration? failureTtl, DateTime Function()? now}) =>
+      DetectedThumbs(
         fetcher: WebFetcher(),
+        failureTtl: failureTtl ?? const Duration(seconds: 30),
+        now: now,
         shrinkImage: (b) async {
           shrunk.add(b);
           return Uint8List.fromList([9, 9]);
@@ -128,6 +132,35 @@ void main() {
       expect(
           await t.of(DetectedItem('${site.base}/p/none.jpg', DetectedKind.image)),
           isNull);
+    });
+
+    test('一時的に取れなかった画像は、期間を置いた次の表示で取り直す（失敗が居座らない）', () async {
+      var clock = DateTime(2026, 11, 14);
+      final t = make(failureTtl: const Duration(seconds: 30), now: () => clock);
+      final d = DetectedItem('${site.base}/p/late.jpg', DetectedKind.image);
+      expect(await t.of(d), isNull);
+      // 期間内は行を作り直しても通信しない（一覧のスクロールで同じ失敗を叩き続けない）
+      site.files['/p/late.jpg'] = _png();
+      expect(await t.of(d), isNull);
+      expect(site.hits, ['/p/late.jpg']);
+      clock = clock.add(const Duration(seconds: 31));
+      expect(await t.of(d), [9, 9]);
+      expect(site.hits, ['/p/late.jpg', '/p/late.jpg']);
+      // 取れた後は覚えている
+      expect(await t.of(d), [9, 9]);
+      expect(site.hits, hasLength(2));
+    });
+
+    test('動画の表紙が data: URL の時は、通信せずその絵を縮小して使う', () async {
+      final t = make();
+      final png = _png();
+      final d = DetectedItem('${site.base}/v/clip.mp4', DetectedKind.video,
+          const {}, 'data:image/png;base64,${base64Encode(png)}');
+      expect(await t.of(d), [9, 9]);
+      expect(shrunk.single, png);
+      // 本体の先頭は試すが、表紙のために別の通信はしない
+      expect(site.hits, ['/v/clip.mp4']);
+      expect(frames, isEmpty);
     });
 
     test('動画は再生部品に URL を渡す。閲覧サイトの Cookie は渡さない', () async {

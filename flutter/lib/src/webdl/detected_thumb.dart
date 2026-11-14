@@ -55,7 +55,10 @@ class DetectedThumbs {
     this.maxSegmentBytes = 16 * 1024 * 1024,
     this.maxPlaylistBytes = 1024 * 1024,
     this.maxVideoPrefixBytes = 8 * 1024 * 1024,
-  })  : _videoFrame = videoFrame ?? _nativeVideoFrame,
+    this.failureTtl = const Duration(seconds: 30),
+    DateTime Function()? now,
+  })  : _now = now ?? DateTime.now,
+        _videoFrame = videoFrame ?? _nativeVideoFrame,
         _shrink = shrinkImage ?? makeImageThumb,
         _tempDir = tempDir ?? getTemporaryDirectory;
 
@@ -81,7 +84,14 @@ class DetectedThumbs {
   /// 数 MB で最初のコマが抜ける。全体は取らない
   final int maxVideoPrefixBytes;
 
+  /// 取れなかった結果を覚えておく長さ。これを過ぎたら次の表示で取り直す。
+  /// 一時的な通信失敗や、メタデータが後から届く前の失敗が、一覧を開いている間ずっとアイコンのままにならないため。
+  /// 取れない物（404 など）を行の再構築のたびに取りに行かないよう、期間内は通信しない
+  final Duration failureTtl;
+  final DateTime Function() _now;
+
   final LinkedHashMap<String, Future<Uint8List?>> _cache = LinkedHashMap();
+  final LinkedHashMap<String, DateTime> _failedUntil = LinkedHashMap();
   int _running = 0;
   final Queue<Completer<void>> _waiting = Queue();
   int _seq = 0;
@@ -95,8 +105,22 @@ class DetectedThumbs {
       _cache[key] = hit;
       return hit;
     }
+    final until = _failedUntil[key];
+    if (until != null) {
+      if (_now().isBefore(until)) return Future.value(null);
+      _failedUntil.remove(key);
+    }
     final f = _limited(() => _make(d));
     _cache[key] = f;
+    // 失敗（null）は居座らせず、期間を置いて取り直せるようにする
+    f.then((v) {
+      if (v != null || !identical(_cache[key], f)) return;
+      _cache.remove(key);
+      _failedUntil[key] = _now().add(failureTtl);
+      while (_failedUntil.length > maxCached) {
+        _failedUntil.remove(_failedUntil.keys.first);
+      }
+    });
     while (_cache.length > maxCached) {
       _cache.remove(_cache.keys.first);
     }
@@ -138,13 +162,28 @@ class DetectedThumbs {
   Future<Uint8List?> _poster(DetectedItem d) async {
     if (d.poster.isEmpty) return null;
     try {
-      final bytes =
-          await _fetchBounded(d.poster, d.headers, maxImageBytes, origin: d.url);
+      // data: の表紙はページに埋め込まれた絵そのもの。通信できない（取得役は http(s) だけ）ので、その場で読む
+      final bytes = d.poster.startsWith('data:')
+          ? _dataUrlBytes(d.poster)
+          : await _fetchBounded(d.poster, d.headers, maxImageBytes,
+              origin: d.url);
       if (bytes.isNotEmpty) return _shrink(bytes);
     } on Exception {
       // 表紙が取れなければ、従来の取り方に回る
     }
     return null;
+  }
+
+  Uint8List _dataUrlBytes(String url) {
+    final i = url.indexOf(',');
+    if (i < 0) return Uint8List(0);
+    final head = url.substring(0, i);
+    final body = url.substring(i + 1);
+    final bytes = head.endsWith(';base64')
+        ? base64Decode(body)
+        : Uint8List.fromList(utf8.encode(Uri.decodeComponent(body)));
+    // http(s) の表紙と同じ上限。巨大な埋め込みを縮小のために丸ごと展開しない
+    return bytes.length > maxImageBytes ? Uint8List(0) : bytes;
   }
 
   Future<Uint8List?> _video(DetectedItem d) async {

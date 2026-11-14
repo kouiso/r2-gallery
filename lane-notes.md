@@ -1,7 +1,7 @@
-STATE PAUSED 2026-11-14T14:20Z (manager: account allowance; resume on RESUME)
+STATE RUNNING 2026-11-14T15:11Z | night lane (cloud) resumed from handoff PR #146; counts pending
 mission: それぞれのプロジェクトに書いてあるプランに書いてある作業をやること / どのプロジェクトもまず既存のPRを本質的に対処することを作業を優先してください。そうしないと溜まってばっかりなので
-model claude-opus-5-5 (lead) | advisor present (fable, set 2026-11-14 by owner) | github via connector (gh: GH_TOKEN invalid) | push via git | png ok (playwright chromium)
-goal: work plan r2-gallery until cycle DONE or DONE-WAITING (set 2026-11-14) | DONE-WAITING satisfies it: yes
+model fable (lead, night order 3) ; manager+reviewers fable, implementers opus, mechanical sonnet | advisor unknown | github via connector | push via git | png ok (playwright chromium)
+goal: lane r2-gallery [cloud] until cycle DONE or DONE-WAITING or PAUSE (set 2026-11-14 night) | DONE-WAITING satisfies it: yes
 rules read: r2-gallery CLAUDE.md/AGENTS.md (same content), .github/scrum-board.yml (project 43), .github/ci/README; archive CLAUDE.md. Stricter: comments Japanese why-only; PR titles Japanese; never edit pages-dist; feature-parity (never drop a feature without owner OK); run `node .github/ci/run.mjs fast` and `node tools/sync-ai-rules.mjs --check` before push; no PR template in either repo.
 DEPLOY | kouiso/r2-gallery merge to main -> production | evidence .github/workflows/web-deploy.yml:4-6,33-48 (push main -> pages-dist = Pages production, CLAUDE.md:49) + CLAUDE.md:48 / .agents/skills/fad-distribute/SKILL.md:8 (merge to main ships APK to FAD testers)
 DEPLOY | kouiso/r2-gallery merge to other bases (feature branches) -> nothing | evidence ci.yml:5-9, maestro.yml:7-16, web-deploy.yml:4-6 (only main triggers deploy)
@@ -209,3 +209,10 @@ STATE OF PRs: merge-ready after posting: #127, #122, #136. Fixing: #145 (FAIL mu
 No scheduled check-ins left (14:53Z one deleted at pause).
 PAUSE handbacks: #145 fix pushed b2aa335 (M1 _completing kept until done, W1 stagedDeleteTimeout 5s, tests fail-before/pass-after; remaining: full checks, LOCAL-CHECK + body addendum, re-review) — paused-145.md | C1a pushed f99d6aa (navigationBarTheme, _NavPillBorder 56x30, success/onAccent tokens, theme_nav_test 7 tests; remaining: analyze/full test/fast/sync, side-by-side PNG (script /home/user/design-prod/c1a.js), PR drafts; C2 notes: nav top line + outline selectedIcons in home_shell.dart, #FFAE00 in video_levels.dart/video_view.dart) — paused-feat-design-c1a-theme-nav.md
 PAUSE handbacks 2: pin_test fix pushed fd15d68 (test bug: wall-clock gap assert; PinLock.computeImpl seam, deterministic test; remaining: 30x under load, analyze/full test/fast/sync, PR drafts) — paused-pin-test.md | #138 pushed 4b1f70f (body bg #0A0A0F, description-equality test, before/after PNG evidence/138-*-390.png; remaining: checks, LOCAL-CHECK, body addendum) | #137 not started (still 31eb486) — paused-137-138.md | #130/#131 reviewer: see paused-130-131-review.md or review files if written
+
+
+START 2026-11-14T15:11Z | lane r2-gallery [cloud] NIGHT (night order 2026-11-15 JST) | new container /workspace/r2-gallery, main == origin/main 4dad7a4 | handoff: PR #146 doc/handoff/handoff-20261114.md (next: post pending-comments; #127 -> #122 -> #136 gate+merge; resume #145 #131 #138 pin-test C1a)
+worktree /workspace/r2-gallery claude/r2-gallery-cloud-message-wait-9ikb8l clean (== main 4dad7a4, nothing unpushed)
+worktree /workspace/notes notes/r2-gallery (this file)
+DECIDED 2026-11-14T15:11Z | night order 8 "no production deploy" vs owner answer RG-12 (line "OWNER ANSWER 2026-11-14"): owner's own specific words win (rules preamble) -> tonight main merges ONLY for RG-17..23 PRs and their direct follow-ups (#127 RG-18, #122 RG-20, #136 hardening of #122 as #141 was for #120, #145 follow-up fix of a hosted failure on main per owner CI rule); every other PR is taken to gate-ready and parked OWNER (merge scope) | reason: main merge = Pages production + FAD; owner asleep, safe side | revert: owner extends scope or says 取り込みは止めて
+DECIDED | night caps: <=3 subagents alive (manager+reviewer included), <=2 GitHub writers, 2s between writes, no Workflow fan-out | reason night order 4/5 | revert: managing session lifts

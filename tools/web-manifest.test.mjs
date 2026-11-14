@@ -22,9 +22,14 @@ it("names, describes and colours the web build like the app, not the Flutter tem
   expect(manifest.theme_color.toUpperCase()).toBe(APP_BG);
   expect(html).toContain("<title>R2 Gallery</title>");
   expect(html).toContain('name="apple-mobile-web-app-title" content="R2 Gallery"');
+  expect(html).toMatch(/<style>[^<]*\bhtml,body\{[^}]*background:#0A0A0F/i);
   for (const text of [JSON.stringify(manifest), html, pubspec]) {
     expect(text).not.toContain("A new Flutter project");
-    expect(text).not.toContain("r2_gallery</title>");
   }
-  expect(manifest.description).not.toBe("");
+  // 説明文は manifest を正として、index.html と pubspec.yaml が空でなく同一である事を見る
+  const metaDescription = html.match(/<meta\s+name="description"\s+content="([^"]*)"/)?.[1];
+  const pubspecDescription = pubspec.match(/^description:\s*"?(.*?)"?\s*$/m)?.[1];
+  expect(manifest.description).toBeTruthy();
+  expect(metaDescription).toBe(manifest.description);
+  expect(pubspecDescription).toBe(manifest.description);
 });

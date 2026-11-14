@@ -3,8 +3,9 @@
  *
  * A "library" is one R2 bucket. Libraries are declared in the LIBRARIES var.
  *
+ * - GET /, /health                           -> {ok:true} (no bearer needed)
  * - GET /v1/libraries                         -> configured libraries
- * - GET /v1/:lib/albums                       -> album list (from META/.system/index-<lib>.json)
+ * - GET /v1/:lib/albums                       -> album list (user albums from META/.system/albums.json + pipeline albums from index-<lib>.json)
  * - GET /v1/:lib/albums/:id?cursor=&limit=    -> items in an album, with signed media URLs
  * - GET /v1/:lib/folders?prefix=&cursor=      -> raw folder browsing of the library bucket
  * - GET /v1/:lib/meta?key=                    -> review metadata joined from D1 (REVIEW_LIBS only)
@@ -26,7 +27,8 @@
  * - POST /v1/:lib/ops/restore {trashKey}      -> move a trashed object back to its original key
  * - GET  /v1/:lib/trash?cursor=               -> list trashed objects
  *
- * Album edits (libraries with readOnly !== true only; they rewrite META/.system/index-<lib>.json):
+ * Album edits (libraries with readOnly !== true only; they rewrite META/.system/albums.json, the user albums
+ * shared by all libraries, where each item is stamped with its lib):
  * - POST   /v1/:lib/albums                   {title, subtitle?}    -> {id,title}  (201)
  * - PATCH  /v1/:lib/albums/:id               {title?, subtitle?}   -> rename / retitle
  * - DELETE /v1/:lib/albums/:id                                     -> {ok:true}  (the album only, media stays)
@@ -35,7 +37,7 @@
  * - POST   /v1/:lib/albums/:id/order         {items:[{key,lib}]}   -> reorder (must be the album's exact current set)
  * A daily cron permanently removes trash entries older than TRASH_RETENTION_DAYS (default 30).
  *
- * All API routes require `Authorization: Bearer <ACCESS_TOKEN>`.
+ * All /v1 API routes require `Authorization: Bearer <ACCESS_TOKEN>`.
  */
 
 import { Hono } from "hono";

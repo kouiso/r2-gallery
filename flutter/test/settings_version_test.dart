@@ -19,7 +19,7 @@ void main() {
       buildSignature: '',
     );
     await _pump(t);
-    expect(find.text('R2 Gallery  バージョン 9.8.7（654）'), findsOneWidget);
+    expect(find.text('9.8.7（654）'), findsOneWidget);
     expect(find.textContaining('Flutter'), findsNothing);
     expect(find.textContaining('0.1.0'), findsNothing);
   });
@@ -33,7 +33,7 @@ void main() {
       buildSignature: '',
     );
     await _pump(t);
-    expect(find.text('R2 Gallery'), findsOneWidget);
+    expect(find.text('—'), findsOneWidget);
   });
 
   test('ビルド番号が空なら版だけ', () {

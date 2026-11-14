@@ -191,7 +191,7 @@ export type FolderSort = "new" | "old" | "name" | "size";
 const FOLDER_SORTS: readonly string[] = ["new", "old", "name", "size"];
 const isFolderSort = (v: string): v is FolderSort => FOLDER_SORTS.includes(v);
 
-/** 並び順ごとの比較値(primary)と、同値の決め手になる key。 */
+// 同じ値の物が並ぶと位置が一つに決まらないので、key を決め手に足して全順序にする
 interface SortPoint {
   primary: number | string;
   key: string;
@@ -209,7 +209,7 @@ function sortPoint(sort: FolderSort, o: { key: string; size: number; uploaded: D
   }
 }
 
-/** 新しい順・サイズ順は大きい値が先、古い順・名前順は小さい値が先。同値は key の昇順。 */
+// 続きのカーソルは「この位置より後」を比較で探すため、並べる時と同じ比較を使う
 function compareFolderSort(sort: FolderSort, a: SortPoint, b: SortPoint): number {
   const dir = sort === "new" || sort === "size" ? -1 : 1;
   const p = a.primary < b.primary ? -1 : a.primary > b.primary ? 1 : 0;

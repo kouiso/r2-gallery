@@ -12,7 +12,6 @@ enum SortMode {
   const SortMode(this.label, this.apiValue);
   final String label;
 
-  /// Worker の `sort` パラメータ値。
   final String apiValue;
 
   /// 日付で並ぶ時だけ日付見出しを出す（名前順・サイズ順では日が飛び飛びになるため）。

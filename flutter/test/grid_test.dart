@@ -32,7 +32,9 @@ class _Api extends ApiClient {
   /// prefix ごとの1ページ目。cursor 付きの続きは [more]。
   final Map<String, FolderPage> pages;
   final Map<String, FolderPage> more = {};
-  final List<({String lib, String prefix, String? cursor, bool recursive})>
+  final List<
+    ({String lib, String prefix, String? cursor, bool recursive, String? sort})
+  >
   folderCalls = [];
   bool failFolder = false;
 
@@ -58,6 +60,7 @@ class _Api extends ApiClient {
       prefix: prefix,
       cursor: cursor,
       recursive: recursive,
+      sort: sort,
     ));
     if (failFolder) throw const ApiError(500, 'boom');
     if (cursor != null) return more[cursor] ?? const FolderPage(items: []);
@@ -555,6 +558,36 @@ void main() {
       await _pumpShell(tester, app);
       expect(api.folderCalls.map((c) => c.cursor), contains('c1'));
       expect(_tile('next.jpg'), findsOneWidget);
+    });
+
+    testWidgets('続きを読み込んだ後に並び替えても、新しい並びの続きを頼み直す', (tester) async {
+      final api = _Api({
+        '': FolderPage(
+          items: [for (var i = 0; i < 40; i++) _img('p$i.jpg', at: _daysAgo(i))],
+          cursor: 'c1',
+        ),
+      });
+      api.more['c1'] = FolderPage(
+        items: [for (var i = 0; i < 40; i++) _img('q$i.jpg', at: _daysAgo(50 + i))],
+      );
+      final app = _app(api);
+      await _pumpShell(tester, app);
+      Future<void> toEnd() async {
+        await tester.fling(find.byType(Scrollable).first, const Offset(0, -6000), 3000);
+        await tester.pumpAndSettle();
+      }
+
+      await toEnd();
+      expect(api.folderCalls.where((c) => c.cursor == 'c1'), hasLength(1));
+
+      // 続きが載って 80 件になった後で並べ替えると、一覧は 40 件に戻る
+      app.photosChrome.sort = SortMode.dateOld;
+      await tester.pumpAndSettle();
+      await toEnd();
+
+      final asks = api.folderCalls.where((c) => c.cursor == 'c1').toList();
+      expect(asks, hasLength(2));
+      expect(asks.last.sort, 'old');
     });
 
     testWidgets('選択中は丸のチェックが出て、選んだタイルだけ選択中になる', (tester) async {

@@ -417,8 +417,12 @@ describe("folders", () => {
       return rows.map((r) => r.key);
     }
 
-    async function walk(sort: Sort, query = ""): Promise<{ keys: string[]; pages: number }> {
+    async function walk(
+      sort: Sort,
+      query = "",
+    ): Promise<{ keys: string[]; pages: number; echoed: (string | undefined)[] }> {
       const keys: string[] = [];
+      const echoed: (string | undefined)[] = [];
       let cursor: string | null = null;
       let pages = 0;
       do {
@@ -428,19 +432,21 @@ describe("folders", () => {
         const res = await api(q);
         expect(res.status).toBe(200);
         const body = (await res.json()) as Folders & { sort?: string };
-        expect(body.sort).toBe(sort);
+        echoed.push(body.sort);
         keys.push(...body.items.map((i) => i.key));
         cursor = body.cursor;
         pages++;
       } while (cursor);
-      return { keys, pages };
+      return { keys, pages, echoed };
     }
 
     for (const sort of sorts) {
       it(`sort=${sort}: ライブラリ全体がその順で、続きのページも重複・欠けなしで出る`, async () => {
-        const { keys, pages } = await walk(sort);
-        expect(pages).toBe(2);
+        const { keys, pages, echoed } = await walk(sort);
+        // 並びの比較を先にする。返し値の確認が先だと、順序のバグが返し値の失敗に隠れる
         expect(keys).toEqual(await expected(sort));
+        expect(pages).toBe(2);
+        expect(echoed).toEqual([sort, sort]);
       });
     }
 

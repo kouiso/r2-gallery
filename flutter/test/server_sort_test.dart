@@ -40,6 +40,9 @@ class _SortingApi extends ApiClient {
   final List<({String? sort, String? cursor})> calls = [];
   // 古い Worker は sort を無視して新着順で返し、sort も返さない
   bool oldWorker = false;
+  bool failNext = false;
+  // 続きのページだけ別の並びで返す(Worker の入れ替わり)
+  String? moreSort;
 
   static final _newest = [
     _it('m.jpg', at: 5, size: 1),
@@ -69,15 +72,22 @@ class _SortingApi extends ApiClient {
       bool recursive = false,
       String? sort}) async {
     calls.add((sort: sort, cursor: cursor));
+    if (failNext) {
+      failNext = false;
+      throw const ApiError(0, 'offline');
+    }
     final all = _order(sort);
     final from = cursor == null ? 0 : int.parse(cursor);
     final page = all.sublist(from, from + 2);
     return FolderPage(
       items: page,
       cursor: from == 0 ? '2' : null,
-      sort: oldWorker ? null : sort,
+      sort: oldWorker ? null : (cursor != null ? (moreSort ?? sort) : sort),
     );
   }
+
+  @override
+  Future<void> putThumb(String libId, String key, Uint8List bytes) async {}
 }
 
 List<String> _keys(List<MediaItem> l) => [for (final i in l) i.key];
@@ -126,5 +136,55 @@ void main() {
     final g = GalleryState(api, sort: SortMode.name);
     await g.refresh('a');
     expect(_keys(g.ordered()), ['B.jpg', 'm.jpg']);
+  });
+
+  test('並び替え直後の取得が失敗しても、古い cursor を新しい並びで送らない', () async {
+    final api = _SortingApi();
+    final g = GalleryState(api);
+    await g.refresh('a');
+    expect(g.cursor, '2');
+    api.failNext = true;
+    await g.changeSort(SortMode.dateOld, 'a');
+    expect(g.cursor, isNull);
+    await g.loadMore('a');
+    // 続きではなく先頭から取り直す
+    expect(api.calls.last, (sort: 'old', cursor: null));
+    expect(_keys(g.ordered()), ['z.jpg', 'a.jpg']);
+  });
+
+  test('続きのページが別の並びで返ったら、継ぎ足さず先頭から取り直す', () async {
+    final api = _SortingApi();
+    final g = GalleryState(api, sort: SortMode.dateOld);
+    await g.refresh('a');
+    api.moreSort = 'new';
+    await g.loadMore('a');
+    expect(api.calls.map((c) => c.cursor), [null, '2', null]);
+    expect(_keys(g.ordered()), ['z.jpg', 'a.jpg']);
+  });
+
+  test('古い Worker の続きは、並びが返らなくてもそのまま継ぎ足す', () async {
+    final api = _SortingApi()..oldWorker = true;
+    final g = GalleryState(api);
+    await g.refresh('a');
+    await g.loadMore('a');
+    expect(api.calls.map((c) => c.cursor), [null, '2']);
+    expect(g.items, hasLength(4));
+  });
+
+  test('サムネ取り込みは今の並び順で辿る', () async {
+    final api = _SortingApi();
+    final g = GalleryState(api, sort: SortMode.dateOld);
+    g.items = [
+      const MediaItem(
+        key: 'v.mp4',
+        type: 'video',
+        url: 'https://w.example/m/v.mp4',
+        thumbStored: false,
+      ),
+    ];
+    g.backfillThumbs('a', makeThumb: (_) async => Uint8List.fromList([1]));
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(api.calls, isNotEmpty);
+    expect(api.calls.every((c) => c.sort == 'old'), isTrue);
   });
 }

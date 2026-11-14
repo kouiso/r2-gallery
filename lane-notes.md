@@ -64,6 +64,8 @@ BLOCK 12:55Z | GitHub secondary rate limit on comment/PR creation ("retry after 
 #118 | head 9e1170f (feature-parity 承認待ち, dead link removed, body full scope; font OFL 1.1 Noto CJK subset w/ OFL.txt shipped; media.ts deploy-first recommended not required) | LOCAL-CHECK queued (rate limit) | re-review (4 slices) running
 DECIDED 12:58Z | container has 4 CPUs / 15 GB; load avg hit ~40 with 8 members + reviewers running flutter -> timeouts in run.mjs fast | cap active members at 5 until load < 8; no two full `flutter test` runs started at once when avoidable | revert: load stays low
 #121 stacked tests | branch test/rg17-resume-409 head 5e092d2 (5 new tests fail on main logic; live run vs local wrangler: put/complete/create/re-complete -> 409) | PR creation queued (rate limit) | run.mjs fast flaky under load -> rerun when load low
+#127 RG-18 | FIX | review FAIL must2 want4 nit2 (queued comment pending-comments/127-review-5095781.md): M1 grid _askedAt not reset on sort change (media_grid.dart:85-90, key gallery_tab.dart:208) list stops at 200; M2 Closes #45 unmet (full listing per page read.ts:258-290) -> Refs #45; W1 failed first page keeps old cursor; W2 _adoptStoredThumbs ignores sort; W3 loadMore ignores page.sort across worker deploy; W4 what-comments | queued: resume RG-18 member when members < 5
+#128 | note: gitleaks (unscoped) flags ac927b5 for "Bearer test-access-token" — the dummy token already defined in worker/wrangler.test.toml, not a real secret; reviewer to confirm .gitleaks.toml allowlist / CI secrets-scan result
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)

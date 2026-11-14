@@ -8,7 +8,8 @@ const check = [['pnpm', ['lint']], ['pnpm', ['worker:typecheck']]];
 const tests = [['pnpm', ['test']]];
 const scan = [['bash', ['.github/ci/gitleaks.sh']]];
 const hygiene = [[process.execPath, ['tools/leak-check.mjs']]];
-const fast = [...check, ...tests, ...scan, ...hygiene];
+const mediaExt = [[process.execPath, ['tools/gen-media-ext.mjs', '--check']]];
+const fast = [...mediaExt, ...check, ...tests, ...scan, ...hygiene];
 // Flutter クライアントのビルド検証は署名鍵を持つ別の運用リポジトリの r2-flutter-build レーンが受け持つ。
 const phases = { check, test: tests, gitleaks: scan, hygiene, secrets: [...scan, ...hygiene], fast, full: fast };
 const phase = process.argv[2] ?? 'fast';

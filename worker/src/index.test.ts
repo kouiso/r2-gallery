@@ -889,6 +889,46 @@ describe("trash", () => {
     expect(after.items.map((i) => i.key)).toContain("gone/pic.png");
   });
 
+  it("restores album membership (at the original position) when restoring from trash", async () => {
+    const post = (path: string, body: unknown) =>
+      api(path, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    const albumItems = async (id: string) =>
+      ((await (await api("/v1/a/albums/" + id)).json()) as { items: { key: string }[] }).items.map(
+        (i) => i.key,
+      );
+    await putObject("a", "alb/one.png");
+    await putObject("a", "alb/two.png");
+    const created = (await (await post("/v1/a/albums", { title: "restore me" })).json()) as {
+      id: string;
+    };
+    await post(`/v1/a/albums/${created.id}/items`, { keys: ["alb/one.png", "alb/two.png"] });
+    expect(await albumItems(created.id)).toEqual(["alb/one.png", "alb/two.png"]);
+
+    const { trashKey } = (await (await post("/v1/a/ops/trash", { key: "alb/one.png" })).json()) as {
+      trashKey: string;
+    };
+    expect(await albumItems(created.id)).toEqual(["alb/two.png"]);
+
+    expect((await post("/v1/a/ops/restore", { trashKey })).status).toBe(200);
+    expect(await albumItems(created.id)).toEqual(["alb/one.png", "alb/two.png"]);
+  });
+
+  it("restores a trashed object trashed before album tracking (no record) without touching albums", async () => {
+    await putObject("a", "old/legacy.png");
+    await env.LIB_A.put(".trash/123/old/legacy.png", PNG);
+    await env.LIB_A.delete("old/legacy.png");
+    const res = await api("/v1/a/ops/restore", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ trashKey: ".trash/123/old/legacy.png" }),
+    });
+    expect(res.status).toBe(200);
+  });
+
   it("scheduled purge removes trash older than the retention period", async () => {
     const old = `.trash/${Date.now() - 31 * 86_400_000}/old.png`;
     const fresh = `.trash/${Date.now()}/fresh.png`;

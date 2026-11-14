@@ -5,7 +5,17 @@ import { assertUserKey, HttpError, json, readJson, ref } from "../lib/http";
 import { handleImport } from "../lib/import";
 import { completeCreateOnly, copyObject, createOnly, moveObject } from "../lib/objects";
 import { loadIndex, mutateAlbums } from "../lib/store";
-import type { AlbumsFile, GlobalAlbum } from "../lib/store";
+import type { AlbumsFile, GlobalAlbum, GlobalAlbumItem } from "../lib/store";
+
+// ゴミ箱へ送る時に外したアルバムの控え。復元で元のアルバムへ戻すために、
+// 外した項目そのものと位置を META に置く（R2 のゴミ箱には載せない）。
+interface TrashAlbumMembership {
+  albumId: string;
+  position: number;
+  item: GlobalAlbumItem;
+}
+const trashAlbumsPath = (lib: string, trashKey: string) =>
+  `${SYSTEM_PREFIX}trash-albums/${lib}/${trashKey.slice(TRASH_PREFIX.length)}.json`;
 
 /** PUT /v1/:lib/objects?key= — small object upload; refuses to overwrite. */
 export async function handlePutObject(req: Request, env: Env, lib: string, url: URL) {
@@ -171,11 +181,22 @@ export async function handleLibOps(
     await moveObject(env, bucket, key, bucket, trashKey);
     // Shared albums must not keep pointing at an object that no longer
     // exists — drop the key from every album that lists it.
+    // 復元で戻せるよう、外す前にどのアルバムのどの位置にいたかを控える。
+    const removedFrom: TrashAlbumMembership[] = [];
     await mutateAlbums(env, (data) => {
+      // etag 競合で再実行されるので、控えは毎回作り直す
+      removedFrom.length = 0;
       for (const a of data.albums) {
+        const position = a.items.findIndex((i) => i.lib === lib && i.key === key);
+        if (position >= 0) removedFrom.push({ albumId: a.id, position, item: a.items[position]! });
         a.items = a.items.filter((i) => !(i.lib === lib && i.key === key));
       }
     });
+    if (removedFrom.length) {
+      await env.META.put(trashAlbumsPath(lib, trashKey), JSON.stringify(removedFrom), {
+        httpMetadata: { contentType: "application/json" },
+      });
+    }
     return json({ ok: true, trashKey });
   }
   // restore
@@ -184,6 +205,21 @@ export async function handleLibOps(
   if (!tm) throw new HttpError(400, "bad_trash_key");
   const original = assertUserKey(tm[2]);
   await moveObject(env, bucket, trashKey, bucket, original);
+  // 控えがあれば、まだ存在するアルバムへ元の位置で戻す。控えが無い（この修正より前に
+  // 捨てた）物は従来どおりファイルだけ戻る。
+  const sidecar = trashAlbumsPath(lib, trashKey);
+  const saved = await env.META.get(sidecar);
+  if (saved) {
+    const memberships = await saved.json<TrashAlbumMembership[]>();
+    await mutateAlbums(env, (data) => {
+      for (const m of memberships) {
+        const album = data.albums.find((a) => a.id === m.albumId);
+        if (!album || album.items.some((i) => i.lib === lib && i.key === original)) continue;
+        album.items.splice(Math.min(m.position, album.items.length), 0, m.item);
+      }
+    });
+    await env.META.delete(sidecar);
+  }
   return json({ ok: true, key: original });
 }
 

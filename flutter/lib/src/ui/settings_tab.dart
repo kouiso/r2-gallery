@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../offline/offline_screen.dart';
 import '../state/app_state.dart';
@@ -230,11 +231,35 @@ class _SettingsTabState extends State<SettingsTab> {
           ),
         ),
         const SizedBox(height: 24),
-        const Center(
-          child: Text('R2 Gallery (Flutter) 0.1.0',
-              style: TextStyle(color: AppColors.textDim, fontSize: 12)),
-        ),
+        const Center(child: AppVersionLabel()),
       ],
+    );
+  }
+}
+
+/// 版数の表示文字。ビルド番号が無い（空）ときは版だけにする
+String formatAppVersion(String version, String build) =>
+    build.isEmpty ? version : '$version（$build）';
+
+/// 設定の一番下の版数。固定の文字だと配布物とずれるので、実際にインストールされた
+/// 本体のメタデータ（pubspec の version+build）から読む。
+class AppVersionLabel extends StatelessWidget {
+  const AppVersionLabel({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<PackageInfo>(
+      future: PackageInfo.fromPlatform(),
+      builder: (context, snap) {
+        final info = snap.data;
+        // 取得できない間・失敗時は嘘の番号を出さず、製品名だけにする
+        final text = info == null || info.version.isEmpty
+            ? 'R2 Gallery'
+            : 'R2 Gallery  バージョン '
+                '${formatAppVersion(info.version, info.buildNumber)}';
+        return Text(text,
+            style: const TextStyle(color: AppColors.textDim, fontSize: 12));
+      },
     );
   }
 }

@@ -83,6 +83,7 @@ MERGE QUEUE (one at a time, after rate limit): #124 -> #123 -> #126 -> (#120 if 
 #120 RG-19 | re-review PASS must0 want4 nit2 (queued 120-review-01936fb.md) | evidence evidence/120-01936fb.png | CI 4/4 green | stacked follow-up (trashOrder prune, O(n) insert, 8-way test) by RG-19 member; merge #120 at its turn then stacked right after (worker change only deploys with RG-24)
 #125 #84/#85 | review PASS must0 nit1 (queued 125-review-5517eca.md) | evidence evidence/125-5517eca.png | CI 4/4 green | NOT an RG row: merge needs owner OK beyond RG-12 scope? -> RG-12 answer covers #118 + RG-17..23 only; stream PRs stay OWNER for merge (ask manager/owner to extend)
 #121-stacked (test/rg17-resume-409 5e092d2) | review PASS must0 want1 (fail-before count 6=4 new+2; fixed in queued body/LOCAL-CHECK by lead, text only) | queued: PR + review
+#122-stacked (fix/rg20-thumb-hardening 27de2cd) | review PASS must0 want2 — DECIDED: want1 (uncapped purge can get permanently stuck with 1000+ expired items; regression vs old progress) treated as blocking; member fixes on same branch before the PR is opened; fresh review after | reason production trash would never empty | revert: n/a
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)

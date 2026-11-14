@@ -626,92 +626,102 @@ class TransferQueue extends ChangeNotifier {
   Future<void> _upload(TransferTask t, CancelToken token) async {
     final size = await _sourceSize(t);
     t.size = size;
-    if (t.key == null) {
-      await _freshUpload(t, token, size);
-    } else {
-      await _resumeUpload(t, token, size, t.key!);
-    }
-  }
-
-  /// 初回: 409（同名あり）なら「name (2)」…と名前を変えて試す。キーはサーバーが受け付けてから確定する。
-  Future<void> _freshUpload(TransferTask t, CancelToken token, int size) async {
-    for (var attempt = 1;; attempt++) {
+    // 台帳から再開する行だけ、最初に台帳のキーを試す。それ以外は name → name (2) … の順
+    var first = t.key;
+    var n = 0;
+    for (;;) {
       _checkCancelled(token);
-      final key = suffixedName(t.name, attempt);
+      if (first == null && ++n > maxKeyAttempts) {
+        throw const ApiError(409, '同じ名前のファイルが多すぎます');
+      }
+      final key = first ?? suffixedName(t.name, n);
+      final resumed = first != null;
+      first = null;
       try {
-        if (size > multipartThreshold) {
-          final id = await api.multipartCreate(t.lib, key, t.mime);
-          // uploadId の確定は区切り。残さんと再開時に2つ目のセッションを作り、1つ目がサーバーに残る
-          t.key = key;
-          t.uploadId = id;
-          t.parts = [];
-          await _persist();
-        } else {
-          final bytes = await _readAll(t);
-          _checkCancelled(token);
-          await api.putObject(t.lib, key, bytes, t.mime,
-              cancelToken: token, onProgress: (s) {
-            t.loaded = s;
-            _progress();
-          });
+        await _place(t, token, size, key, resumed: resumed);
+        return;
+      } on ApiError catch (e) {
+        if (e.status != 409 || token.isCancelled) rethrow;
+        // 409 は分割の開始でも完了でも起きる。「同名がある」だけでは自分の物か分からんので、
+        // 再開の時は中身を照合する。黙って完了にすると送れていないのに端末の退避まで消える
+        if (resumed && await _storedSame(t, token, key, size)) {
+          await _abortSession(t);
           t.key = key;
           await _persist();
           return;
         }
-      } on ApiError catch (e) {
-        if (e.status == 409 && attempt < maxKeyAttempts && !token.isCancelled) {
-          continue;
-        }
-        rethrow;
+        await _abortSession(t);
+        t.key = null;
+        t.loaded = 0;
+        await _persist();
       }
-      await _multipart(t, token, size);
-      return;
     }
   }
 
-  /// 再開: キーは台帳で確定済み。ここでの 409 は前回の完了が届いていたということ。
-  Future<void> _resumeUpload(
-      TransferTask t, CancelToken token, int size, String key) async {
+  /// 1つのキーへ送る。同名があれば 409 のまま投げ、呼び出し側が照合か名前の付け直しを決める。
+  Future<void> _place(
+      TransferTask t, CancelToken token, int size, String key,
+      {required bool resumed}) async {
     if (size <= multipartThreshold) {
-      try {
-        await api.putObject(t.lib, key, await _readAll(t), t.mime,
-            cancelToken: token, onProgress: (s) {
-          t.loaded = s;
-          _progress();
-        });
-      } on ApiError catch (e) {
-        if (e.status != 409) rethrow;
-      }
+      final bytes = await _readAll(t);
+      _checkCancelled(token);
+      await api.putObject(t.lib, key, bytes, t.mime, cancelToken: token,
+          onProgress: (s) {
+        t.loaded = s;
+        _progress();
+      });
+      t.key = key;
+      await _persist();
       return;
     }
-    final existing = t.uploadId;
+    final existing = resumed ? t.uploadId : null;
     if (existing != null) {
       try {
         await _multipart(t, token, size);
         return;
       } on ApiError catch (e) {
-        // サーバー側で uploadId が失効している。作り直して最初から送る
-        if (e.status < 400) rethrow;
-        try {
-          await api.multipartAbort(t.lib, key, existing);
-        } on ApiError catch (abortErr) {
-          debugPrint('stale multipart not aborted: $abortErr');
-        }
-        t.uploadId = null;
-        t.parts = [];
+        // 完了時の同名（409）は呼び出し側へ。それ以外はサーバー側で uploadId が失効している
+        // ので、作り直して最初から送る
+        if (e.status == 409 || e.status < 400) rethrow;
+        await _abortSession(t);
         t.loaded = 0;
         await _persist();
       }
     }
     _checkCancelled(token);
-    try {
-      t.uploadId = await api.multipartCreate(t.lib, key, t.mime);
-    } on ApiError catch (e) {
-      if (e.status == 409) return;
-      rethrow;
-    }
+    final id = await api.multipartCreate(t.lib, key, t.mime);
+    // uploadId の確定は区切り。残さんと再開時に2つ目のセッションを作り、1つ目がサーバーに残る
+    t.key = key;
+    t.uploadId = id;
+    t.parts = [];
     await _persist();
     await _multipart(t, token, size);
+  }
+
+  /// 開いたままの multipart を畳む。キーに紐づくので、名前を変える時は新しく作り直す必要がある。
+  Future<void> _abortSession(TransferTask t) async {
+    final id = t.uploadId;
+    final key = t.key;
+    t.uploadId = null;
+    t.parts = [];
+    if (id == null || key == null) return;
+    try {
+      await api.multipartAbort(t.lib, key, id);
+    } on ApiError catch (e) {
+      debugPrint('stale multipart not aborted: $e');
+    }
+  }
+
+  Future<bool> _storedSame(
+      TransferTask t, CancelToken token, String key, int size) {
+    Stream<List<int>> local() async* {
+      for (var off = 0; off < size; off += partSize) {
+        final len = off + partSize > size ? size - off : partSize;
+        yield await _readChunk(t, off, len);
+      }
+    }
+
+    return api.storedMatches(t.lib, key, size, local, cancelToken: token);
   }
 
   Future<void> _multipart(TransferTask t, CancelToken token, int size) async {

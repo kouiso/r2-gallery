@@ -95,6 +95,7 @@ fix/ci-secrets-scan-range cf913ae | review PASS must0 want1 nit2 (queued) | want
 #120-stacked (fix/rg19-trash-order-prune 1f96179) | review FAIL must2 (committed node_modules symlink breaks CI install; restore window regression drops trashOrder slot) want2 | rework by RG-19 member | checked all lane branches: no other node_modules/.wrangler/.dev.vars/wrangler.toml committed
 MERGED #124 RG-22 13:27Z | head 989ca87 == GATE head https://github.com/kouiso/r2-gallery/pull/124#issuecomment-6877963078 | merge 0b43385 | #57 #58 closed by GitHub | web-deploy run 43599833103 in progress; pages-dist/fad-dist-state still 5dfe918 -> confirm before next merge
 stream A | PRs #129 (#33, 9e20f53) -> #130 (#92/#93, fbb6162) -> #131 (#66/#67, 3b748eb) stacked; evidence pr1/pr2/pr3 PNGs (goldens, Ahem font); #69/#70 OWNER-blocked on #29
+OWNER INSTRUCTION 2026-11-14 (relayed): 「…デザイン通りになるように全部作ること」 -> design page = reference for everything on screen; queue position: after existing open PRs + iteration items. Design link: https://claude.ai/artifact/6NsgHfP9kH9whED6j4ec26 (opened OK 12:2xZ; identical to repo doc/design/project). Pages: current (10/27, 11/11 修正), review (11/11 proposals), redesign (10/11 KMP record).
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)

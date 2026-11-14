@@ -19,6 +19,10 @@ MANAGER agent a9b29b434b520f613 (fable high) | policy 2026-11-14:
   PASS LINE: all checks green on head (emulator incl.; red needs root cause, editing Maestro flow just to pass does not count); run.mjs fast + sync-ai-rules --check on that SHA; bug fix has fail-on-main/pass-on-head test; independent review PASS on that SHA; evidence image + GATE comment; no doc/feature-parity.md row removed/downgraded without linked owner OK. Issue "done" in lane = gate-ready + ledger row OWNER with exact remaining steps; issue stays open until owner merges.
   #118: keep one PR, review in 4 slices (Dart / Android / iOS fork via tools/verify-video-player-fork.py / worker); needs: full-scope title+body (whole #208 series), linked owner OK for removing 端末に保存 (H7/H8/X1) and P1 gesture-to-panel change (else OWNER question), GATE states whether worker/src/routes/media.ts must deploy first, emulator fixed, 6-scene device evidence listed as OWNER step.
 RG-26 | しない: RG-Q3 = 2 (manager decision: record here only) | done
+CYCLE 1 T=2026-11-14T12:18:56Z | PRs 3 (r2-gallery #118; archive #207 #208; excl. NOTES #119) | issues 106 (r2-gallery 100, archive 6) | ledger rows 13 | cycle-1.tsv
+  skipped: owner's rule (-ux): 0 (no item assigned to/authored by i4zhdk-ux)
+  iteration (Project 43): NOT READABLE — no ProjectV2 tool in this container (connector has no projects op; gh token invalid) -> rule 1(a) moved 0 to front
+  pre-sort: OWNER (prod worker deploy SBIs) #47 #50 #53 #56; OWNER (owner-decision) #96 #97 #98 #99 archive#220; OWNER (prod data delete) archive#184 #185 #186; DEVICE (Android real device SBIs) #43 #68 #75 #80 #94 #107 #110 #113 #115
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)
@@ -45,5 +49,6 @@ RG-26 | しない: RG-Q3 = 2 (manager decision: record here only) | done
 - ひなたの 4 枚: ごみ箱から元のアルバムへ戻してよいか（期限 ~12-12）（はい／いいえ）
 
 ## for main session
+- Project 43 iteration field unreadable from this cloud container (no ProjectV2 tool, gh token invalid): please send this/next week iteration issue numbers for r2-gallery, or give the lane a working gh token route
 - gh CLI token (GH_TOKEN) invalid in this container; using GitHub connector
 - ledger owner column for RG-17..23, RG-26, RG-31 still 'wait' (plan.md:98 rewrite)

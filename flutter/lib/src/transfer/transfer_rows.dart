@@ -62,6 +62,8 @@ TransferRow rowOfTask(TransferTask t, TransferQueue q, {required bool online}) {
       t.percent > 0 ? '一時停止 ${_pct(t.percent)}' : '一時停止中',
   };
   final s = t.status;
+  // 完了待ちの行は操作を受け付けないので、押しても何も起きないボタンを出さない
+  final settling = q.isCompleting(t.id);
   return TransferRow(
     id: t.id,
     name: t.name,
@@ -71,14 +73,16 @@ TransferRow rowOfTask(TransferTask t, TransferQueue q, {required bool online}) {
     size: t.size,
     loaded: t.loaded,
     label: label,
-    onPause: s == TransferStatus.running ||
-            s == TransferStatus.queued ||
-            s == TransferStatus.preparing
+    onPause: !settling &&
+            (s == TransferStatus.running ||
+                s == TransferStatus.queued ||
+                s == TransferStatus.preparing)
         ? () => q.pause(t.id)
         : null,
-    onResume: s == TransferStatus.paused ? () => q.resume(t.id) : null,
+    onResume:
+        !settling && s == TransferStatus.paused ? () => q.resume(t.id) : null,
     onRetry: s == TransferStatus.error ? () => q.retry(t.id) : null,
-    onCancel: s == TransferStatus.done || s == TransferStatus.cancelled
+    onCancel: settling || s == TransferStatus.done || s == TransferStatus.cancelled
         ? null
         : () => q.cancel(t.id),
     onDismiss: s == TransferStatus.done || s == TransferStatus.cancelled

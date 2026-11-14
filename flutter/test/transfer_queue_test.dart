@@ -9,6 +9,7 @@ import 'package:r2_gallery/src/api/models.dart';
 import 'package:r2_gallery/src/offline/offline_store.dart';
 import 'package:r2_gallery/src/transfer/transfer_api.dart';
 import 'package:r2_gallery/src/transfer/transfer_queue.dart';
+import 'package:r2_gallery/src/transfer/transfer_rows.dart';
 
 /// worker と署名URLの配信を1つのローカルサーバーで真似る。本物の Dio で往復させる。
 class FakeWorker {
@@ -317,6 +318,7 @@ void main() {
     int threshold = 1024,
     int part = 1024,
     Duration stagedDeleteTimeout = const Duration(seconds: 5),
+    FileThumbMaker? makeThumb,
   }) {
     final q = TransferQueue(
       api: ApiClientTransferApi(api),
@@ -328,6 +330,7 @@ void main() {
       partSize: part,
       netRetryDelay: const Duration(milliseconds: 50),
       stagedDeleteTimeout: stagedDeleteTimeout,
+      makeThumb: makeThumb,
       configured: () => api.conn != null,
     );
     queues.add(q);
@@ -435,6 +438,65 @@ void main() {
         expect(Directory('${tmp.path}/stage').listSync(), isEmpty);
         expect(jsonDecode(ledger.value!), isEmpty);
         expect(w.objects.keys.toList(), ['cr.jpg']);
+      }, _SlowDeleteOverrides(const Duration(milliseconds: 300)));
+    });
+
+    test('サムネ作成中に一時停止し、退避ファイルの削除中に再開しても、退避し直さずに完了する', () async {
+      final gate = Completer<void>();
+      var thumbStarted = false;
+      await IOOverrides.runWithIOOverrides(() async {
+        final q = make(makeThumb: (file, mime) async {
+          thumbStarted = true;
+          await gate.future;
+          return null;
+        });
+        await q.restore();
+        final path = await source('tp.jpg', bytesOf(500));
+        await q.enqueueUploads('lib', [
+          UploadSource(name: 'tp.jpg', size: 500, mime: 'image/jpeg', path: path),
+        ]);
+        final t = q.tasks.single;
+        await until(() => thumbStarted, what: 'thumb');
+        q.pause(t.id);
+        expect(t.status, TransferStatus.paused);
+        gate.complete();
+        await until(() => q.isCompleting(t.id) && t.stagedPath == null,
+            what: 'staged delete');
+        final row = rowOfTask(t, q, online: true);
+        expect(row.onResume, isNull);
+        expect(row.onPause, isNull);
+        expect(row.onCancel, isNull);
+        q.resume(t.id);
+        expect(t.status, TransferStatus.paused, reason: '完了待ちの行は退避し直さない');
+        await q.idle();
+        expect(t.status, TransferStatus.done);
+        expect(t.stagedPath, isNull);
+        expect(Directory('${tmp.path}/stage').listSync(), isEmpty);
+        expect(jsonDecode(ledger.value!), isEmpty);
+        expect(w.objects.keys.toList(), ['tp.jpg']);
+      }, _SlowDeleteOverrides(const Duration(milliseconds: 300)));
+    });
+
+    test('完了待ちの間は一時停止・取り消しのボタンを出さない', () async {
+      await IOOverrides.runWithIOOverrides(() async {
+        final q = make();
+        await q.restore();
+        final path = await source('bt.jpg', bytesOf(500));
+        await q.enqueueUploads('lib', [
+          UploadSource(name: 'bt.jpg', size: 500, mime: 'image/jpeg', path: path),
+        ]);
+        final t = q.tasks.single;
+        final before = rowOfTask(t, q, online: true);
+        expect(before.onPause, isNotNull);
+        expect(before.onCancel, isNotNull);
+        await until(() => q.isCompleting(t.id), what: 'completing');
+        final during = rowOfTask(t, q, online: true);
+        expect(during.status, TransferStatus.running);
+        expect(during.onPause, isNull);
+        expect(during.onCancel, isNull);
+        await q.idle();
+        expect(q.isCompleting(t.id), isFalse);
+        expect(t.status, TransferStatus.done);
       }, _SlowDeleteOverrides(const Duration(milliseconds: 300)));
     });
 

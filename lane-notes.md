@@ -48,6 +48,11 @@ JUDGE b3 (manager): evidence bar — worker-only #120 #122 #123 = LOCAL-CHECK im
   fail-before behavioural for #121 confirmed by reviewer (timeout "waiting for all done", v (2).mp4 missing) — not compile errors.
 #122 RG-20 | review PASS must0 want6 nit1 https://github.com/kouiso/r2-gallery/pull/122#issuecomment-6877338927 | evidence: LOCAL-CHECK image (to make)
 DECIDED | #122 handled like #121 (JUDGE b3 mechanics): want1 (purging expired trash entry deletes fresh same-name entry's thumb objects.ts:130), want2 (purge order orphans thumbs if loop dies objects.ts:125-131), want3 (deleteThumb throw after create -> 5xx -> client retry 409 -> duplicate; make best-effort) + want4 tests (copy/move/import) go into a PR stacked on #122's branch; head c0437cf unchanged; merge order #120 -> #122 -> stacked (per #51 "#49 first"). want5 (move leaves source thumb orphaned) + purge of .system/trash-albums -> follow-up issues named in GATE | reason want1/want3 are data-affecting, same bar manager set for #121 | revert: manager overrules
+CAPACITY 2026-11-14 (manager relay of owner): cloud lane may run up to 8 members; reviews in parallel; workflow for classes of 5+.
+#124 RG-22 | review PASS must0 want1 nit2 https://github.com/kouiso/r2-gallery/pull/124#issuecomment-6877362997 | want: Closes #57 needs browser network/console check -> evidence member running (headless Chromium vs local worker)
+#126 RG-23 (#64 only) | review running | #65 needs owner decision
+#127 RG-18 | review running | #44 index (no full enumeration) needs owner decision
+#120 | reworked head 01936fb (trashOrder in albums.json; sidecar before mutate; resumable restore) | re-review running
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)
@@ -69,6 +74,8 @@ DECIDED | #122 handled like #121 (JUDGE b3 mechanics): want1 (purging expired tr
 | RG-31 | blocked | wait | DEVICE |
 
 ## needs owner
+- #65（#63 の 2 つ目）: 一覧に出ない形式（HEIC など）は「上げる前に止める」か「HEIC を表示できるようにする」か。あわせて、既に上がっている一覧に出ないファイルをどうするか（そのまま／一覧に出す／書き出す）。推奨: 上げる前に止める・既存はそのまま
+- #44: 並び替えのたびにバケット全体を数え上げない作りにするため、一覧の索引を META（R2 のファイル）か D1 に持つか。D1 はデータベースの変更になる。推奨: META の索引（データベースは触らない）
 - #29 アプリ独自の PIN を撤去し端末の画面ロックに一本化してよいか（機能の撤去）（はい／いいえ）
 - #32 設定タブのライブラリ切替チップを隠すか、課題を閉じるか（隠す／閉じる）
 - #104 重複一覧 API のために本番 Worker の CPU 上限で読み取り量を測ってよいか（本番での計測・読み取りのみ）（はい／いいえ）

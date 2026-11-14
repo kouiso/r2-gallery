@@ -538,9 +538,11 @@ class TransferQueue extends ChangeNotifier {
       } finally {
         _completing.remove(t);
       }
+      // 退避ファイルは完了を報告する前に消し終える。先に done にすると、完了を見た側
+      // （画面・テスト）が掃除の途中の退避ファイルを見てしまう
+      await _dropStaged(t);
       t.status = TransferStatus.done;
       t.loaded = t.size;
-      await _dropStaged(t);
       if (!_done.isClosed) _done.add(t);
     } catch (e) {
       if (token.isCancelled || !_owns(t, gen)) {

@@ -205,6 +205,53 @@ Future<void> until(bool Function() cond, {String? what}) async {
   fail('timed out waiting for ${what ?? 'condition'}');
 }
 
+/// 退避ファイルの delete だけを遅らせる File。完了通知が掃除より先に出る順序を決定的に作る。
+/// キューが使う操作だけ転送する（未対応の操作は noSuchMethod で落とし、黙って素通りさせない）。
+class _SlowDeleteFile implements File {
+  _SlowDeleteFile(this._inner, this.delay);
+  final File _inner;
+  final Duration delay;
+
+  @override
+  String get path => _inner.path;
+
+  @override
+  Future<bool> exists() => _inner.exists();
+
+  @override
+  Future<int> length() => _inner.length();
+
+  @override
+  IOSink openWrite({FileMode mode = FileMode.write, Encoding encoding = utf8}) =>
+      _inner.openWrite(mode: mode, encoding: encoding);
+
+  @override
+  Future<Uint8List> readAsBytes() => _inner.readAsBytes();
+
+  @override
+  Future<RandomAccessFile> open({FileMode mode = FileMode.read}) =>
+      _inner.open(mode: mode);
+
+  @override
+  Future<FileSystemEntity> delete({bool recursive = false}) async {
+    await Future<void>.delayed(delay);
+    return _inner.delete(recursive: recursive);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _SlowDeleteOverrides extends IOOverrides {
+  _SlowDeleteOverrides(this.delay);
+  final Duration delay;
+
+  @override
+  File createFile(String path) => path.contains('/stage/')
+      ? _SlowDeleteFile(super.createFile(path), delay)
+      : super.createFile(path);
+}
+
 void main() {
   late FakeWorker w;
   late ApiClient api;
@@ -272,6 +319,19 @@ void main() {
       expect(jsonDecode(ledger.value!), isEmpty);
       // 元のファイルには触らない
       expect(File(path).existsSync(), isTrue);
+    });
+
+    test('完了を報告した時点で退避ファイルは消えている（掃除が遅くても）', () async {
+      await IOOverrides.runWithIOOverrides(() async {
+        final q = make();
+        await q.restore();
+        final path = await source('slow.jpg', bytesOf(500));
+        await q.enqueueUploads('lib', [
+          UploadSource(name: 'slow.jpg', size: 500, mime: 'image/jpeg', path: path),
+        ]);
+        await until(() => q.tasks.single.status == TransferStatus.done);
+        expect(Directory('${tmp.path}/stage').listSync(), isEmpty);
+      }, _SlowDeleteOverrides(const Duration(milliseconds: 300)));
     });
 
     test('同名があれば「name (2)」で上げる', () async {

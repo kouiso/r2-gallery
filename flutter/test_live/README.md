@@ -10,6 +10,17 @@
 - 読み取り専用ライブラリ `b`: 選択（オフライン保存用）には入るが「ゴミ箱へ」「アルバムへ」が出ないこと、
   API で直接 `POST /v1/b/ops/trash` を送っても 403 で中身が残ることを確かめる。
 
+## live_conflict_test.dart — 同名への書き込みは 409
+
+転送キューは、再開時の 409 を「サーバーの物と手元の中身を照合する」合図として使う（#121）。その前提を本物の Worker で確かめる。
+単発 PUT・multipart の開始・multipart の完了（別の upload が先に完了した場合と、完了済みの uploadId を
+もう一度完了する場合＝応答が落ちた再開）が、どれも 409 になること。
+
+```bash
+(cd worker && npx wrangler dev --local --port 8799 -c wrangler.live-trash.toml --persist-to ../.work/live-conflict) &
+cd flutter && flutter test test_live/live_conflict_test.dart --dart-define=LIVE_ENDPOINT=http://127.0.0.1:8799
+```
+
 ## 流し方（リポジトリのルートで）
 
 ```bash

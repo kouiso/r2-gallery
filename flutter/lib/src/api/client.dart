@@ -130,7 +130,7 @@ class ApiClient {
       if (recursive) 'recursive': '1',
       // 名前順だとゴミ箱等の先頭キーに新規アップが埋もれて出てこない（新着順に揃える）
       'order': 'recent',
-      if (cursor != null) 'cursor': cursor,
+      'cursor': ?cursor,
     });
   }
 
@@ -212,7 +212,7 @@ class ApiClient {
       );
     }, query: {
       'limit': limit,
-      if (cursor != null) 'cursor': cursor,
+      'cursor': ?cursor,
     });
   }
 
@@ -298,7 +298,7 @@ class ApiClient {
       return TrashPage(items, r.data['cursor'] as String?,
           retentionDays: (r.data['retentionDays'] as num?)?.toInt());
     }, query: {
-      if (cursor != null) 'cursor': cursor,
+      'cursor': ?cursor,
     });
   }
 

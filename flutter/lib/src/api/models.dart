@@ -104,14 +104,14 @@ class TrashItem {
   String get name => key.split('/').last;
 }
 
-class Page_<T> {
+class PageOf<T> {
   final List<T> items;
   final String? cursor;
-  const Page_(this.items, this.cursor);
+  const PageOf(this.items, this.cursor);
 }
 
 /// ゴミ箱一覧の1ページ。保持日数は Worker の設定値（古い Worker は返さんので null）。
-class TrashPage extends Page_<TrashItem> {
+class TrashPage extends PageOf<TrashItem> {
   final int? retentionDays;
   const TrashPage(super.items, super.cursor, {this.retentionDays});
 }

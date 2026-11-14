@@ -236,6 +236,75 @@ Future<void> until(bool Function() cond, {String? what}) async {
   fail('timed out waiting for ${what ?? 'condition'}');
 }
 
+/// 退避ファイルの delete だけを遅らせる File。完了通知が掃除より先に出る順序を決定的に作る。
+/// キューが使う操作だけ転送する（未対応の操作は noSuchMethod で落とし、黙って素通りさせない）。
+class _SlowDeleteFile implements File {
+  _SlowDeleteFile(this._inner, this.delay);
+  final File _inner;
+  final Duration delay;
+
+  @override
+  String get path => _inner.path;
+
+  @override
+  Future<bool> exists() => _inner.exists();
+
+  @override
+  Future<int> length() => _inner.length();
+
+  @override
+  IOSink openWrite({FileMode mode = FileMode.write, Encoding encoding = utf8}) =>
+      _inner.openWrite(mode: mode, encoding: encoding);
+
+  @override
+  Future<Uint8List> readAsBytes() => _inner.readAsBytes();
+
+  @override
+  Future<RandomAccessFile> open({FileMode mode = FileMode.read}) =>
+      _inner.open(mode: mode);
+
+  @override
+  Future<FileSystemEntity> delete({bool recursive = false}) async {
+    await Future<void>.delayed(delay);
+    return _inner.delete(recursive: recursive);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _SlowDeleteOverrides extends IOOverrides {
+  _SlowDeleteOverrides(this.delay);
+  final Duration delay;
+
+  @override
+  File createFile(String path) => path.contains('/stage/')
+      ? _SlowDeleteFile(super.createFile(path), delay)
+      : super.createFile(path);
+}
+
+/// 退避ファイルの delete が永久に返らない File。掃除が止まった時も完了が報告されることを見る。
+class _HangDeleteFile extends _SlowDeleteFile {
+  _HangDeleteFile(File inner, this.never) : super(inner, Duration.zero);
+  final Completer<void> never;
+
+  @override
+  Future<FileSystemEntity> delete({bool recursive = false}) async {
+    await never.future;
+    return this;
+  }
+}
+
+final class _HangDeleteOverrides extends IOOverrides {
+  _HangDeleteOverrides(this.never);
+  final Completer<void> never;
+
+  @override
+  File createFile(String path) => path.contains('/stage/')
+      ? _HangDeleteFile(super.createFile(path), never)
+      : super.createFile(path);
+}
+
 void main() {
   late FakeWorker w;
   late ApiClient api;
@@ -244,7 +313,11 @@ void main() {
   late OfflineStore offline;
   final queues = <TransferQueue>[];
 
-  TransferQueue make({int threshold = 1024, int part = 1024}) {
+  TransferQueue make({
+    int threshold = 1024,
+    int part = 1024,
+    Duration stagedDeleteTimeout = const Duration(seconds: 5),
+  }) {
     final q = TransferQueue(
       api: ApiClientTransferApi(api),
       offline: offline,
@@ -254,6 +327,7 @@ void main() {
       multipartThreshold: threshold,
       partSize: part,
       netRetryDelay: const Duration(milliseconds: 50),
+      stagedDeleteTimeout: stagedDeleteTimeout,
       configured: () => api.conn != null,
     );
     queues.add(q);
@@ -303,6 +377,37 @@ void main() {
       expect(jsonDecode(ledger.value!), isEmpty);
       // 元のファイルには触らない
       expect(File(path).existsSync(), isTrue);
+    });
+
+    test('完了を報告した時点で退避ファイルは消えている（掃除が遅くても）', () async {
+      await IOOverrides.runWithIOOverrides(() async {
+        final q = make();
+        await q.restore();
+        final path = await source('slow.jpg', bytesOf(500));
+        await q.enqueueUploads('lib', [
+          UploadSource(name: 'slow.jpg', size: 500, mime: 'image/jpeg', path: path),
+        ]);
+        await until(() => q.tasks.single.status == TransferStatus.done);
+        expect(Directory('${tmp.path}/stage').listSync(), isEmpty);
+      }, _SlowDeleteOverrides(const Duration(milliseconds: 300)));
+    });
+
+    test('退避ファイルの削除が返らなくても完了を報告し、残りは起動時の掃除に任せる', () async {
+      final never = Completer<void>();
+      await IOOverrides.runWithIOOverrides(() async {
+        final q = make(stagedDeleteTimeout: const Duration(milliseconds: 100));
+        await q.restore();
+        final path = await source('hang.jpg', bytesOf(500));
+        await q.enqueueUploads('lib', [
+          UploadSource(name: 'hang.jpg', size: 500, mime: 'image/jpeg', path: path),
+        ]);
+        await until(() => q.tasks.single.status == TransferStatus.done);
+        await q.idle();
+        expect(q.hasActiveWork, isFalse);
+        expect(jsonDecode(ledger.value!), isEmpty);
+        // 消せなかったファイルは残る（起動時の掃除の対象）
+        expect(Directory('${tmp.path}/stage').listSync(), isNotEmpty);
+      }, _HangDeleteOverrides(never));
     });
 
     test('同名があれば「name (2)」で上げる', () async {
@@ -485,6 +590,40 @@ void main() {
           a.status == TransferStatus.done && b.status == TransferStatus.done);
       await q.idle();
       expect(jsonDecode(gate.value!), isEmpty);
+    });
+
+    test('退避ファイルの削除中に別の行が台帳を書いても、完了待ちの行を転送中で書き戻さない', () async {
+      await IOOverrides.runWithIOOverrides(() async {
+        w.holdComplete = true;
+        w.holdPutKey = 'a.jpg';
+        final q = make();
+        await q.restore();
+        await q.enqueueUploads('lib', [
+          UploadSource(
+              name: 'a.jpg', size: 4, mime: 'image/jpeg',
+              path: await source('a.jpg', bytesOf(4))),
+          UploadSource(
+              name: 'b.mp4', size: 2000, mime: 'video/mp4',
+              path: await source('b.mp4', bytesOf(2000, 5))),
+        ]);
+        await w.holdPutSeen.future;
+        await w.holdCompleteSeen.future;
+        final a = q.tasks.firstWhere((t) => t.name == 'a.jpg');
+        final b = q.tasks.firstWhere((t) => t.name == 'b.mp4');
+        w.holdPutRelease.complete();
+        // a が削除待ちに入ってから b の完了の書き込みを走らせる
+        await until(() => a.stagedPath == null, what: 'a in staged delete');
+        w.holdCompleteRelease.complete();
+        await until(() =>
+            a.status == TransferStatus.done && b.status == TransferStatus.done);
+        await q.idle();
+        expect(jsonDecode(ledger.value!), isEmpty);
+        // 台帳から再起動しても送り直さない
+        final r = make();
+        await r.restore();
+        await r.idle();
+        expect(w.objects.keys.toSet(), {'a.jpg', 'b.mp4'});
+      }, _SlowDeleteOverrides(const Duration(milliseconds: 500)));
     });
 
     test('同時に走るのは2件まで', () async {

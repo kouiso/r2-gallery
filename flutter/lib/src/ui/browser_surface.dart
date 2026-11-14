@@ -81,6 +81,17 @@ const _hookJs = r'''
       queue.push(['f',u,d]); if(!timer) timer=setTimeout(flush,250);
     }catch(e){}
   }
+  // video 要素のメタデータが示す再生時間（秒）を送る。ライブ配信の Infinity や未読込の NaN は送らない。
+  // 長さは後から分かる（loadedmetadata）ので、分かった時点で1回だけ送る
+  function pushd(v,u){
+    try{
+      var d=v.duration;
+      if(!isFinite(d) || d<=0) return;
+      u=abs(u); if(!/^https?:/i.test(u)) return;
+      var id='d'+u+'|'+Math.round(d); if(seen[id]) return; seen[id]=1;
+      queue.push(['d',u,d]); if(!timer) timer=setTimeout(flush,250);
+    }catch(e){}
+  }
   function scan(){
     try{
       document.querySelectorAll('img').forEach(function(e){var s=e.currentSrc||e.src; if(s) push('p',s)});
@@ -97,6 +108,14 @@ const _hookJs = r'''
         // 最初のコマが出た所で送る（preload=none でずっと読まない物はそのまま）。
         // 送り先の URL は取る時点で拾い直す（走査の時は src がまだ無く、後から
         // スクリプトで付く動画があるため）
+        var sendDur=function(){
+          var ss=[];
+          if(v.currentSrc) ss.push(v.currentSrc); if(v.src) ss.push(v.src);
+          v.querySelectorAll('source').forEach(function(s){ if(s.src) ss.push(s.src) });
+          ss.forEach(function(s){ pushd(v,s) });
+        };
+        if(!v.__r2d){ v.__r2d=1; v.addEventListener('loadedmetadata',sendDur); v.addEventListener('durationchange',sendDur); }
+        sendDur();
         if(!v.__r2f){ v.__r2f=1;
           var grab=function(){
             var ss=[];
@@ -454,6 +473,13 @@ class _BrowserSurfaceState extends State<BrowserSurface>
       };
       if (kind == 's') {
         _collector.capture(url, headers);
+      } else if (kind == 'd') {
+        // 'd' は [要素, URL, 秒] の3つ組。数でない・有限でない・0 以下は長さ不明として捨てる
+        final seconds = p.length > 2 && p[2] is num ? (p[2] as num).toDouble() : 0.0;
+        if (seconds.isFinite && seconds > 0) {
+          _collector.addFromPage(url, headers,
+              duration: Duration(milliseconds: (seconds * 1000).round()));
+        }
       } else if (kind == 'f') {
         // 'f' は [要素, URL, 実コマの dataURL] の3つ組
         final frame = p.length > 2 && p[2] is String ? p[2] as String : '';

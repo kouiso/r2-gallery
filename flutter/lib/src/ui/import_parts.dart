@@ -50,6 +50,15 @@ IconData kindIcon(DetectedKind k) => switch (k) {
       DetectedKind.other => Icons.download,
     };
 
+/// 検出した動画の再生時間。「3分05秒」「0分05秒」「65分02秒」（時間の桁は作らない）。
+/// 端数は四捨五入で秒に丸める（59.6 秒は「1分00秒」）。
+String fmtDuration(Duration d) {
+  final total = (d.inMilliseconds / 1000).round();
+  final m = total ~/ 60;
+  final s = total % 60;
+  return '$m分${s.toString().padLeft(2, '0')}秒';
+}
+
 String fmtSize(int bytes) {
   if (bytes >= 1000000000) return '${(bytes / 1000000000 * 10).floor() / 10} GB';
   if (bytes >= 1000000) return '${(bytes / 1000000 * 10).floor() / 10} MB';
@@ -175,7 +184,7 @@ class DetectedSheetContent extends StatelessWidget {
                                     overflow: TextOverflow.ellipsis),
                                 Text(
                                   // 音声などは上げても一覧に出ないので、押す前に分かるようにする
-                                  '${kindLabel(d.kind)}・$host${d.label.isNotEmpty ? '・${d.displayName}' : ''}${savable ? '' : '・ギャラリー非対応'}',
+                                  '${kindLabel(d.kind)}${d.duration == null ? '' : ' ${fmtDuration(d.duration!)}'}・$host${d.label.isNotEmpty ? '・${d.displayName}' : ''}${savable ? '' : '・ギャラリー非対応'}',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(

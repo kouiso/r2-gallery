@@ -197,3 +197,4 @@ QUEUED (post pass ~14:53Z, order): reviews 122/136 -> issues (newline regex, mov
 #127 delta re-review PASS at 30d6430 must0 nit1 (merge commit trailers) — review queued; GATE-READY at ~14:53Z (evidence evidence/127-fcfc041.* still valid: product code unchanged since fcfc041, only test fake + main)
 #145 REVIEW FAIL at 79c7b8c must1 (new order drops row from _completing before status=done → concurrent ledger write saves it as running → duplicate upload after restart; reproduced a (2).jpg) want1 (hanging delete never completes → timeout) nit1 | merge-result 487/487 | review queued | fix member running (merge main first, keep _completing until done, timeout, regression test)
 C1a design chunk (theme.dart nav/tokens) member started 14:15Z on feat/design-c1a-theme-nav
+#131 merged #130 4bed24e in: head a436ec0 (no conflicts; 接続中/変更 row inside 接続 group, 切断 kept) | flutter 489/0 | re-review #130 delta + #131 full running (files only)

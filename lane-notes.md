@@ -148,3 +148,10 @@ stream C done: t3 69aad36 / run-locally-v2 3572d44 / kmp-era b16b51e (fresh LOCA
 - Project 43 iteration field unreadable from this cloud container (no ProjectV2 tool, gh token invalid): please send this/next week iteration issue numbers for r2-gallery, or give the lane a working gh token route
 - gh CLI token (GH_TOKEN) invalid in this container; using GitHub connector
 - ledger owner column for RG-17..23, RG-26, RG-31 still 'wait' (plan.md:98 rewrite)
+MERGED #141 (#120 stacked) 13:44Z | head 38404d1 == GATE https://github.com/kouiso/r2-gallery/pull/141#issuecomment-6878132195 | merge 9f14722 | LOCAL-CHECK re-run on merge result 36ba6f8 | NOTE: merged before pages-dist showed #120 (feda953 confirmed right after) — order slip, no harm; back to confirm-before-next
+PROD #120 confirmed: pages-dist .source-sha == feda953 ~13:45Z; #141 web-deploy in progress
+HOSTED FAIL main feda953 maestro/emulator: 477/1, transfer_queue_test.dart:271 (staged file still present). Worker-only merge -> pre-existing intermittent test (OBS above). Follow-up fix member running on fix/transfer-queue-stage-cleanup (root cause, no skip). run https://github.com/kouiso/r2-gallery/actions/runs/43600783777
+CLOSED #128 -> superseded by #142 (docs/run-locally-v2) https://github.com/kouiso/r2-gallery/pull/128#issuecomment-6878143585
+POSTER done: new PRs #135 (#121 stacked) #136 (#122 stacked) #137 (#74) #138 (#60; body has both "Closes #59" and "#59 対象外" -> reviewer to check) #139 (kmp-era) #140 (feature-parity t3) #142 (run-locally-v2) #143 (CI scan range); issue #144 (#121 want3)
+#122 conflicts with main (write.ts, after #120/#141) -> member merging main into fix/rg20-stale-thumbs then into fix/rg20-thumb-hardening; fresh review after. Queue reorder: #121 -> #135 -> #127 -> #122 -> #136
+#121 merge-result LOCAL-CHECK (98bf444 = 4e24c2a + main 9f14722) running

@@ -102,6 +102,7 @@ MERGED #123 RG-21 ~13:32Z | head 91b67c1 == GATE head https://github.com/kouiso/
 DESIGN LINK confirmed by owner 2026-11-14 (relayed): 「https://claude.ai/artifact/6NsgHfP9kH9whED6j4ec26 これr2ギャラリー」 — same link already opened from this container at ~12:25Z (Artifact read OK; 31 boards byte-identical to doc/design/project). Design parity audit member running.
 docs reviews | run-locally-v2 189b77c PASS (want: LOCAL-CHECK timestamp 13:40Z was future-dated -> regenerate honestly); kmp-era 196973f PASS; feature-parity-t3 c527b08 FAIL must1 (index.ts:29 wrong file albums.json vs index-<lib>.json) -> stream C member fixing
 NOTE (for main session too): docs/run-locally branch (ac927b5, dummy token in curl) stays on origin — lane may not delete branches; without CI_SCAN_BASE, local `run.mjs fast` exits 2 in clones that have it. Owner may delete it after #128 is closed.
+#120-stacked (fix/rg19-trash-order-prune 38404d1) | re-review PASS must0 want1 (body test section corrected by lead, text only) nit2 (stale sidecar keeps key; parallel head race — follow-up) | PR to be created after #120 merges
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)

@@ -34,7 +34,7 @@ pnpm lint                 # eslint + prettier over worker/tools
 cd flutter && flutter pub get && flutter analyze && flutter test
 cd flutter && flutter build apk --release  # FAD artifact (AOT; never ship a debug/JIT build)
 cd flutter && flutter build web --release  # Pages artifact
-cd worker && npx wrangler dev --local --port 8787   # local API (miniflare R2/D1)
+pnpm exec wrangler dev --local --port 8787 --config worker/wrangler.test.toml --persist-to worker/.wrangler/state   # local API (miniflare R2/D1, token test-access-token); app side: README "手元で動かす"
 ```
 
 ## Coding Rules

@@ -584,6 +584,10 @@ void main() {
     });
 
     testWidgets('設定に件数を出し、すべて削除できる', (tester) async {
+      // 設定タブに見出しが入って縦に長くなったので、下のカードまで描かれる高さにする
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
       final app = makeApp();
       await tester.runAsync(() async {
         for (final k in ['a.jpg', 'b.jpg']) {

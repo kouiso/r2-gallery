@@ -115,6 +115,37 @@ class _SettingsTabState extends State<SettingsTab> {
     if (ms != null) await app.setRelockGraceMs(ms);
   }
 
+  Widget _disconnectCard(AppState app) {
+    return Card(
+          child: ListTile(
+            leading: const Icon(Icons.link_off, color: AppColors.danger),
+            title: const Text('切断',
+                style: TextStyle(color: AppColors.danger)),
+            subtitle: const Text('保存した接続情報を消去します',
+                style: TextStyle(color: AppColors.textDim, fontSize: 12)),
+            onTap: () async {
+              final ok = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('切断しますか？'),
+                  content:
+                      const Text('エンドポイントとトークンがこの端末から消えます。'),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('キャンセル')),
+                    FilledButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('切断')),
+                  ],
+                ),
+              );
+              if (ok == true) await app.disconnect();
+            },
+          ),
+        );
+  }
+
   @override
   Widget build(BuildContext context) {
     final app = widget.app;
@@ -126,6 +157,7 @@ class _SettingsTabState extends State<SettingsTab> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        const SettingsHeading('接続', first: true),
         Card(
           child: ListTile(
             leading: Container(
@@ -146,7 +178,10 @@ class _SettingsTabState extends State<SettingsTab> {
             onTap: host != null ? null : app.leaveBrowseOnly,
           ),
         ),
-        const SizedBox(height: 8),
+        // 切断の置き場はデザインでは別画面だが、#66 で接続先の変更が入るまで今の場所に残す
+        if (app.connected) const SizedBox(height: 8),
+        if (app.connected) _disconnectCard(app),
+        const SettingsHeading('ロック'),
         Card(
           child: SwitchListTile(
             secondary: const Icon(Icons.fingerprint, color: AppColors.accent),
@@ -198,40 +233,13 @@ class _SettingsTabState extends State<SettingsTab> {
             onTap: () => _editPin(isNew: !app.hasPin),
           ),
         ),
-        const SizedBox(height: 8),
-        // オフライン保存は接続なしでも見る・消すので、接続の有無に関わらず出す
+        // オフライン保存は接続なしでも見る・消すので、接続の有無に関わらず出す。
+        // Web など非対応の環境では中身が空になるので見出しごと出さない
+        if (app.offlineSupported) const SettingsHeading('オフライン保存'),
         OfflineSettingsCard(app: app),
-        if (app.connected) const SizedBox(height: 8),
-        if (app.connected) Card(
-          child: ListTile(
-            leading: const Icon(Icons.link_off, color: AppColors.danger),
-            title: const Text('切断',
-                style: TextStyle(color: AppColors.danger)),
-            subtitle: const Text('保存した接続情報を消去します',
-                style: TextStyle(color: AppColors.textDim, fontSize: 12)),
-            onTap: () async {
-              final ok = await showDialog<bool>(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('切断しますか？'),
-                  content:
-                      const Text('エンドポイントとトークンがこの端末から消えます。'),
-                  actions: [
-                    TextButton(
-                        onPressed: () => Navigator.pop(ctx, false),
-                        child: const Text('キャンセル')),
-                    FilledButton(
-                        onPressed: () => Navigator.pop(ctx, true),
-                        child: const Text('切断')),
-                  ],
-                ),
-              );
-              if (ok == true) await app.disconnect();
-            },
-          ),
-        ),
+        const SettingsHeading('このアプリについて'),
+        const AppVersionLabel(),
         const SizedBox(height: 24),
-        const Center(child: AppVersionLabel()),
       ],
     );
   }
@@ -241,25 +249,58 @@ class _SettingsTabState extends State<SettingsTab> {
 String formatAppVersion(String version, String build) =>
     build.isEmpty ? version : '$version（$build）';
 
-/// 設定の一番下の版数。固定の文字だと配布物とずれるので、実際にインストールされた
-/// 本体のメタデータ（pubspec の version+build）から読む。
+/// 設定の見出し。カードが同じ見た目で縦に並ぶだけだと、何の設定かが1枚ずつ読まないと
+/// 分からないので、グループごとに名前を付ける（ReviewSettings）。
+class SettingsHeading extends StatelessWidget {
+  final String text;
+  final bool first;
+  const SettingsHeading(this.text, {super.key, this.first = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(4, first ? 0 : 16, 4, 6),
+      child: Semantics(
+        header: true,
+        child: Text(
+          text,
+          style: const TextStyle(
+            color: AppColors.textDim,
+            fontSize: 13,
+            height: 20 / 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 「このアプリについて」の版数の行。固定の文字だと配布物とずれるので、実際に
+/// インストールされた本体のメタデータ（pubspec の version+build）から読む。
 class AppVersionLabel extends StatelessWidget {
   const AppVersionLabel({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<PackageInfo>(
-      future: PackageInfo.fromPlatform(),
-      builder: (context, snap) {
-        final info = snap.data;
-        // 取得できない間・失敗時は嘘の番号を出さず、製品名だけにする
-        final text = info == null || info.version.isEmpty
-            ? 'R2 Gallery'
-            : 'R2 Gallery  バージョン '
-                '${formatAppVersion(info.version, info.buildNumber)}';
-        return Text(text,
-            style: const TextStyle(color: AppColors.textDim, fontSize: 12));
-      },
+    return Card(
+      child: FutureBuilder<PackageInfo>(
+        future: PackageInfo.fromPlatform(),
+        builder: (context, snap) {
+          final info = snap.data;
+          // 取得できない間・失敗時は嘘の番号を出さず、値を空にする
+          final value = info == null || info.version.isEmpty
+              ? '—'
+              : formatAppVersion(info.version, info.buildNumber);
+          return ListTile(
+            title: const Text('バージョン'),
+            trailing: Text(
+              value,
+              style: const TextStyle(color: AppColors.textDim, fontSize: 14),
+            ),
+          );
+        },
+      ),
     );
   }
 }

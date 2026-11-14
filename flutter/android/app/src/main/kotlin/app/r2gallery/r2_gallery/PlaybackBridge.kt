@@ -74,7 +74,12 @@ object PlaybackBridge {
                     }
                     return@setMethodCallHandler
                 }
-                if (session == null || session != snapshot?.session) {
+                // 小窓の中で再生が終わると snapshot は null になる。その後のロック・接続変更でも
+                // 小窓ごと閉じる必要があるので、exitPip だけは小窓の session も受ける。
+                val accepted = if (call.method == "exitPip") {
+                    PipPolicy.acceptsExit(session, snapshot?.session, pipSession)
+                } else session == snapshot?.session
+                if (session == null || !accepted) {
                     result.success(if (call.method == "enterPip") false else null)
                     return@setMethodCallHandler
                 }
@@ -134,6 +139,9 @@ object PlaybackBridge {
                             val activity = host?.get()
                             // 認証ロック時に小窓を残さず、利用者の画面を強制的に前面へ戻さない。
                             if (Build.VERSION.SDK_INT >= 26 && activity?.isInPictureInPictureMode == true) {
+                                // finish() で pipChanged(false) が届く保証は無いので、受信側と小窓の記録をここで外す
+                                unregisterPipReceiver()
+                                pipSession = null
                                 activity.finish()
                             }
                             result.success(null)
@@ -157,6 +165,8 @@ object PlaybackBridge {
     fun detach(activity: Activity) {
         if (host?.get() !== activity) return
         host = null
+        // Activity が終わる時は小窓の受信側も残さない
+        if (activity.isFinishing) unregisterPipReceiver()
         if (activity.isFinishing && !activity.isChangingConfigurations) command("close")
     }
 

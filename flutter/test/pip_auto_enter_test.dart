@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:r2_gallery/src/playback/mobile_playback.dart';
@@ -28,6 +30,16 @@ PlaybackSession _make(
 
 bool _everArmed(FakePlaybackPort port) => port.arms.any((a) => a.$1);
 
+class _Gated extends FakeVideo {
+  _Gated(this.gate);
+  final Completer<void> gate;
+  @override
+  Future<void> initialize() async {
+    await gate.future;
+    await super.initialize();
+  }
+}
+
 class _Clock implements LockClock {
   int now = 0;
   @override
@@ -56,6 +68,22 @@ void main() {
       expect(port.arms.last.$1, isFalse);
       await session.play();
       expect(port.arms.last, (true, 16, 9));
+      await session.close();
+    });
+
+    test('読み込み中（initialize が終わる前）は入る設定にならない', () async {
+      final port = FakePlaybackPort();
+      final gate = Completer<void>();
+      final video = _Gated(gate);
+      final session = _make(port, video);
+      final loading = session.initialize();
+      await Future<void>.delayed(Duration.zero);
+      expect(video.value.isInitialized, isFalse);
+      expect(_everArmed(port), isFalse, reason: '読み込み中は入らない');
+      gate.complete();
+      await loading;
+      await session.play();
+      expect(_everArmed(port), isTrue, reason: '読み込みが終わって再生すれば入る');
       await session.close();
     });
 
@@ -241,6 +269,21 @@ void main() {
       await session.close();
     });
 
+    testWidgets('「元に戻す」と決めた後に resumed が届かなくても、3 秒で止めない', (tester) async {
+      final port = FakePlaybackPort();
+      final video = FakeVideo();
+      final session = _make(port, video);
+      await session.initialize();
+      await session.play();
+      await session.lifecycle(AppLifecycleState.inactive);
+      session.pipChanged(true);
+      session.pipChanged(false, restoring: true);
+      await tester.pump(const Duration(seconds: 4));
+      expect(video.value.isPlaying, isTrue, reason: '値がある時は時間で決めない');
+      expect(video.pauses, 0);
+      await session.close();
+    });
+
     test('native が「×」と決めたら、すぐ止めて背景再生も切る', () async {
       final port = FakePlaybackPort();
       final video = FakeVideo();
@@ -346,6 +389,26 @@ void main() {
       await session.close();
     });
 
+    test('小窓の中で終わった後にロックされても、小窓を閉じる依頼が native に受けられる', () async {
+      final port = FakePlaybackPort();
+      final video = FakeVideo();
+      final session = _make(port, video);
+      await session.initialize();
+      await session.play();
+      await session.lifecycle(AppLifecycleState.inactive);
+      session.pipChanged(true);
+      video.value = video.value.copyWith(isPlaying: false, isCompleted: true);
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      expect(port.bound, isNull, reason: '終了で clear 済み（native の snapshot は null）');
+      expect(port.pipSession, session.id);
+      session.authorizationChanged(connectionChanged: false, locked: true);
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      expect(port.droppedExits, 0, reason: 'session ガードで捨てられない');
+      expect(port.exits, 1);
+      expect(session.pip, isFalse);
+      await session.close();
+    });
+
     test('閉じない停止が走っている間にロックされても、小窓を閉じ忘れない', () async {
       final port = FakePlaybackPort();
       final session = _make(port, FakeVideo());
@@ -406,6 +469,31 @@ void main() {
       expect(find.text('dialog-b'), findsNothing);
       expect(find.byType(VideoView), findsOneWidget);
       expect(video.value.isPlaying, isTrue);
+    });
+
+    testWidgets('いま見ていないページ（active: false）は再生しても入る設定にならない', (tester) async {
+      final port = FakePlaybackPort();
+      final owner = PlaybackCoordinator(port);
+      final video = FakeVideo();
+      Widget page(bool active) => MaterialApp(
+        theme: buildAppTheme(),
+        home: Scaffold(
+          body: VideoView(
+            url: 'https://fixture.invalid/a.mp4',
+            active: active,
+            controllerFactory: (_) => video,
+            playbackCoordinator: owner,
+          ),
+        ),
+      );
+      await tester.pumpWidget(page(false));
+      await tester.pump();
+      await tester.pump();
+      expect(_everArmed(port), isFalse, reason: '裏のページは入らない');
+      await tester.pumpWidget(page(true));
+      await tester.pump();
+      await tester.pump();
+      expect(_everArmed(port), isTrue, reason: '見ているページになれば入る');
     });
 
     testWidgets('小窓の中では終了表示を出さず、戻すと出る', (tester) async {

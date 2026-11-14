@@ -124,6 +124,25 @@ void main() {
     expect(audio.activations.last, isFalse);
   });
 
+  test('小窓の中で終わった後にロックされても、clear の後に exitPip が同じ session で送られる', () async {
+    await session.play();
+    await session.lifecycle(AppLifecycleState.inactive);
+    session.pipChanged(true);
+    video.value = video.value.copyWith(isPlaying: false, isCompleted: true);
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    List<String> methods() => calls.map((c) => c.method).toList();
+    expect(methods(), contains('clear'));
+    expect(methods(), isNot(contains('exitPip')), reason: '終わっただけでは小窓を閉じない');
+    session.authorizationChanged(connectionChanged: false, locked: true);
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    final exit = calls.lastWhere((c) => c.method == 'exitPip');
+    expect(exit.arguments, {'session': session.id});
+    expect(
+      methods().lastIndexOf('exitPip'),
+      greaterThan(methods().indexOf('clear')),
+    );
+  });
+
   test('小窓の中のボタン（再生／一時停止）も同じ命令経路を通り、認証が切れたら再生だけ拒否される', () async {
     await session.play();
     session.pipChanged(true);

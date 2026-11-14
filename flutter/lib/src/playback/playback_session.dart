@@ -494,12 +494,11 @@ class PlaybackSession extends ChangeNotifier {
       // ×で閉じたと native が決めた。時間差を待たずに止める。
       backgroundAllowed = false;
       unawaited(stop());
-    } else if (!active) {
-      // 古い経路でだけ、通常画面への復帰と小窓の閉鎖を、resumed通知が届く余地を置いて分ける。
+    } else if (!active && restoring == null) {
+      // native が値を渡さない古い経路でだけ、通常画面への復帰と小窓の閉鎖を、
+      // resumed通知が届く余地を置いて分ける。値がある時は時間で決めない。
       _pipExitTimer = Timer(
-        restoring == true
-            ? const Duration(seconds: 3)
-            : const Duration(milliseconds: 250),
+        const Duration(milliseconds: 250),
         () {
           if (live && !foreground && !pip) {
             backgroundAllowed = false;

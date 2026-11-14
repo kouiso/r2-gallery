@@ -23,7 +23,11 @@ class FakePlaybackPort implements PlaybackPort {
   void update(PlaybackSession session) {}
   @override
   Future<void> clear(PlaybackSession session) async {
-    if (identical(bound, session)) bound = null;
+    // native と同じく、小窓の中で clear されたら小窓の session だけ覚えておく
+    if (identical(bound, session)) {
+      pipSession = session.pip ? session.id : null;
+      bound = null;
+    }
   }
 
   @override
@@ -39,8 +43,21 @@ class FakePlaybackPort implements PlaybackPort {
   }
 
   @override
-  Future<void> exitPip(PlaybackSession session) async => exits++;
+  Future<void> exitPip(PlaybackSession session) async {
+    // native の session ガードと同じ。現在の session か、小窓の session だけを受ける
+    final accepted = identical(bound, session) || pipSession == session.id;
+    if (!accepted) {
+      droppedExits++;
+      return;
+    }
+    exits++;
+    pipSession = null;
+  }
+
   int exits = 0;
+  // native が session 違いで捨てた exitPip の数
+  int droppedExits = 0;
+  String? pipSession;
   @override
   Future<void> visibility(PlaybackSession session) async {}
   @override

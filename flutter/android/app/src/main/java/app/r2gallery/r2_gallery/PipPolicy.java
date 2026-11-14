@@ -60,6 +60,16 @@ public final class PipPolicy {
         return activityStarted;
     }
 
+    /**
+     * 小窓を閉じる依頼（exitPip）を受けてよい session か。
+     * 再生が小窓の中で自然に終わると clear で snapshot は null になり、小窓の session だけが残る。
+     * その後のロック・接続変更でも小窓ごと閉じられるよう、現在の session と小窓の session の両方を通す。
+     */
+    public static boolean acceptsExit(String session, String snapshotSession, String pipSession) {
+        if (session == null) return false;
+        return session.equals(snapshotSession) || session.equals(pipSession);
+    }
+
     /** 小窓のボタンが送る放送の名前。アプリ内の受信側だけがこの 2 つを受ける。 */
     public static final String ACTION_PLAY = "app.r2gallery.pip.PLAY";
     public static final String ACTION_PAUSE = "app.r2gallery.pip.PAUSE";

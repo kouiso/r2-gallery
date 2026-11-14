@@ -60,6 +60,12 @@ public final class PipPolicyProbe {
         is("知らない放送は無視", PipPolicy.commandFor("android.intent.action.VIEW") == null, true);
         is("null は無視", PipPolicy.commandFor(null) == null, true);
         is("stop は放送から通さない", PipPolicy.commandFor("app.r2gallery.pip.STOP") == null, true);
+        // 小窓の中で自然に終わった後（snapshot は null、小窓の session だけ残る）でも小窓を閉じられる
+        is("現在の session は通す", PipPolicy.acceptsExit("s1", "s1", null), true);
+        is("終了後も小窓の session は通す", PipPolicy.acceptsExit("s1", null, "s1"), true);
+        is("別の session は通さない", PipPolicy.acceptsExit("old", "s1", "s1"), false);
+        is("小窓が無く snapshot も無ければ通さない", PipPolicy.acceptsExit("s1", null, null), false);
+        is("session 無しは通さない", PipPolicy.acceptsExit(null, null, null), false);
         System.out.println("PipPolicyProbe ok: " + checks + " checks");
     }
 }

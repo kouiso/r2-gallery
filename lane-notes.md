@@ -33,6 +33,10 @@ JUDGE b2 (manager): RG-17..23 first; iteration items jump queue (unreadable here
   C worker/docs: #84/#85 -> #103 -> #105 -> #86/#87 -> #88/#89 -> #90/#91 -> #81/#82 (web-deploy.yml minimal, called out in GATE)
   D: #73/#74 -> #59/#60 -> help B
   pass-line add: client PR must work against currently deployed Worker. Stacked PRs state merge order in GATE.
+#120 | FIX | review FAIL must1 want4 nit1 https://github.com/kouiso/r2-gallery/pull/120#issuecomment-6877273847 (multi-item undo scrambles album order write.ts:190/:218) + CodeRabbit majors (record before mutate; resumable restore) | queued for fix member
+#121 RG-17 | review running | head 4e24c2a
+#122 RG-20 | review running | head c0437cf
+#123 RG-21 | review running | head 04944bc
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)

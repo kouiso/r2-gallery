@@ -22,7 +22,7 @@ class _GalleryApi extends ApiClient {
 
   @override
   Future<FolderPage> folder(String libId,
-      {String prefix = '', String? cursor, bool recursive = false}) async {
+      {String prefix = '', String? cursor, bool recursive = false, String? sort}) async {
     if (recursive) galleryCalls.update(libId, (n) => n + 1, ifAbsent: () => 1);
     return FolderPage(items: [
       for (final item in items[libId] ?? <MediaItem>[])

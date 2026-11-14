@@ -30,7 +30,7 @@ class _TrashApi extends ApiClient {
 
   @override
   Future<FolderPage> folder(String libId,
-          {String prefix = '', String? cursor, bool recursive = false}) async =>
+          {String prefix = '', String? cursor, bool recursive = false, String? sort}) async =>
       FolderPage(items: [
         for (final f in files)
           if (!trashed.any((t) => t.key == f.key)) f

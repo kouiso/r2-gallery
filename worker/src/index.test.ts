@@ -407,6 +407,102 @@ describe("folders", () => {
     expect(f3.items).toEqual([]);
   });
 
+  describe("sort=new|old|name|size は全件に対して並べ、カーソルで続きを返す (#44)", () => {
+    const N = 205; // 1ページ(200件)を超える件数で、2ページ目の位置が崩れないことを確かめる
+    const sorts = ["new", "old", "name", "size"] as const;
+    type Sort = (typeof sorts)[number];
+
+    interface Row {
+      key: string;
+      size: number;
+      uploaded: number;
+    }
+
+    beforeAll(async () => {
+      for (let i = 0; i < N; i++) {
+        // 大文字小文字の混在・同サイズ・同時刻を含め、同値の決め手(key)も確かめる
+        const name = `${i % 3 === 0 ? "B" : "a"}${String((i * 37) % N).padStart(3, "0")}.jpg`;
+        await env.LIB_A.put(`sortbig/${name}`, new Uint8Array(((i * 7) % 50) + 1), {
+          httpMetadata: { contentType: "image/jpeg" },
+        });
+      }
+    });
+
+    async function expected(sort: Sort): Promise<string[]> {
+      const rows: Row[] = [];
+      let cursor: string | undefined;
+      do {
+        const l = await env.LIB_A.list({ prefix: "sortbig/", cursor });
+        for (const o of l.objects)
+          rows.push({ key: o.key, size: o.size, uploaded: o.uploaded.getTime() });
+        cursor = l.truncated ? l.cursor : undefined;
+      } while (cursor);
+      const base = (k: string) => k.split("/").pop()!.toLowerCase();
+      const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+      rows.sort((a, b) => {
+        const c =
+          sort === "new"
+            ? b.uploaded - a.uploaded
+            : sort === "old"
+              ? a.uploaded - b.uploaded
+              : sort === "size"
+                ? b.size - a.size
+                : cmp(base(a.key), base(b.key));
+        return c || cmp(a.key, b.key);
+      });
+      return rows.map((r) => r.key);
+    }
+
+    async function walk(
+      sort: Sort,
+      query = "",
+    ): Promise<{ keys: string[]; pages: number; echoed: (string | undefined)[] }> {
+      const keys: string[] = [];
+      const echoed: (string | undefined)[] = [];
+      let cursor: string | null = null;
+      let pages = 0;
+      do {
+        const q: string = `/v1/a/folders?prefix=sortbig/&sort=${sort}${query}${
+          cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""
+        }`;
+        const res = await api(q);
+        expect(res.status).toBe(200);
+        const body = (await res.json()) as Folders & { sort?: string };
+        echoed.push(body.sort);
+        keys.push(...body.items.map((i) => i.key));
+        cursor = body.cursor;
+        pages++;
+      } while (cursor);
+      return { keys, pages, echoed };
+    }
+
+    for (const sort of sorts) {
+      it(`sort=${sort}: ライブラリ全体がその順で、続きのページも重複・欠けなしで出る`, async () => {
+        const { keys, pages, echoed } = await walk(sort);
+        // 並びの比較を先にする。返し値の確認が先だと、順序のバグが返し値の失敗に隠れる
+        expect(keys).toEqual(await expected(sort));
+        expect(pages).toBe(2);
+        expect(echoed).toEqual([sort, sort]);
+      });
+    }
+
+    it("recursive=1 でも同じ順で続きが取れる(写真タブの経路)", async () => {
+      const { keys } = await walk("size", "&recursive=1");
+      expect(keys.filter((k) => k.startsWith("sortbig/"))).toEqual(await expected("size"));
+    });
+
+    it("sort が無い order=recent だけの古いアプリは、新しい順のまま", async () => {
+      const res = await api("/v1/a/folders?prefix=sortbig/&order=recent");
+      const body = (await res.json()) as Folders & { sort?: string };
+      expect(body.items.map((i) => i.key)).toEqual((await expected("new")).slice(0, 200));
+    });
+
+    it("知らない sort は 400", async () => {
+      const res = await api("/v1/a/folders?prefix=sortbig/&sort=random");
+      expect(res.status).toBe(400);
+    });
+  });
+
   it("recursive=1 returns all media under the prefix and no folder list", async () => {
     await env.LIB_A.put("deep/inner/leaf.png", PNG, { httpMetadata: { contentType: "image/png" } });
     const res = await api("/v1/a/folders?prefix=&recursive=1");

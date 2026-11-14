@@ -48,7 +48,7 @@ void main() {
     for (final h in ['接続', 'ロック', 'このアプリについて']) {
       expect(find.text(h), findsOneWidget, reason: h);
     }
-    final y = (String s) => t.getTopLeft(find.text(s)).dy;
+    double y(String s) => t.getTopLeft(find.text(s)).dy;
     expect(y('接続') < y('ロック'), isTrue);
     expect(y('ロック') < y('このアプリについて'), isTrue);
     for (final s in [

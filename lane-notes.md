@@ -27,6 +27,12 @@ JUDGE b1 (manager): #118 emulator flow update accepted (intentional tested renam
 #120 RG-19 | FIX->review | PR opened head f78bbf4 | local-check posted | reviewer running
 #118 | FIX | member pushed 6454563 (03-play flow 閉じる->一覧に戻る) | emulator rerun in progress | local flutter test 614/0
 DESIGN | owner shared https://claude.ai/artifact/6NsgHfP9kH9whED6j4ec26 (r2-gallery デザイン, version 1794408011-d892) | all 31 project/*.dc.html + canvas.json byte-identical to repo doc/design/project (PR #95) | UI items (#66/#67 ReviewConnectEdit, #73/#74 ReviewFolder, #76-#79 ReviewFoundation, #69-#72 ReviewLock, #92/#93 ReviewSettings, #96 Logo) build against doc/design/project/review/*.dc.html
+JUDGE b2 (manager): RG-17..23 first; iteration items jump queue (unreadable here). OWNER confirmed #10 #11 archive#113 archive#212. DEVICE #1 #4 #15 #24 #25 #28 (+#2 #3 via #118, add Refs #2 #3 #13 to #118 body; #13 font redistribution terms in body). LATER (not this cycle): #27 #40 #30 #35 #26 #37 #38 #108 #109 #106 #112 #76-#79 #61/#62 #71/#72 #111 (after #118). OWNER question: #29 #32 #104. WORK now:
+  A settings_tab.dart stack: #33/#34(label only; build-number automation OWNER) -> #92/#93 -> #66/#67 -> #69/#70
+  B: #115 (emulator/web + local worker; if no repro -> owner question) -> #116/#117 -> #39 -> #83 -> #36
+  C worker/docs: #84/#85 -> #103 -> #105 -> #86/#87 -> #88/#89 -> #90/#91 -> #81/#82 (web-deploy.yml minimal, called out in GATE)
+  D: #73/#74 -> #59/#60 -> help B
+  pass-line add: client PR must work against currently deployed Worker. Stacked PRs state merge order in GATE.
 
 ## LEDGER
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)
@@ -48,6 +54,9 @@ DESIGN | owner shared https://claude.ai/artifact/6NsgHfP9kH9whED6j4ec26 (r2-gall
 | RG-31 | blocked | wait | DEVICE |
 
 ## needs owner
+- #29 アプリ独自の PIN を撤去し端末の画面ロックに一本化してよいか（機能の撤去）（はい／いいえ）
+- #32 設定タブのライブラリ切替チップを隠すか、課題を閉じるか（隠す／閉じる）
+- #104 重複一覧 API のために本番 Worker の CPU 上限で読み取り量を測ってよいか（本番での計測・読み取りのみ）（はい／いいえ）
 - #118 feature changes (separate from RG-12; blocks #118): ①「端末に保存」(端末ギャラリーへの書き出し) を廃止しアプリ内オフライン保存だけにする ②明るさ・音量のスワイプを明示パネルに置き換える ③更新後、以前のオフライン保存は隔離され表示されない（消えはしないが移行手段なし）④O1・O1-2・S7 を実機確認待ちで ☑→◐ — それぞれ OK か（はい／いいえ）。推奨: ①② は既に作られた変更なので はい、③ は移行を足すまで いいえ
 - ASK | Is kouiso/r2-gallery-archive's main still watched by any deploy lane (equus r2-web-deploy) so that a merge there would change production? yes/no/don't know | read: archive .github/workflows/ci.yml:7-8, archive CLAUDE.md:49, r2-gallery CLAUDE.md:49 ("retired in #10") | the retirement note covers the relay, not the external lane | on "don't know": never merge in the archive (only closes planned anyway)
 - RG-12 (+ bug-fix merges): 審査が通り証跡が付いた PR を、あなたの OK を待たずにマージしてよいか（マージすると本番の Web と FAD が新しくなる）。壊れたら戻し PR も即取り込んでよいか。（はい／いいえ） — recommend: はい

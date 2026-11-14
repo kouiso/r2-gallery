@@ -8,6 +8,17 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'models.dart';
 import 'review_meta.dart';
 
+/// 接続の確認結果。理由を画面に出し分けるための物
+class ProbeOutcome {
+  final bool success;
+  final bool tokenRejected;
+  final int? libraryCount;
+  const ProbeOutcome._(this.success, this.tokenRejected, this.libraryCount);
+  const ProbeOutcome.ok({int? libraryCount}) : this._(true, false, libraryCount);
+  static const unreachable = ProbeOutcome._(false, false, null);
+  static const badToken = ProbeOutcome._(false, true, null);
+}
+
 class Connection {
   final String endpoint;
   final String token;
@@ -105,6 +116,29 @@ class ApiClient {
       return res.statusCode != null && res.statusCode! < 400;
     } catch (_) {
       return false;
+    }
+  }
+
+  /// probe と同じ確認だが、失敗の理由（届かない／トークンが違う）も返す。
+  /// 接続先の変更画面で、保存の前に試して理由を出すのに使う。
+  Future<ProbeOutcome> probeOutcome(String endpoint, String token) async {
+    try {
+      final res = await _dio.get(
+        '${endpoint.replaceAll(RegExp(r'/+$'), '')}/v1/libraries',
+        options: Options(headers: {'Authorization': 'Bearer ${token.trim()}'}),
+      );
+      final n = ((res.data is Map ? res.data['libraries'] : null) as List?)
+          ?.length;
+      return res.statusCode != null && res.statusCode! < 400
+          ? ProbeOutcome.ok(libraryCount: n)
+          : ProbeOutcome.unreachable;
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      return code == 401 || code == 403
+          ? ProbeOutcome.badToken
+          : ProbeOutcome.unreachable;
+    } catch (_) {
+      return ProbeOutcome.unreachable;
     }
   }
 

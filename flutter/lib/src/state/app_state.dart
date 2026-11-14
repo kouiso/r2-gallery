@@ -277,28 +277,77 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<String?> connect(String endpoint, String token) async {
+  /// 接続先を差し替えた回数。同じライブラリ id の別の接続先でも画面の一覧・選択を作り直す合図に使う
+  int connectionGen = 0;
+
+  // connect / tryConnect / saveConnection で入力の確かめ方と文言を揃える
+  ({String endpoint, String token})? _validInput(
+      String endpoint, String token, void Function(String) onError) {
     final input = normalizeConnectInput(endpoint, token);
-    if (input == null) {
-      final ep = endpoint.trim();
-      return ep.contains('://') && !ep.startsWith('https://')
-          ? 'エンドポイントは https:// で始めてください'
-          : connectFailedMessage;
-    }
-    final ok = await api
-        .probe(input.endpoint, input.token)
-        .timeout(_bakedProbeBudget, onTimeout: () => false);
-    if (!ok) return connectFailedMessage;
-    api.setConnection(Connection(input.endpoint, input.token));
-    await Kv.set(Keys.endpoint, input.endpoint);
-    await Kv.set(Keys.token, input.token);
+    if (input != null) return input;
+    final ep = endpoint.trim();
+    onError(ep.contains('://') && !ep.startsWith('https://')
+        ? 'エンドポイントは https:// で始めてください'
+        : connectFailedMessage);
+    return null;
+  }
+
+  Future<void> _applyConnection(String endpoint, String token) async {
+    api.setConnection(Connection(endpoint, token));
+    await Kv.set(Keys.endpoint, endpoint);
+    await Kv.set(Keys.token, token);
     connected = true;
     browseOnly = false;
     bakedProbeFailed = false;
     startupError = null;
+    // 同じライブラリ id でも中身は別の接続先のもの。先に上げて、通知で画面が古い一覧を使い続けないようにする
+    connectionGen++;
     notifyListeners();
     await _loadLibraries();
+  }
+
+  Future<String?> connect(String endpoint, String token) async {
+    String? err;
+    final input = _validInput(endpoint, token, (e) => err = e);
+    if (input == null) return err;
+    final ok = await api
+        .probe(input.endpoint, input.token)
+        .timeout(_bakedProbeBudget, onTimeout: () => false);
+    if (!ok) return connectFailedMessage;
+    await _applyConnection(input.endpoint, input.token);
     return null;
+  }
+
+  /// 接続先の変更画面の保存。connect と違い、届かない／トークンが違うを区別した理由を返す。
+  /// 確かめて成功した時だけ接続を差し替え、失敗では今の接続にも保存値にも触れない。
+  Future<String?> saveConnection(String endpoint, String token) async {
+    String? err;
+    final input = _validInput(endpoint, token, (e) => err = e);
+    if (input == null) return err;
+    final r = await api
+        .probeOutcome(input.endpoint, input.token)
+        .timeout(_bakedProbeBudget, onTimeout: () => ProbeOutcome.unreachable);
+    if (!r.success) return _probeReason(r);
+    await _applyConnection(input.endpoint, input.token);
+    return null;
+  }
+
+  String _probeReason(ProbeOutcome r) => r.tokenRejected
+      ? 'トークンが違います。確認してください。'
+      : '接続先に届きません。URLとネットワークを確認してください。';
+
+  /// 接続先を保存せずに試す。今の接続・保存済みの値には一切触れない。
+  /// 返す文字列は失敗の理由、成功なら null（件数は取れた時だけ）。
+  Future<({String? error, int? libraryCount})> tryConnect(
+      String endpoint, String token) async {
+    String? err;
+    final input = _validInput(endpoint, token, (e) => err = e);
+    if (input == null) return (error: err, libraryCount: null);
+    final r = await api
+        .probeOutcome(input.endpoint, input.token)
+        .timeout(_bakedProbeBudget, onTimeout: () => ProbeOutcome.unreachable);
+    if (r.success) return (error: null, libraryCount: r.libraryCount);
+    return (error: _probeReason(r), libraryCount: null);
   }
 
   Future<void> _connectBaked() async {

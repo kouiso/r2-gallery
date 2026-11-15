@@ -428,10 +428,18 @@ export async function handleLibOps(
   if (!resumed) {
     const back = await moveObject(env, bucket, trashKey, bucket, original);
     // ゴミ箱の間もサムネは残してある。あるかを 1 回だけ確かめて索引に足す
-    const hasThumb = !!(await env.META.head(thumbPath(lib, original)));
+    // 確かめられなかった時はサムネの有無に触れない。ここで 5xx にすると、本体は戻ったのに
+    // 失敗と伝わり、やり直しは「もうゴミ箱に無い」で通らなくなる
+    const hasThumb = await env.META.head(thumbPath(lib, original)).then(
+      (o) => o !== null,
+      (e: unknown) => {
+        console.error("thumb_probe_failed", lib, original, e);
+        return null;
+      },
+    );
     await journalBestEffort(env, lib, {
       put: [rowOf(back)],
-      ...(hasThumb ? { thumb: [original] } : { unthumb: [original] }),
+      ...(hasThumb === null ? {} : hasThumb ? { thumb: [original] } : { unthumb: [original] }),
     });
   }
   if (saved) {

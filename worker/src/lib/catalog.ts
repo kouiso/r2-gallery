@@ -69,16 +69,24 @@ export interface Catalog {
 }
 
 const RESERVED = [SYSTEM_PREFIX, TRASH_PREFIX];
-// 別々の isolate の時計のずれ。索引を作り始めた時刻より少し前の追記も重ねて当てる
-// （追記は「その key の今の姿」なので、二度当てても結果は変わらない）
-const CLOCK_SKEW_MS = 60_000;
+// 別々の isolate の時計のずれ。索引を作り始めた時刻より少し前の追記も重ねて当てる。
+// 追記は「その key の今の姿」なので、Worker 経由の書き込みだけなら二度当てても結果は
+// 変わらない。この幅の間に R2 へ直接書かれた物とは食い違い得る（次の作り直しで直る）ので、
+// 幅は時計のずれを吸える範囲で小さく取る
+const CLOCK_SKEW_MS = 10_000;
 const DEFAULT_MAX_AGE_S = 300;
 // 追記が溜まると毎回の読み込みが重くなるので、この数を超えたら索引へ畳む
 const JOURNAL_COMPACT_AT = 400;
+// ここまで溜まると、追記を全部読むだけで 1 リクエストの外部呼び出しの上限（1000 回）に
+// 近づく。裏で畳むのを待たず、畳んでから答える
+const JOURNAL_HARD_LIMIT = 600;
+// 裏の作り直しを別々の isolate が同時に始めないための目印の寿命
+const REBUILD_LEASE_MS = 60_000;
 const VIEW_CACHE = 6;
 
 const snapshotKey = (lib: string) => `${SYSTEM_PREFIX}catalog/${lib}.json`;
 const journalPrefix = (lib: string) => `${SYSTEM_PREFIX}catalog/${lib}/j/`;
+const leaseKey = (lib: string) => `${SYSTEM_PREFIX}catalog/${lib}.lease`;
 const thumbPrefix = (lib: string) => `${SYSTEM_PREFIX}thumbs/${lib}/`;
 
 const mem = new Map<string, CatalogState>();
@@ -199,9 +207,11 @@ async function rebuildOnce(env: Env, lib: string, bucket: R2Bucket): Promise<voi
     startedAt,
     items: rows.map((r) => [r[0], r[1], r[2], r[3], thumbs.has(r[0]) ? 1 : 0]),
   };
-  // 遅く終わった古い作り直しが、新しい索引を上書きしないようにする
+  // 遅く終わった古い作り直しが、新しい索引を上書きしないようにする。時計が狂って
+  // 「未来に作った」ことになっている索引には負けない（負けると二度と作り直せなくなる）
   const current = await env.META.head(snapshotKey(lib));
-  if (Number(current?.customMetadata?.startedAt ?? 0) > startedAt) return;
+  const currentAt = Number(current?.customMetadata?.startedAt ?? 0);
+  if (currentAt > startedAt && currentAt <= Date.now() + CLOCK_SKEW_MS) return;
   await env.META.put(snapshotKey(lib), JSON.stringify(file), {
     httpMetadata: { contentType: "application/json" },
     customMetadata: { startedAt: String(startedAt) },
@@ -221,6 +231,20 @@ export function rebuildCatalog(env: Env, lib: string, bucket: R2Bucket): Promise
   const p = rebuildOnce(env, lib, bucket).finally(() => rebuilding.delete(lib));
   rebuilding.set(lib, p);
   return p;
+}
+
+/**
+ * 応答の後に回す作り直し。古くなった瞬間に、受けた isolate の数だけ全件列挙が走るのを
+ * 避けるため、始める前に目印を置き、新しい目印がある間は他の isolate は始めない。
+ * 目印の確認と設置は厳密な排他ではない（同時に 2 つ走っても結果は同じ）。
+ */
+async function rebuildInBackground(env: Env, lib: string, bucket: R2Bucket): Promise<void> {
+  if (rebuilding.has(lib)) return;
+  const lease = await env.META.head(leaseKey(lib));
+  const age = lease ? Date.now() - lease.uploaded.getTime() : Infinity;
+  if (age >= 0 && age < REBUILD_LEASE_MS) return;
+  await env.META.put(leaseKey(lib), "");
+  await rebuildCatalog(env, lib, bucket);
 }
 
 /** 日次の cron から呼ぶ。直接 R2 に置かれた物を拾い、追記を畳む。 */
@@ -277,25 +301,36 @@ async function fetchSnapshot(
   };
 }
 
-async function loadJournalBodies(env: Env, keys: string[]): Promise<void> {
-  const missing = keys.filter((k) => !journalBodies.has(k));
-  await Promise.all(
-    missing.map(async (k) => {
-      const obj = await env.META.get(k);
-      // 一覧の後に畳まれて消えた追記は、新しい索引に入っているので空として扱う
-      journalBodies.set(k, obj ? await obj.json<JournalEntry>() : {});
-    }),
-  );
-  if (journalBodies.size > keys.length + 2000) {
-    const keep = new Set(keys);
+/** [wanted] のうち手元に無い追記を読む。[listed] に無い物（畳まれた物）は手元からも捨てる。 */
+async function loadJournalBodies(env: Env, wanted: string[], listed: string[]): Promise<void> {
+  const missing = wanted.filter((k) => !journalBodies.has(k));
+  // 同時に開ける接続には上限があるので、まとめて投げずに区切って読む
+  for (let i = 0; i < missing.length; i += 24) {
+    await Promise.all(
+      missing.slice(i, i + 24).map(async (k) => {
+        const obj = await env.META.get(k);
+        // 一覧の後に畳まれて消えた追記は、新しい索引に入っているので空として扱う
+        journalBodies.set(k, obj ? await obj.json<JournalEntry>() : {});
+      }),
+    );
+  }
+  if (journalBodies.size > listed.length + 500) {
+    const keep = new Set(listed);
     for (const k of journalBodies.keys()) if (!keep.has(k)) journalBodies.delete(k);
   }
 }
 
+type Composed = { state: CatalogState; journal: number };
+
+/**
+ * 索引に追記を当てた今の姿を作る。索引が無ければ null。追記が溜まりすぎていて
+ * [allowBacklog] が false なら、読まずに "backlog" を返す（呼び出し側が先に畳む）。
+ */
 async function compose(
   env: Env,
   lib: string,
-): Promise<{ state: CatalogState; journal: number } | null> {
+  allowBacklog = false,
+): Promise<Composed | "backlog" | null> {
   const prefix = journalPrefix(lib);
   let [state, listed] = await Promise.all([
     fetchSnapshot(env, lib, mem.get(lib)),
@@ -314,19 +349,19 @@ async function compose(
       relevant = relevantOf(state);
     }
   }
+  if (relevant.length > JOURNAL_HARD_LIMIT && !allowBacklog) return "backlog";
   const isPrefix =
     state.applied.length <= relevant.length && state.applied.every((k, i) => relevant[i] === k);
+  const todo = isPrefix ? relevant.slice(state.applied.length) : relevant;
+  // 読むのは先に全部済ませる。同じ isolate の別のリクエストがこの state を使っているので、
+  // await を挟んで少しずつ書き換えると、当てかけの一覧を相手に見せてしまう
+  await loadJournalBodies(env, todo, listed);
   if (!isPrefix) {
     // 途中に割り込む追記・消えた追記がある。索引から当て直す
     state.rows = new Map(state.base);
     state.thumbs = new Set(state.baseThumbs);
-    state.applied = [];
-    state.views.clear();
-    state.sizes = null;
   }
-  const todo = relevant.slice(state.applied.length);
-  if (todo.length) {
-    await loadJournalBodies(env, todo);
+  if (todo.length || !isPrefix) {
     for (const k of todo) applyEntry(state, journalBodies.get(k) ?? {});
     state.applied = relevant;
     state.views.clear();
@@ -433,6 +468,11 @@ export interface CatalogOptions {
   ctx?: Pick<ExecutionContext, "waitUntil">;
   /** 利用者が「引っ張って更新」した時。古ければ作り直してから返す */
   fresh?: boolean;
+  /**
+   * 索引がまだ無い時に、作るのを待たずに null を返す（作るのは裏に回す）。
+   * 索引が無くても答えられる呼び出し（R2 に直接聞いた一覧のサムネの有無）で使う。
+   */
+  optional?: boolean;
 }
 
 // 「今すぐ最新を」と言われても、直前に作ったばかりなら作り直さない
@@ -446,21 +486,49 @@ export async function loadCatalog(
   env: Env,
   lib: string,
   bucket: R2Bucket,
+  opts: CatalogOptions & { optional: true },
+): Promise<Catalog | null>;
+export async function loadCatalog(
+  env: Env,
+  lib: string,
+  bucket: R2Bucket,
+  opts?: CatalogOptions,
+): Promise<Catalog>;
+export async function loadCatalog(
+  env: Env,
+  lib: string,
+  bucket: R2Bucket,
   opts: CatalogOptions = {},
-): Promise<Catalog> {
+): Promise<Catalog | null> {
   const maxAge = maxAgeMs(env);
-  let composed = await compose(env, lib);
-  const age = composed ? Date.now() - composed.state.startedAt : Infinity;
-  const mustWait =
-    !composed || maxAge === 0 || (opts.fresh === true && age > FRESH_MIN_INTERVAL_MS);
-  if (mustWait) {
-    await rebuildCatalog(env, lib, bucket);
-    composed = await compose(env, lib);
-  } else if (age > maxAge || composed!.journal > JOURNAL_COMPACT_AT) {
-    const work = rebuildCatalog(env, lib, bucket).catch((e) =>
+  const background = () => {
+    const work = rebuildInBackground(env, lib, bucket).catch((e) =>
       console.error("catalog_rebuild_failed", lib, e),
     );
     if (opts.ctx) opts.ctx.waitUntil(work);
+  };
+  if (opts.optional) {
+    try {
+      const got = await compose(env, lib);
+      if (!got || got === "backlog" || Date.now() - got.state.startedAt > maxAge) background();
+      return got && got !== "backlog" ? toCatalog(got.state) : null;
+    } catch (e) {
+      console.error("catalog_unavailable", lib, e);
+      return null;
+    }
+  }
+  let composed = await compose(env, lib);
+  if (composed === "backlog") {
+    // 追記が溜まりすぎている。全部読む前に畳む
+    await rebuildCatalog(env, lib, bucket);
+    composed = (await compose(env, lib, true)) as Composed | null;
+  }
+  const age = composed ? Date.now() - composed.state.startedAt : Infinity;
+  if (!composed || maxAge === 0 || (opts.fresh === true && age > FRESH_MIN_INTERVAL_MS)) {
+    await rebuildCatalog(env, lib, bucket);
+    composed = (await compose(env, lib, true)) as Composed | null;
+  } else if (age > maxAge || composed.journal > JOURNAL_COMPACT_AT) {
+    background();
   }
   if (!composed) throw new Error("catalog_unavailable");
   return toCatalog(composed.state);

@@ -270,14 +270,20 @@ export async function handleFolders(
     // 直下だけの一覧は、1000 件に収まるなら R2 に直接聞く。アプリは上げた直後に
     // 「その key が今あるか」をこの口で確かめるので、索引への追記が遅れても正しく答える。
     const fresh = url.searchParams.get("fresh") === "1";
-    const directly = recursive ? null : bucket.list({ prefix, delimiter: "/", limit: 1000 });
-    // 索引を毎回作り直す設定の時は、直接聞いて足りる一覧のために全件を列挙しない
-    const [direct, loaded] = await Promise.all([
-      directly,
-      catalogEnabled(env) || recursive ? loadCatalog(env, lib, bucket, { ctx, fresh }) : null,
-    ]);
+    let direct: R2Objects | null = null;
+    let catalog: Catalog | null = null;
+    if (recursive) {
+      catalog = await loadCatalog(env, lib, bucket, { ctx, fresh });
+    } else {
+      // 索引は「サムネがあるか」を引くためだけに使う。無い・読めない時は待たずに 1 件ずつ
+      // 確かめる（上げた直後の存在確認を、索引の作り直しや META の不調で止めない）
+      [direct, catalog] = await Promise.all([
+        bucket.list({ prefix, delimiter: "/", limit: 1000 }),
+        catalogEnabled(env) ? loadCatalog(env, lib, bucket, { ctx, optional: true }) : null,
+      ]);
+      if (direct.truncated) catalog = await loadCatalog(env, lib, bucket, { ctx, fresh });
+    }
     const small = !!direct && !direct.truncated;
-    const catalog = loaded ?? (small ? null : await loadCatalog(env, lib, bucket, { ctx, fresh }));
     let view: FolderView;
     if (direct && small) {
       view = buildView(

@@ -198,6 +198,14 @@ describe("CORS preflight", () => {
     const allowed = list((await preflight("PATCH")).headers.get("access-control-allow-methods"));
     for (const m of ALLOWED_METHODS) expect(allowed).toContain(m.toLowerCase());
   });
+
+  // アプリが付ける独自ヘッダが許可に無いと、Web 版だけ事前確認で止まる
+  it("allows every custom header the app sends", async () => {
+    const allowed = list((await preflight("PUT")).headers.get("access-control-allow-headers"));
+    for (const h of ["authorization", "content-type", "x-content-sha256"]) {
+      expect(allowed).toContain(h);
+    }
+  });
 });
 
 describe("auth", () => {
@@ -1994,6 +2002,138 @@ describe("一覧の索引", () => {
     expect(new Set(keys).size).toBe(N);
   });
 
+  it(
+    "予約の接頭辞が 1 ページを超えても、その中へ入らずに飛ばして続きを拾う",
+    { timeout: 60_000 },
+    async () => {
+      // META と同じバケットをライブラリにしている構成では、.system/ の下に本体と同じ数の
+      // サムネがある。1000 件を超える分を飛ばせることを、list の呼ばれ方まで見て確かめる
+      for (let i = 0; i < 1100; i += 100) {
+        await Promise.all(
+          Array.from({ length: 100 }, (_, j) =>
+            env.LIB_A.put(
+              `.system/skipme/${String(i + j).padStart(4, "0")}.webp`,
+              new Uint8Array(1),
+            ),
+          ),
+        );
+      }
+      await env.LIB_A.put("!before-system.png", PNG);
+      await env.LIB_A.put("zz-after-system.png", PNG);
+      const list = vi.spyOn(env.LIB_A, "list");
+      try {
+        await rebuildNow();
+        const jumps = list.mock.calls.filter(
+          ([o]) => typeof o?.startAfter === "string" && o.startAfter.startsWith(".system/"),
+        );
+        expect(jumps.length).toBeGreaterThanOrEqual(1);
+        // 飛ばさなければ .system/ だけで 2 回余計に呼ぶ
+        const within = list.mock.calls.filter(([o]) => !o?.prefix).length;
+        const all = await keysOf("recursive=1&sort=name");
+        expect(all).toContain("!before-system.png");
+        expect(all).toContain("zz-after-system.png");
+        expect(all.some((k) => k.startsWith(".system/"))).toBe(false);
+        expect(within).toBeGreaterThan(0);
+      } finally {
+        list.mockRestore();
+        await env.LIB_A.delete(["!before-system.png", "zz-after-system.png"]);
+      }
+    },
+  );
+
+  it("作り直すと、索引に入った追記は消え、一覧は変わらない", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      await rebuildNow();
+      expect((await putVia("cat7/a.png")).status).toBe(201);
+      expect((await putVia("cat7/b.png")).status).toBe(201);
+      await jsonPost("/v1/a/ops/trash", { key: "cat7/a.png" });
+      const journal = async () =>
+        (await env.META.list({ prefix: ".system/catalog/a/j/" })).objects.length;
+      expect(await journal()).toBeGreaterThanOrEqual(3);
+      vi.setSystemTime(Date.now() + 60_000);
+      const ctrl = {
+        cron: "17 3 * * *",
+        scheduledTime: Date.now(),
+      } as unknown as ScheduledController;
+      await worker.scheduled(ctrl, cachedEnv());
+      expect(await journal()).toBe(0);
+      // 追記が消えた後、手元の写しを持つ isolate も、持たない isolate も同じ一覧を返す
+      expect(await keysOf("recursive=1&sort=name&prefix=cat7/")).toEqual(["cat7/b.png"]);
+      resetCatalogMemory();
+      expect(await keysOf("recursive=1&sort=name&prefix=cat7/")).toEqual(["cat7/b.png"]);
+    } finally {
+      vi.useRealTimers();
+      await env.META.delete(".system/catalog/a.json");
+      resetCatalogMemory();
+    }
+  });
+
+  it("ゴミ箱の掃除が落ちても、cron は索引を作り直す", async () => {
+    await rebuildNow();
+    await env.LIB_A.put("cat8/direct.png", PNG);
+    const spy = vi.spyOn(env.LIB_A, "delete").mockRejectedValue(new Error("boom"));
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await env.LIB_A.put(`.trash/${Date.now() - 40 * 86_400_000}/cat8/old.png`, PNG);
+    try {
+      const ctrl = {
+        cron: "17 3 * * *",
+        scheduledTime: Date.now(),
+      } as unknown as ScheduledController;
+      await worker.scheduled(ctrl, cachedEnv());
+      expect(log).toHaveBeenCalledWith("trash_purge_failed", expect.anything());
+    } finally {
+      spy.mockRestore();
+      log.mockRestore();
+    }
+    expect(await keysOf("recursive=1&sort=name&prefix=cat8/")).toEqual(["cat8/direct.png"]);
+  });
+
+  it("索引が読めなくても、直下の一覧（上げた物の存在確認）は答える", async () => {
+    await rebuildNow();
+    expect((await putVia("cat9/up.png")).status).toBe(201);
+    resetCatalogMemory();
+    const real = env.META.get.bind(env.META);
+    const spy = vi
+      .spyOn(env.META, "get")
+      .mockImplementation(((k: string, ...rest: unknown[]) =>
+        k.startsWith(".system/catalog/")
+          ? Promise.reject(new Error("meta down"))
+          : (real as (...a: unknown[]) => unknown)(k, ...rest)) as typeof env.META.get);
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const res = await direct("/v1/a/folders?prefix=cat9%2Fup.png&order=recent", {}, cachedEnv());
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as Listing).items.map((i) => i.key)).toEqual(["cat9/up.png"]);
+    } finally {
+      spy.mockRestore();
+      log.mockRestore();
+    }
+  });
+
+  it("戻す時にサムネの確認が落ちても、戻した事は成功で返り、一覧に出る", async () => {
+    await rebuildNow();
+    expect((await putVia("cat10/pic.png")).status).toBe(201);
+    const { trashKey } = (await (
+      await jsonPost("/v1/a/ops/trash", { key: "cat10/pic.png" })
+    ).json()) as { trashKey: string };
+    const real = env.META.head.bind(env.META);
+    const spy = vi
+      .spyOn(env.META, "head")
+      .mockImplementation(((k: string) =>
+        k.startsWith(".system/thumbs/")
+          ? Promise.reject(new Error("meta down"))
+          : real(k)) as typeof env.META.head);
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      expect((await jsonPost("/v1/a/ops/restore", { trashKey })).status).toBe(200);
+    } finally {
+      spy.mockRestore();
+      log.mockRestore();
+    }
+    expect(await keysOf("recursive=1&sort=name&prefix=cat10/")).toEqual(["cat10/pic.png"]);
+  });
+
   it("mkdir で作った空のフォルダが、大きいフォルダの段にも出る", async () => {
     await rebuildNow();
     expect((await jsonPost("/v1/a/ops/mkdir", { prefix: "catbig/made" })).status).toBe(201);
@@ -2227,6 +2367,30 @@ describe("重複の束", () => {
     expect(groupOf(await duplicateGroups(), "dupL/b1.png")).toEqual(["dupL/b1.png", "dupL/b2.png"]);
   });
 
+  it("1 回で読む件数にも上限があり、区切りごとに記録が残る", async () => {
+    const body = bytesOf(70, 33);
+    for (const k of ["dupN/1.png", "dupN/2.png", "dupN/3.png"]) {
+      expect((await putVia(k, body)).status).toBe(201);
+    }
+    const one = cachedEnv({ DUP_SCAN_OBJECTS: "1" });
+    const step = (await (await jsonPost("/v1/a/duplicates/scan", {}, one)).json()) as {
+      pending: number;
+      hashed: number;
+    };
+    expect(step.hashed).toBe(1);
+    expect(step.pending).toBe(2);
+    // 1 件ぶんはもう記録されていて、次の呼び出しは残りから進む
+    expect(
+      Object.keys((await hashesFile()).items).filter((k) => k.startsWith("dupN/")).length,
+    ).toBe(1);
+    expect((await scanAll(one)).pending).toBe(0);
+    expect(groupOf(await duplicateGroups(), "dupN/1.png")).toEqual([
+      "dupN/1.png",
+      "dupN/2.png",
+      "dupN/3.png",
+    ]);
+  });
+
   it("読み取り専用のライブラリでも束は見られ、知らないライブラリは 404", async () => {
     expect((await direct("/v1/b/duplicates", {}, cachedEnv())).status).toBe(200);
     expect((await direct("/v1/nope/duplicates", {}, cachedEnv())).status).toBe(404);
@@ -2370,6 +2534,50 @@ describe("重複として消す", () => {
     for (const k of ["dd3/a.png", "dd3/b.png"]) {
       expect(listed.includes(k), k).toBe((await env.LIB_A.head(k)) !== null);
     }
+  });
+
+  it("残す側を別の操作が消している最中でも、アルバムは無い物を指さない", async () => {
+    // A を「B を残して」消すのと、B を「C を残して」消すのが重なる。A が入っていたアルバムが
+    // ゴミ箱にある B を指したままになってはいけない
+    for (let round = 0; round < 4; round++) {
+      const p = `dd4-${round}`;
+      const body = bytesOf(80 + round, 95);
+      for (const k of ["a", "b", "c"]) await putVia(`${p}/${k}.png`, body);
+      const album = await mkAlbum(p, [`${p}/a.png`]);
+      await Promise.all([
+        post("/v1/a/ops/trash", { key: `${p}/a.png`, duplicateOf: `${p}/b.png` }),
+        post("/v1/a/ops/trash", { key: `${p}/b.png`, duplicateOf: `${p}/c.png` }),
+      ]);
+      const keys = await albumKeys(album);
+      expect(keys.length, p).toBe(1);
+      for (const k of keys) expect(await env.LIB_A.head(k), `${p}: ${k}`).not.toBeNull();
+    }
+  });
+
+  it("残す側が、アルバムを書く直前に消えていたら、消した物を戻して断る", async () => {
+    const body = bytesOf(90, 97);
+    await putVia("dd5/a.png", body);
+    await putVia("dd5/b.png", body);
+    const album = await mkAlbum("dd5", ["dd5/a.png"]);
+    // 移した後の確認までは残す側があり、アルバムを書く時には無い、という順を作る
+    const real = env.LIB_A.head.bind(env.LIB_A);
+    let seen = 0;
+    const spy = vi
+      .spyOn(env.LIB_A, "head")
+      .mockImplementation(((k: string) =>
+        k === "dd5/b.png" && ++seen > 2
+          ? Promise.resolve(null)
+          : real(k)) as typeof env.LIB_A.head);
+    try {
+      const res = await post("/v1/a/ops/trash", { key: "dd5/a.png", duplicateOf: "dd5/b.png" });
+      expect(res.status).toBe(409);
+      expect(await res.json()).toEqual({ error: "keeper_missing" });
+    } finally {
+      spy.mockRestore();
+    }
+    expect(await env.LIB_A.head("dd5/a.png")).not.toBeNull();
+    expect(await albumKeys(album)).toEqual(["dd5/a.png"]);
+    expect(await keysOf("recursive=1&sort=name&prefix=dd5/")).toEqual(["dd5/a.png", "dd5/b.png"]);
   });
 
   it("読み取り専用のライブラリでは消せない", async () => {

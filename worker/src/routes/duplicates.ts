@@ -217,12 +217,15 @@ export async function trashDuplicate(
     await putBack();
     throw new HttpError(409, "keeper_missing");
   }
-  await journalBestEffort(env, lib, { del: [key] });
   const id = (k: string) => `${lib}:${k}`;
   try {
     const index = await loadIndex(env, lib);
     const meta = index.items?.find((i) => i.key === keeper);
-    await mutateAlbums(env, (data) => {
+    await mutateAlbums(env, async (data) => {
+      // 書く直前にもう一度、残す側があるかを確かめる。別の操作が残す側を消した後で
+      // アルバムを残す側へ書き換えると、ゴミ箱にある物を指してしまう。albums.json は
+      // etag の条件付きで書くので、ここで見た後に相手が先に書けば、こちらはやり直しになる
+      if (!(await bucket.head(keeper))) throw new HttpError(409, "keeper_missing");
       for (const a of data.albums) {
         const at = a.items.findIndex((i) => i.lib === lib && i.key === key);
         if (at < 0) continue;
@@ -252,6 +255,8 @@ export async function trashDuplicate(
     await putBack();
     throw e;
   }
+  // 消すと決まってから索引から外す（途中で戻した時に、戻した物を外したままにしない）
+  await journalBestEffort(env, lib, { del: [key] });
   await dropHashBestEffort(env, lib, key);
   return json({ ok: true, trashKey });
 }

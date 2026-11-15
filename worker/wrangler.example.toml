@@ -37,6 +37,7 @@ URL_TTL_SECONDS = "3600"
 # CATALOG_MAX_AGE_SECONDS = "300"
 # Duplicate detection: bytes hashed per scan call, and the largest object that is hashed at all.
 # DUP_SCAN_BYTES = "100663296"
+# DUP_SCAN_OBJECTS = "200"
 # DUP_MAX_OBJECT_BYTES = "1073741824"
 # Comma-separated library ids allowed to join objects to REVIEW_DB review rows.
 # REVIEW_LIBS = "a"

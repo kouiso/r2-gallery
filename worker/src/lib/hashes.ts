@@ -134,6 +134,11 @@ export interface HashBudget {
   bytes: number;
   /** これより大きい物は計算しない（Worker の CPU 時間に収まらない） */
   maxObjectBytes: number;
+  /**
+   * 1 回の呼び出しで読む件数の上限。小さい物ばかりだと量の目安に届く前に、
+   * 1 リクエストの外部呼び出しの上限（1000 回）を超えて落ちる
+   */
+  objects: number;
 }
 
 export function hashBudget(env: Env): HashBudget {
@@ -144,6 +149,7 @@ export function hashBudget(env: Env): HashBudget {
   return {
     bytes: num(env.DUP_SCAN_BYTES, 96 * 1024 * 1024),
     maxObjectBytes: num(env.DUP_MAX_OBJECT_BYTES, 1024 * 1024 * 1024),
+    objects: Math.min(400, num(env.DUP_SCAN_OBJECTS, 200)),
   };
 }
 
@@ -182,24 +188,30 @@ export async function ensureHashes(
   const picked: CatalogRow[] = [];
   let bytes = 0;
   for (const row of todo) {
+    if (picked.length >= budget.objects) break;
     if (picked.length && bytes + row[1] > budget.bytes) break;
     picked.push(row);
     bytes += row[1];
   }
-  const fresh = new Map<string, HashRecord>();
-  // 同時に開ける接続に上限があるので 4 本ずつ読む
-  for (let i = 0; i < picked.length; i += 4) {
-    await Promise.all(
-      picked.slice(i, i + 4).map(async (row) => {
-        const got = await sha256OfObject(bucket, row[0]);
-        // 一覧の後に消えた・入れ替わった物は記録しない（次の一覧で改めて見る）
-        if (!got || got.etag !== row[3]) return;
-        fresh.set(row[0], { size: got.size, etag: got.etag, sha256: got.sha256 });
-        known.set(row[0], got.sha256);
-      }),
-    );
-  }
-  if (fresh.size) {
+  let hashed = 0;
+  // 同時に開ける接続に上限があるので 4 本ずつ読み、区切りごとに記録する。最後にまとめて
+  // 書くと、途中で落ちた時に 1 件も残らず、次の呼び出しも同じ所で落ち続ける
+  for (let i = 0; i < picked.length; i += 40) {
+    const fresh = new Map<string, HashRecord>();
+    const chunk = picked.slice(i, i + 40);
+    for (let j = 0; j < chunk.length; j += 4) {
+      await Promise.all(
+        chunk.slice(j, j + 4).map(async (row) => {
+          const got = await sha256OfObject(bucket, row[0]);
+          // 一覧の後に消えた・入れ替わった物は記録しない（次の一覧で改めて見る）
+          if (!got || got.etag !== row[3]) return;
+          fresh.set(row[0], { size: got.size, etag: got.etag, sha256: got.sha256 });
+          known.set(row[0], got.sha256);
+        }),
+      );
+    }
+    if (!fresh.size) continue;
+    hashed += fresh.size;
     try {
       await mutateHashes(env, lib, (d) => {
         for (const [k, rec] of fresh) d.items[k] = rec;
@@ -209,7 +221,7 @@ export async function ensureHashes(
       console.error("hash_record_failed", lib, e);
     }
   }
-  return { known, hashed: fresh.size, pending: todo.length - picked.length, skipped };
+  return { known, hashed, pending: todo.length - picked.length, skipped };
 }
 
 export interface DuplicateGroup {

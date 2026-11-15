@@ -97,7 +97,7 @@ Both files are derived data: deleting them only costs one rebuild.
 Only the Worker writes it — digests it computed itself, or that R2 verified on upload
 (`x-content-sha256` on `PUT /v1/:lib/objects`). A record counts only while the object still has the
 same `etag`. Digests are computed lazily, only for objects that share a byte size with another one
-(`POST /v1/:lib/duplicates/scan`, bounded by `DUP_SCAN_BYTES` per call; objects above
+(`POST /v1/:lib/duplicates/scan`, bounded by `DUP_SCAN_BYTES` and `DUP_SCAN_OBJECTS` per call; objects above
 `DUP_MAX_OBJECT_BYTES` are skipped). `GET /v1/:lib/duplicates` returns the groups,
 `POST /v1/:lib/objects/check` answers "is this already stored?" before an upload, and
 `POST /v1/:lib/ops/trash` with `duplicateOf` moves album memberships to the copy that is kept.

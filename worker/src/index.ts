@@ -207,8 +207,13 @@ export default {
     return app.fetch(req, env, ctx);
   },
   async scheduled(_event: ScheduledController, env: Env): Promise<void> {
-    const removed = await purgeTrash(env);
-    console.log("trash purge", removed);
+    try {
+      const removed = await purgeTrash(env);
+      console.log("trash purge", removed);
+    } catch (e) {
+      // ゴミ箱の掃除が落ちても、索引の作り直しは走らせる（落ちたままだと索引が古いまま残る）
+      console.error("trash_purge_failed", e);
+    }
     // Worker を通らずに R2 へ置かれた物を拾い、溜まった追記を畳む
     await rebuildAllCatalogs(env);
   },

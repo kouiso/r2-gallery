@@ -7,6 +7,7 @@ import '../api/client.dart';
 import '../api/models.dart';
 import '../config/baked.dart' as baked;
 import '../grid/photos_chrome.dart';
+import '../grid/sort_mode.dart';
 import '../offline/offline_store.dart';
 import '../store/device_auth.dart';
 import '../store/kv.dart';
@@ -588,7 +589,31 @@ class GalleryState extends ChangeNotifier {
   GalleryState(this.api,
       {this.prefix = '',
       this.recursive = true,
+      this.sort = SortMode.dateNew,
       this.loadMoreBackoff = const Duration(seconds: 3)});
+
+  SortMode sort;
+
+  /// 並び順を変えたのに先頭ページをまだ取れていない間は true。この間に古い順の
+  /// cursor を新しい順へ送ると、既出の分を返す・途中で終わる、になるため。
+  bool _needsFirstPage = false;
+
+  /// 今の [items] を Worker が [sort] の順で返したか。古い Worker は sort を無視して
+  /// 新着順で返すので、その時だけ端末側で並べ直す。
+  bool _serverSorted = false;
+
+  /// Worker が並べた物は触らない(触ると続きの読み込みで位置が跳ぶ)。
+  List<MediaItem> ordered() => _serverSorted ? items : sort.sorted(items);
+
+  Future<void> changeSort(SortMode m, String lib) {
+    if (m == sort) return Future.value();
+    sort = m;
+    // 取り直しが失敗しても、古い並びの cursor を新しい並びで使わせない
+    cursor = null;
+    _serverSorted = false;
+    _needsFirstPage = true;
+    return refresh(lib);
+  }
 
   /// 続きページの取得に失敗した後、次を試すまで空ける時間。
   /// スクロール通知ごとに呼ばれるので、空けないと圏外のあいだ再試行と再描画を繰り返す。
@@ -626,9 +651,14 @@ class GalleryState extends ChangeNotifier {
     notifyListeners();
     try {
       // KMP 版のホームと同じく、サブフォルダの中まで含めた全メディアを出す
-      final page =
-          await api.folder(lib, prefix: prefix, cursor: null, recursive: recursive);
+      final page = await api.folder(lib,
+          prefix: prefix,
+          cursor: null,
+          recursive: recursive,
+          sort: sort.apiValue);
       if (e != epoch) return;
+      _serverSorted = page.sort == sort.apiValue;
+      _needsFirstPage = false;
       items = page.items;
       folders = page.folders;
       cursor = page.cursor;
@@ -641,7 +671,12 @@ class GalleryState extends ChangeNotifier {
   }
 
   Future<void> loadMore(String lib) async {
-    if (cursor == null || loadingMore || loading) return;
+    if (loadingMore || loading) return;
+    if (_needsFirstPage) {
+      await refresh(lib);
+      return;
+    }
+    if (cursor == null) return;
     final sinceFailure = _sinceLoadMoreFailure;
     if (sinceFailure != null && sinceFailure.elapsed < loadMoreBackoff) return;
     final e = epoch;
@@ -649,8 +684,18 @@ class GalleryState extends ChangeNotifier {
     notifyListeners();
     try {
       final page = await api.folder(lib,
-          prefix: prefix, cursor: cursor, recursive: recursive);
+          prefix: prefix,
+          cursor: cursor,
+          recursive: recursive,
+          sort: sort.apiValue);
       if (e != epoch) return;
+      // 先頭ページは Worker の並びだったのに、続きが別の並びで返ったら cursor は使えない
+      // (Worker の入れ替わり)。続きを継ぎ足さず先頭から取り直す
+      if (_serverSorted && page.sort != sort.apiValue) {
+        loadingMore = false;
+        await refresh(lib);
+        return;
+      }
       final seen = {for (final it in items) '${it.lib}:${it.key}'};
       items = [
         ...items,
@@ -807,7 +852,7 @@ class GalleryState extends ChangeNotifier {
 
   /// サムネを保存できた動画の行だけを、サーバーの最新の行に差し替える。
   /// refresh() は先頭 1 ページに巻き戻して続きページを捨て、スクロール位置が飛ぶので使わない。
-  /// 一覧は新着順で並ぶため、対象が見つかるまで先頭から読み込み済みの件数分だけ辿る。
+  /// 一覧は今の並び順で積まれているため、対象が見つかるまで先頭から読み込み済みの件数分だけ辿る。
   Future<void> _adoptStoredThumbs(String lib, Set<String> ids) async {
     final e = epoch;
     final pending = {...ids};
@@ -816,7 +861,12 @@ class GalleryState extends ChangeNotifier {
     String? cur;
     try {
       while (pending.isNotEmpty && !_disposed) {
-        final page = await api.folder(lib, cursor: cur, recursive: true);
+        // items は今の並び順で積まれているので、同じ範囲・同じ並びで辿らないと見つからない
+        final page = await api.folder(lib,
+            prefix: prefix,
+            cursor: cur,
+            recursive: recursive,
+            sort: sort.apiValue);
         if (e != epoch) return;
         final fresh = {for (final it in page.items) _idOf(it, lib): it};
         items = [

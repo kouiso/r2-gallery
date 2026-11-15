@@ -5,9 +5,11 @@ import {
   SELF,
   waitOnExecutionContext,
 } from "cloudflare:test";
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { purgeTrash } from "./lib/objects";
 import worker, { forbiddenHost, type Env } from "./index";
+import { ALLOWED_METHODS } from "./lib/http";
 
 declare module "cloudflare:test" {
   interface ProvidedEnv extends Env {
@@ -160,6 +162,41 @@ beforeAll(async () => {
   await env.LIB_A.put("seed/hls.ts", PNG, { httpMetadata: { contentType: "video/MP2T" } });
   await env.LIB_B.put("ro/keep.jpg", PNG, { httpMetadata: { contentType: "image/jpeg" } });
   await env.LIB_A.put("hidden/.system/x.jpg", PNG);
+});
+
+describe("CORS preflight", () => {
+  // 本番の Pages オリジンはリポジトリに無く、worker は allow-origin を "*" で返す設計。
+  // よって任意のオリジンで検証する（特定オリジンは作り話になるため置かない）。
+  const preflight = (method: string) =>
+    SELF.fetch(`${ORIGIN}/v1/lib-a/albums/x`, {
+      method: "OPTIONS",
+      headers: {
+        origin: "https://web.example.test",
+        "access-control-request-method": method,
+        "access-control-request-headers": "authorization, content-type",
+      },
+    });
+  const list = (v: string | null) => (v ?? "").split(",").map((m) => m.trim().toLowerCase());
+
+  // クライアントが実際に使う全メソッドを許可しないと、Web 版でブラウザが本リクエスト自体を送らない（#54）
+  it.each(["GET", "POST", "PUT", "PATCH", "DELETE"])("allows %s", async (method) => {
+    const res = await preflight(method);
+    expect(res.status).toBe(204);
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+    const allowed = list(res.headers.get("access-control-allow-methods"));
+    expect(allowed).toContain(method.toLowerCase());
+    expect(allowed).toContain("options");
+    const headers = list(res.headers.get("access-control-allow-headers"));
+    expect(headers).toContain("authorization");
+    expect(headers).toContain("content-type");
+  });
+
+  // 入口の方法拒否が通すメソッドは全部 CORS にも出ること（一覧を二重管理しない回帰防止）。
+  // GET/HEAD/POST は単純メソッドで事前確認は不要だが、一覧を一本化しているので全て並ぶのが正。
+  it("lists every method the entry guard accepts", async () => {
+    const allowed = list((await preflight("PATCH")).headers.get("access-control-allow-methods"));
+    for (const m of ALLOWED_METHODS) expect(allowed).toContain(m.toLowerCase());
+  });
 });
 
 describe("auth", () => {
@@ -369,6 +406,102 @@ describe("folders", () => {
     const res3 = await api("/v1/a/folders?prefix=&order=recent&cursor=0%7Ca");
     const f3 = (await res3.json()) as Folders;
     expect(f3.items).toEqual([]);
+  });
+
+  describe("sort=new|old|name|size は全件に対して並べ、カーソルで続きを返す (#44)", () => {
+    const N = 205; // 1ページ(200件)を超える件数で、2ページ目の位置が崩れないことを確かめる
+    const sorts = ["new", "old", "name", "size"] as const;
+    type Sort = (typeof sorts)[number];
+
+    interface Row {
+      key: string;
+      size: number;
+      uploaded: number;
+    }
+
+    beforeAll(async () => {
+      for (let i = 0; i < N; i++) {
+        // 大文字小文字の混在・同サイズ・同時刻を含め、同値の決め手(key)も確かめる
+        const name = `${i % 3 === 0 ? "B" : "a"}${String((i * 37) % N).padStart(3, "0")}.jpg`;
+        await env.LIB_A.put(`sortbig/${name}`, new Uint8Array(((i * 7) % 50) + 1), {
+          httpMetadata: { contentType: "image/jpeg" },
+        });
+      }
+    });
+
+    async function expected(sort: Sort): Promise<string[]> {
+      const rows: Row[] = [];
+      let cursor: string | undefined;
+      do {
+        const l = await env.LIB_A.list({ prefix: "sortbig/", cursor });
+        for (const o of l.objects)
+          rows.push({ key: o.key, size: o.size, uploaded: o.uploaded.getTime() });
+        cursor = l.truncated ? l.cursor : undefined;
+      } while (cursor);
+      const base = (k: string) => k.split("/").pop()!.toLowerCase();
+      const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+      rows.sort((a, b) => {
+        const c =
+          sort === "new"
+            ? b.uploaded - a.uploaded
+            : sort === "old"
+              ? a.uploaded - b.uploaded
+              : sort === "size"
+                ? b.size - a.size
+                : cmp(base(a.key), base(b.key));
+        return c || cmp(a.key, b.key);
+      });
+      return rows.map((r) => r.key);
+    }
+
+    async function walk(
+      sort: Sort,
+      query = "",
+    ): Promise<{ keys: string[]; pages: number; echoed: (string | undefined)[] }> {
+      const keys: string[] = [];
+      const echoed: (string | undefined)[] = [];
+      let cursor: string | null = null;
+      let pages = 0;
+      do {
+        const q: string = `/v1/a/folders?prefix=sortbig/&sort=${sort}${query}${
+          cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""
+        }`;
+        const res = await api(q);
+        expect(res.status).toBe(200);
+        const body = (await res.json()) as Folders & { sort?: string };
+        echoed.push(body.sort);
+        keys.push(...body.items.map((i) => i.key));
+        cursor = body.cursor;
+        pages++;
+      } while (cursor);
+      return { keys, pages, echoed };
+    }
+
+    for (const sort of sorts) {
+      it(`sort=${sort}: ライブラリ全体がその順で、続きのページも重複・欠けなしで出る`, async () => {
+        const { keys, pages, echoed } = await walk(sort);
+        // 並びの比較を先にする。返し値の確認が先だと、順序のバグが返し値の失敗に隠れる
+        expect(keys).toEqual(await expected(sort));
+        expect(pages).toBe(2);
+        expect(echoed).toEqual([sort, sort]);
+      });
+    }
+
+    it("recursive=1 でも同じ順で続きが取れる(写真タブの経路)", async () => {
+      const { keys } = await walk("size", "&recursive=1");
+      expect(keys.filter((k) => k.startsWith("sortbig/"))).toEqual(await expected("size"));
+    });
+
+    it("sort が無い order=recent だけの古いアプリは、新しい順のまま", async () => {
+      const res = await api("/v1/a/folders?prefix=sortbig/&order=recent");
+      const body = (await res.json()) as Folders & { sort?: string };
+      expect(body.items.map((i) => i.key)).toEqual((await expected("new")).slice(0, 200));
+    });
+
+    it("知らない sort は 400", async () => {
+      const res = await api("/v1/a/folders?prefix=sortbig/&sort=random");
+      expect(res.status).toBe(400);
+    });
   });
 
   it("recursive=1 returns all media under the prefix and no folder list", async () => {
@@ -889,6 +1022,216 @@ describe("trash", () => {
     expect(after.items.map((i) => i.key)).toContain("gone/pic.png");
   });
 
+  describe("album membership", () => {
+    const post = (path: string, body: unknown) =>
+      api(path, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    const trash = async (key: string) =>
+      ((await (await post("/v1/a/ops/trash", { key })).json()) as { trashKey: string }).trashKey;
+    const restore = (trashKey: string) => post("/v1/a/ops/restore", { trashKey });
+    const items = async (id: string) =>
+      ((await (await api("/v1/a/albums/" + id)).json()) as { items: { key: string }[] }).items.map(
+        (i) => i.key,
+      );
+    // 各テストが固有のプレフィックスを使い、他のテストのアルバムと混ざらないようにする
+    async function mkAlbum(prefix: string, names: string[]) {
+      const keys = names.map((n) => `${prefix}/${n}.png`);
+      for (const k of keys) await putObject("a", k);
+      const { id } = (await (await post("/v1/a/albums", { title: prefix })).json()) as {
+        id: string;
+      };
+      await post(`/v1/a/albums/${id}/items`, { keys });
+      return { id, keys };
+    }
+
+    it("restores the album membership when restoring from trash", async () => {
+      const { id, keys } = await mkAlbum("m1", ["one", "two"]);
+      const tk = await trash(keys[0]!);
+      expect(await items(id)).toEqual([keys[1]]);
+      expect((await restore(tk)).status).toBe(200);
+      expect(await items(id)).toEqual(keys);
+    });
+
+    it("keeps the album order when several items are trashed then restored one by one", async () => {
+      const { id, keys } = await mkAlbum("m2", ["1", "2", "3"]);
+      const tks = [await trash(keys[0]!), await trash(keys[1]!), await trash(keys[2]!)];
+      expect(await items(id)).toEqual([]);
+      for (const tk of tks) expect((await restore(tk)).status).toBe(200);
+      expect(await items(id)).toEqual(keys);
+    });
+
+    it("keeps the album order for non-adjacent items and for concurrent trash batches", async () => {
+      const { id, keys } = await mkAlbum("m3", ["A", "B", "C", "D"]);
+      const tks = await Promise.all([trash(keys[0]!), trash(keys[2]!)]);
+      expect(await items(id)).toEqual([keys[1], keys[3]]);
+      for (const tk of tks) expect((await restore(tk)).status).toBe(200);
+      expect(await items(id)).toEqual(keys);
+      // 逆順で戻しても同じ並びになる
+      const again = await Promise.all([trash(keys[0]!), trash(keys[2]!)]);
+      for (const tk of [...again].reverse()) await restore(tk);
+      expect(await items(id)).toEqual(keys);
+    });
+
+    it("restores into every album the item was in", async () => {
+      const x = await mkAlbum("m4", ["p", "q"]);
+      const y = (await (await post("/v1/a/albums", { title: "m4b" })).json()) as { id: string };
+      await post(`/v1/a/albums/${y.id}/items`, { keys: [x.keys[1]] });
+      const tk = await trash(x.keys[1]!);
+      expect(await items(x.id)).toEqual([x.keys[0]]);
+      expect(await items(y.id)).toEqual([]);
+      await restore(tk);
+      expect(await items(x.id)).toEqual(x.keys);
+      expect(await items(y.id)).toEqual([x.keys[1]]);
+    });
+
+    it("skips an album deleted between trash and restore", async () => {
+      const { id, keys } = await mkAlbum("m5", ["a", "b"]);
+      const tk = await trash(keys[0]!);
+      expect((await api(`/v1/a/albums/${id}`, { method: "DELETE" })).status).toBeLessThan(300);
+      const res = await restore(tk);
+      expect(res.status).toBe(200);
+      const after = await folders("a", "m5/");
+      expect(after.items.map((i) => i.key)).toContain(keys[0]);
+      expect((await api(`/v1/a/albums/${id}`)).status).toBe(404);
+    });
+
+    it("does not duplicate an item that is already back in the album at restore", async () => {
+      const { id, keys } = await mkAlbum("m6", ["a", "b"]);
+      const tk = await trash(keys[0]!);
+      // 戻す前に同じ物が入り直した状態：実体を戻し、手動でアルバムへ追加する
+      await env.LIB_A.put(keys[0]!, PNG);
+      await env.LIB_A.delete(tk);
+      await post(`/v1/a/albums/${id}/items`, { keys: [keys[0]] });
+      expect((await restore(tk)).status).toBe(200);
+      expect((await items(id)).filter((k) => k === keys[0])).toHaveLength(1);
+    });
+
+    const trashOrderOf = async (id: string) => {
+      const f = (await (await env.META.get(".system/albums.json"))!.json()) as {
+        albums: { id: string; trashOrder?: string[] }[];
+      };
+      return f.albums.find((a) => a.id === id)?.trashOrder;
+    };
+    // 期限切れ purge と同じ状態：.trash の実体だけ消える（控えは残る）
+    const purge = (tk: string) => env.LIB_A.delete(tk);
+
+    it("keeps the album order when 8 items are trashed concurrently then restored in turn", async () => {
+      const { id, keys } = await mkAlbum(
+        "m9",
+        Array.from({ length: 10 }, (_, n) => String(n)),
+      );
+      const tks = await Promise.all(keys.slice(1, 9).map((k) => trash(k)));
+      expect(await items(id)).toEqual([keys[0], keys[9]]);
+      for (const tk of tks) expect((await restore(tk)).status).toBe(200);
+      expect(await items(id)).toEqual(keys);
+      expect(await trashOrderOf(id)).toBeUndefined();
+    });
+
+    it("drops purged and removed keys from trashOrder so it stays bounded", async () => {
+      const { id, keys } = await mkAlbum("m10", ["a", "b", "c", "d"]);
+      const ta = await trash(keys[0]!);
+      expect(await trashOrderOf(id)).toEqual(keys.map((k) => `a:${k}`));
+      // a は戻さないまま purge された
+      await purge(ta);
+      const tb = await trash(keys[1]!);
+      // a は落ち、今ゴミ箱にいる b と残っている c, d だけが残る
+      expect(await trashOrderOf(id)).toEqual(keys.slice(1).map((k) => `a:${k}`));
+      // アルバムから外した物も落ちる
+      await post(`/v1/a/albums/${id}/items/remove`, { keys: [keys[2]] });
+      expect(await trashOrderOf(id)).toEqual([keys[1], keys[3]].map((k) => `a:${k}`));
+      expect((await restore(tb)).status).toBe(200);
+      expect(await items(id)).toEqual([keys[1], keys[3]]);
+      expect(await trashOrderOf(id)).toBeUndefined();
+    });
+
+    it("keeps the slot of a restore whose file was already moved back when another edit prunes", async () => {
+      const { id, keys } = await mkAlbum("m13", ["a", "b", "c", "d"]);
+      const tb = await trash(keys[1]!);
+      // 前回の restore はファイルを戻した後に落ちた状態
+      await env.LIB_A.put(keys[1]!, PNG);
+      await env.LIB_A.delete(tb);
+      // 同じアルバムへの無関係な操作が刈り込みを走らせる
+      await post(`/v1/a/albums/${id}/items/remove`, { keys: [keys[3]] });
+      expect((await restore(tb)).status).toBe(200);
+      expect(await items(id)).toEqual([keys[0], keys[1], keys[2]]);
+    });
+
+    it("keeps the slot of a resumed restore when another item is trashed in the same album", async () => {
+      const { id, keys } = await mkAlbum("m14", ["a", "b", "c", "d"]);
+      const tb = await trash(keys[1]!);
+      await env.LIB_A.put(keys[1]!, PNG);
+      await env.LIB_A.delete(tb);
+      await trash(keys[3]!);
+      expect((await restore(tb)).status).toBe(200);
+      expect(await items(id)).toEqual([keys[0], keys[1], keys[2]]);
+    });
+
+    it("clears trashOrder when nothing is left in the trash", async () => {
+      const { id, keys } = await mkAlbum("m11", ["a", "b"]);
+      const ta = await trash(keys[0]!);
+      await purge(ta);
+      await post(`/v1/a/albums/${id}/items/remove`, { keys: [keys[1]] });
+      expect(await trashOrderOf(id)).toBeUndefined();
+    });
+
+    it("restores into the right place in an album of 2000 items", async () => {
+      const keys = Array.from({ length: 2000 }, (_, n) => `big/${String(n).padStart(4, "0")}.png`);
+      const cur = await env.META.get(".system/albums.json");
+      const file = (cur ? await cur.json() : { version: 1, albums: [] }) as {
+        version: 1;
+        albums: unknown[];
+      };
+      file.albums.push({
+        id: "m12",
+        title: "big",
+        items: keys.map((key) => ({ key, lib: "a", createdAt: 1 })),
+      });
+      await env.META.put(".system/albums.json", JSON.stringify(file));
+      for (const k of [keys[3]!, keys[1000]!, keys[1999]!]) await env.LIB_A.put(k, PNG);
+      const tks = await Promise.all([keys[3]!, keys[1000]!, keys[1999]!].map((k) => trash(k)));
+      // 一覧 API はページ分けされるので、albums.json を直接読む
+      const keysOf = async () => {
+        const f = (await (await env.META.get(".system/albums.json"))!.json()) as {
+          albums: { id: string; items: { key: string }[] }[];
+        };
+        return f.albums.find((a) => a.id === "m12")!.items.map((i) => i.key);
+      };
+      expect((await keysOf()).length).toBe(1997);
+      for (const tk of tks) await restore(tk);
+      expect(await keysOf()).toEqual(keys);
+    });
+
+    it("leaves albums untouched when restoring an item trashed without a record", async () => {
+      const { id, keys } = await mkAlbum("m7", ["a", "b"]);
+      // 修正前にゴミ箱へ送った物：実体だけ .trash にあり、控えは無い。アルバムには別の物が入っている
+      await env.LIB_A.put(".trash/123/m7/legacy.png", PNG);
+      const before = await items(id);
+      const res = await restore(".trash/123/m7/legacy.png");
+      expect(res.status).toBe(200);
+      expect(await items(id)).toEqual(before);
+      expect(await items(id)).toEqual(keys);
+      expect(await env.LIB_A.head("m7/legacy.png")).not.toBeNull();
+      expect(await env.LIB_A.head(".trash/123/m7/legacy.png")).toBeNull();
+    });
+
+    it("resumes a restore whose file move already happened", async () => {
+      const { id, keys } = await mkAlbum("m8", ["a", "b"]);
+      const tk = await trash(keys[0]!);
+      // 前回はファイルを戻した後にアルバム更新で失敗した状態を作る
+      await env.LIB_A.put(keys[0]!, PNG);
+      await env.LIB_A.delete(tk);
+      expect(await items(id)).toEqual([keys[1]]);
+      expect((await restore(tk)).status).toBe(200);
+      expect(await items(id)).toEqual(keys);
+      expect(
+        await env.META.head(`.system/trash-albums/a/${tk.slice(".trash/".length)}.json`),
+      ).toBeNull();
+    });
+  });
+
   it("scheduled purge removes trash older than the retention period", async () => {
     const old = `.trash/${Date.now() - 31 * 86_400_000}/old.png`;
     const fresh = `.trash/${Date.now()}/fresh.png`;
@@ -906,6 +1249,230 @@ describe("trash", () => {
 
     expect(await env.LIB_A.head(old)).toBeNull();
     expect(await env.LIB_A.head(fresh)).not.toBeNull();
+  });
+});
+
+describe("stale thumbnails", () => {
+  const thumbKey = (k: string) => `.system/thumbs/a/${k}.webp`;
+  const trashPurge = async () => {
+    const ctx = createExecutionContext();
+    const ctrl = {
+      cron: "17 3 * * *",
+      scheduledTime: Date.now(),
+      noRetry: () => undefined,
+    } as unknown as ScheduledController;
+    await worker.scheduled(ctrl, env);
+    await waitOnExecutionContext(ctx);
+  };
+
+  it("purge removes the thumbnail of an expired trash entry", async () => {
+    await env.LIB_A.put(`.trash/${Date.now() - 31 * 86_400_000}/gone/old.png`, PNG);
+    await env.META.put(thumbKey("gone/old.png"), "OLD");
+    await trashPurge();
+    expect(await env.META.head(thumbKey("gone/old.png"))).toBeNull();
+  });
+
+  it("purge removes an expired trash entry whose key contains a newline, and its thumbnail", async () => {
+    // assertUserKey は改行を許すので、`.` が改行に当たらない正規表現だと永久に消えない
+    const original = "nl/line1\nline2.png";
+    const tk = `.trash/${Date.now() - 31 * 86_400_000}/${original}`;
+    await env.LIB_A.put(tk, PNG);
+    await env.META.put(thumbKey(original), "OLD");
+    await trashPurge();
+    expect(await env.LIB_A.head(tk)).toBeNull();
+    expect(await env.META.head(thumbKey(original))).toBeNull();
+  });
+
+  it("purge keeps the thumbnail while a same-name object has been re-uploaded", async () => {
+    await env.LIB_A.put(`.trash/${Date.now() - 31 * 86_400_000}/again/pic.png`, PNG);
+    await env.LIB_A.put("again/pic.png", PNG);
+    await env.META.put(thumbKey("again/pic.png"), "NEW");
+    await trashPurge();
+    expect(await env.META.head(thumbKey("again/pic.png"))).not.toBeNull();
+  });
+
+  it("purge keeps the thumbnail of a fresh trash entry (restore needs it)", async () => {
+    await env.LIB_A.put(`.trash/${Date.now()}/keep/pic.png`, PNG);
+    await env.META.put(thumbKey("keep/pic.png"), "KEEP");
+    await trashPurge();
+    expect(await env.META.head(thumbKey("keep/pic.png"))).not.toBeNull();
+  });
+
+  it("simple upload drops a stale thumbnail of the same name", async () => {
+    await env.META.put(thumbKey("re/up.png"), "OLD");
+    expect((await putObject("a", "re/up.png")).status).toBe(201);
+    expect(await env.META.head(thumbKey("re/up.png"))).toBeNull();
+  });
+
+  it("multipart complete drops a stale thumbnail of the same name", async () => {
+    await env.META.put(thumbKey("re/mp.mp4"), "OLD");
+    const create = await api("/v1/a/objects/multipart", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key: "re/mp.mp4", contentType: "video/mp4" }),
+    });
+    const { uploadId } = (await create.json()) as { uploadId: string };
+    const p = await api(
+      `/v1/a/objects/multipart/part?key=${encodeURIComponent("re/mp.mp4")}&uploadId=${uploadId}&part=1`,
+      {
+        method: "PUT",
+        headers: { "content-type": "application/octet-stream" },
+        body: new Uint8Array([1, 2, 3]),
+      },
+    );
+    const part = (await p.json()) as { partNumber: number; etag: string };
+    const done = await api("/v1/a/objects/multipart/complete", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key: "re/mp.mp4", uploadId, parts: [part] }),
+    });
+    expect(done.status).toBe(201);
+    expect(await env.META.head(thumbKey("re/mp.mp4"))).toBeNull();
+  });
+
+  const post = (path: string, body: unknown) =>
+    api(path, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+  it("copy drops a stale thumbnail of the destination name", async () => {
+    await env.LIB_A.put("cp/src.png", PNG);
+    await env.META.put(thumbKey("cp/dst.png"), "OLD");
+    const res = await post("/v1/ops/copy", {
+      from: { lib: "a", key: "cp/src.png" },
+      to: { lib: "a", key: "cp/dst.png" },
+    });
+    expect(res.status).toBe(200);
+    expect(await env.META.head(thumbKey("cp/dst.png"))).toBeNull();
+  });
+
+  it("move drops a stale thumbnail of the destination name", async () => {
+    await env.LIB_A.put("mv/src.png", PNG);
+    await env.META.put(thumbKey("mv/dst.png"), "OLD");
+    const res = await post("/v1/ops/move", {
+      from: { lib: "a", key: "mv/src.png" },
+      to: { lib: "a", key: "mv/dst.png" },
+    });
+    expect(res.status).toBe(200);
+    expect(await env.META.head(thumbKey("mv/dst.png"))).toBeNull();
+  });
+
+  it("purge keeps the thumbnail when an expired and a fresh trash entry share a name", async () => {
+    const oldKey = `.trash/${Date.now() - 31 * 86_400_000}/dup/pic.png`;
+    const freshKey = `.trash/${Date.now()}/dup/pic.png`;
+    await env.LIB_A.put(oldKey, PNG);
+    await env.LIB_A.put(freshKey, PNG);
+    await env.META.put(thumbKey("dup/pic.png"), "FRESH");
+    await trashPurge();
+    expect(await env.META.head(thumbKey("dup/pic.png"))).not.toBeNull();
+    expect(await env.LIB_A.head(oldKey)).toBeNull();
+    expect(await env.LIB_A.head(freshKey)).not.toBeNull();
+  });
+
+  it("purge deletes thumbnails before objects, so an interrupted run can be retried", async () => {
+    const dieKey = `.trash/${Date.now() - 31 * 86_400_000}/die/pic.png`;
+    await env.LIB_A.put(dieKey, PNG);
+    await env.META.put(thumbKey("die/pic.png"), "OLD");
+    const spy = vi.spyOn(env.LIB_A, "delete").mockRejectedValueOnce(new Error("boom"));
+    try {
+      await expect(purgeTrash(env)).rejects.toThrow();
+    } finally {
+      spy.mockRestore();
+    }
+    // 本体の削除で落ちても、サムネは先に消えている（孤児にならない）
+    expect(await env.META.head(thumbKey("die/pic.png"))).toBeNull();
+    await trashPurge();
+    expect(await env.LIB_A.head(dieKey)).toBeNull();
+  });
+
+  it("a thumbnail delete failure does not turn a stored upload into a 5xx", async () => {
+    const spy = vi.spyOn(env.META, "delete").mockRejectedValue(new Error("meta down"));
+    try {
+      const up = await putObject("a", "ok/up.png");
+      expect(up.status).toBe(201);
+      await env.LIB_A.put("ok/src.png", PNG);
+      const cp = await post("/v1/ops/copy", {
+        from: { lib: "a", key: "ok/src.png" },
+        to: { lib: "a", key: "ok/cp.png" },
+      });
+      expect(cp.status).toBe(200);
+      const mv = await post("/v1/ops/move", {
+        from: { lib: "a", key: "ok/src.png" },
+        to: { lib: "a", key: "ok/mv.png" },
+      });
+      expect(mv.status).toBe(200);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(await env.LIB_A.head("ok/up.png")).not.toBeNull();
+    expect(await env.LIB_A.head("ok/cp.png")).not.toBeNull();
+    expect(await env.LIB_A.head("ok/mv.png")).not.toBeNull();
+    expect(await env.LIB_A.head("ok/src.png")).toBeNull();
+  });
+
+  it("multipart complete still returns 201 when the thumbnail delete fails", async () => {
+    const create = await post("/v1/a/objects/multipart", {
+      key: "ok/mp.mp4",
+      contentType: "video/mp4",
+    });
+    const { uploadId } = (await create.json()) as { uploadId: string };
+    const p = await api(
+      `/v1/a/objects/multipart/part?key=${encodeURIComponent("ok/mp.mp4")}&uploadId=${uploadId}&part=1`,
+      {
+        method: "PUT",
+        headers: { "content-type": "application/octet-stream" },
+        body: new Uint8Array([1, 2, 3]),
+      },
+    );
+    const part = (await p.json()) as { partNumber: number; etag: string };
+    const spy = vi.spyOn(env.META, "delete").mockRejectedValue(new Error("meta down"));
+    try {
+      const done = await post("/v1/a/objects/multipart/complete", {
+        key: "ok/mp.mp4",
+        uploadId,
+        parts: [part],
+      });
+      expect(done.status).toBe(201);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(await env.LIB_A.head("ok/mp.mp4")).not.toBeNull();
+  });
+
+  it("purge makes progress batch by batch even if a run dies midway", async () => {
+    // 他のテストの残りより必ず先に並ぶよう、十分古い時刻にする
+    const base = Date.now() - 90 * 86_400_000;
+    const names = [0, 1, 2, 3, 4].map((i) => `batch/p${i}.png`);
+    const trashKeys = names.map((n, i) => `.trash/${base + i}/${n}`);
+    for (const [i, tk] of trashKeys.entries()) {
+      await env.LIB_A.put(tk, PNG);
+      await env.META.put(thumbKey(names[i]!), "OLD");
+    }
+    const orig = env.META.delete.bind(env.META);
+    let calls = 0;
+    const spy = vi.spyOn(env.META, "delete").mockImplementation(async (k) => {
+      calls += 1;
+      // 2件ずつの batch の 2 つ目で落とす
+      if (calls === 3) throw new Error("subrequest limit");
+      return orig(k);
+    });
+    try {
+      await expect(purgeTrash(env, 2)).rejects.toThrow();
+    } finally {
+      spy.mockRestore();
+    }
+    // 済んだ batch は本体まで消え、落ちた batch 以降は残る
+    expect(await env.LIB_A.head(trashKeys[0]!)).toBeNull();
+    expect(await env.LIB_A.head(trashKeys[1]!)).toBeNull();
+    expect(await env.LIB_A.head(trashKeys[2]!)).not.toBeNull();
+    // 次の実行は残りだけを片付ける
+    await purgeTrash(env, 2);
+    for (const [i, tk] of trashKeys.entries()) {
+      expect(await env.LIB_A.head(tk)).toBeNull();
+      expect(await env.META.head(thumbKey(names[i]!))).toBeNull();
+    }
   });
 });
 
@@ -960,6 +1527,27 @@ describe("url import", () => {
     const obj = await env.LIB_A.get("imports/img.png");
     expect(new Uint8Array(await obj!.arrayBuffer())).toEqual(PNG);
     expect(obj?.httpMetadata?.contentType).toBe("image/png");
+  });
+
+  it("import drops a stale thumbnail and survives a thumbnail delete failure", async () => {
+    await env.META.put(".system/thumbs/a/imports/th.png.webp", "OLD");
+    fetchMock
+      .get(REMOTE)
+      .intercept({ path: "/th.png" })
+      .reply(200, PNG, { headers: { "content-type": "image/png" } });
+    expect((await importUrl(`${REMOTE}/th.png`)).status).toBe(201);
+    expect(await env.META.head(".system/thumbs/a/imports/th.png.webp")).toBeNull();
+
+    fetchMock
+      .get(REMOTE)
+      .intercept({ path: "/th2.png" })
+      .reply(200, PNG, { headers: { "content-type": "image/png" } });
+    const spy = vi.spyOn(env.META, "delete").mockRejectedValue(new Error("meta down"));
+    try {
+      expect((await importUrl(`${REMOTE}/th2.png`)).status).toBe(201);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("follows a redirect while re-validating each hop", async () => {

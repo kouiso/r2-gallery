@@ -40,7 +40,7 @@ class FakePlatform implements TransferPlatform {
 class _Api extends ApiClient {
   @override
   Future<FolderPage> folder(String libId,
-          {String prefix = '', String? cursor, bool recursive = false}) async =>
+          {String prefix = '', String? cursor, bool recursive = false, String? sort}) async =>
       const FolderPage(items: [
         // 画像だと一覧がネットのサムネを読みに行くので、通信の要らない動画にする
         MediaItem(key: 'a.mp4', type: 'video', url: 'https://w.example/m/a.mp4'),
@@ -124,6 +124,11 @@ class _StuckApi implements TransferApi {
     throw const ApiError(0, 'stopped');
   }
 
+  @override
+  Future<bool> storedMatches(
+          String lib, String key, int size, Stream<List<int>> Function() local,
+          {CancelToken? cancelToken}) =>
+      throw UnimplementedError();
   @override
   Future<String> multipartCreate(String lib, String key, String contentType) =>
       throw UnimplementedError();

@@ -28,10 +28,11 @@ import { constants, tmpdir } from "node:os";
 import { basename, extname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
-// Must match worker/src/lib/const.ts: a narrower list rejects indexes whose videos the
+// Built from the same media-ext.json as worker/src/lib/const.ts: a narrower list rejects indexes whose videos the
 // worker would serve. tools/index-upload.test.mjs asserts the two stay in sync.
-const IMAGE = "jpe?g|png|webp|gif|avif";
-const VIDEO = "mp4|webm|mov|m4v|mkv|ts|m2ts|mpg|mpeg|avi|flv|3gp|wmv";
+const mediaExt = JSON.parse(readFileSync(new URL("../worker/src/lib/media-ext.json", import.meta.url), "utf8"));
+const IMAGE = mediaExt.image.join("|");
+const VIDEO = mediaExt.video.join("|");
 const IMAGE_RE = new RegExp(`\\.(${IMAGE})$`, "i");
 const VIDEO_RE = new RegExp(`\\.(${VIDEO})$`, "i");
 const MEDIA_RE = new RegExp(`\\.(${IMAGE}|${VIDEO})$`, "i");

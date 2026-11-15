@@ -57,6 +57,7 @@ class _FolderBrowseScreenState extends State<FolderBrowseScreen> {
     widget.app.api,
     prefix: widget.prefix,
     recursive: false,
+    sort: widget.app.photosChrome.sort,
   )..refresh(widget.lib);
   late final MediaController _c = MediaController(widget.app)
     ..bind(_g, widget.lib);
@@ -103,7 +104,7 @@ class _FolderBrowseScreenState extends State<FolderBrowseScreen> {
     return ListenableBuilder(
       listenable: _c,
       builder: (context, _) {
-        final sorted = _sort.sorted(_g.items);
+        final sorted = _g.ordered();
         final selecting = _c.selectedCount > 0;
         return PopScope(
           // 選択中の戻るは選択を解くだけにする（画面ごと閉じて選択を失わせない）
@@ -122,12 +123,17 @@ class _FolderBrowseScreenState extends State<FolderBrowseScreen> {
                     actions: [
                       SortMenuButton(
                         current: _sort,
-                        onPick: (m) => setState(() => _sort = m),
+                        onPick: (m) {
+                          setState(() => _sort = m);
+                          _g.changeSort(m, widget.lib);
+                        },
                       ),
                     ],
                   ),
             body: MediaListBody(
               c: _c,
+              // 並び替えで件数が戻っても続きを頼み直せるよう、並び順ごとに作り直す
+              gridKey: ValueKey('folder-${_g.sort.apiValue}'),
               sort: _sort,
               sorted: sorted,
               onOpenItem: (i) => openViewer(context,

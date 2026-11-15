@@ -99,13 +99,16 @@ class _Api extends ApiClient {
 /// 端末への書き出しを記録だけする（MediaStore もダウンロードも使わない）。
 class _FakeExporter extends DeviceExporter {
   _FakeExporter(ApiClient api, this.exported, {this.supported = true})
-      : super(api: api);
+    : super(api: api);
   final List<String> exported;
   @override
   final bool supported;
   @override
-  Future<void> export(MediaItem item, String lib,
-      {Future<void> Function(Future<void> Function() body)? guardSave}) async {
+  Future<void> export(
+    MediaItem item,
+    String lib, {
+    Future<void> Function(Future<void> Function() body)? guardSave,
+  }) async {
     exported.add(item.key);
   }
 }
@@ -137,7 +140,11 @@ _TestApp _app(_Api api, {bool readOnly = false}) {
 }
 
 Future<void> _pumpShell(WidgetTester tester, AppState app) async {
-  await tester.pumpWidget(MaterialApp(home: HomeShell(app: app, initialTab: HomeShell.photosTab)));
+  await tester.pumpWidget(
+    MaterialApp(
+      home: HomeShell(app: app, initialTab: HomeShell.photosTab),
+    ),
+  );
   await tester.pumpAndSettle();
 }
 
@@ -288,8 +295,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('R2 Gallery'), findsOneWidget);
       expect(
-          tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
-          HomeShell.photosTab);
+        tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+        HomeShell.photosTab,
+      );
     });
 
     testWidgets('閉じるボタンで選択を抜ける', (tester) async {
@@ -324,17 +332,23 @@ void main() {
           tester.view.physicalSize.height / tester.view.devicePixelRatio;
       for (final label in ['アルバムへ', 'ゴミ箱へ']) {
         final button = find.ancestor(
-            of: find.text(label), matching: find.byType(InkWell));
-        expect(tester.getRect(button).bottom,
-            lessThanOrEqualTo(screenBottom - inset),
-            reason: '「$label」の押せる範囲が下端の帯に食い込んでいる');
+          of: find.text(label),
+          matching: find.byType(InkWell),
+        );
+        expect(
+          tester.getRect(button).bottom,
+          lessThanOrEqualTo(screenBottom - inset),
+          reason: '「$label」の押せる範囲が下端の帯に食い込んでいる',
+        );
       }
       await tester.tap(find.text('ゴミ箱へ'));
       await tester.pumpAndSettle();
       expect(api.trashed, hasLength(1));
     });
 
-    testWidgets('オフライン保存できる環境なら、選んだ分をライブラリごとに #149 のオフライン保存へ積む', (tester) async {
+    testWidgets('オフライン保存できる環境なら、選んだ分をライブラリごとに #149 のオフライン保存へ積む', (
+      tester,
+    ) async {
       final app = _app(_threeDays())..offlineOn = true;
       final saved = app.saved;
       await _pumpShell(tester, app);
@@ -563,17 +577,25 @@ void main() {
     testWidgets('続きを読み込んだ後に並び替えても、新しい並びの続きを頼み直す', (tester) async {
       final api = _Api({
         '': FolderPage(
-          items: [for (var i = 0; i < 40; i++) _img('p$i.jpg', at: _daysAgo(i))],
+          items: [
+            for (var i = 0; i < 40; i++) _img('p$i.jpg', at: _daysAgo(i)),
+          ],
           cursor: 'c1',
         ),
       });
       api.more['c1'] = FolderPage(
-        items: [for (var i = 0; i < 40; i++) _img('q$i.jpg', at: _daysAgo(50 + i))],
+        items: [
+          for (var i = 0; i < 40; i++) _img('q$i.jpg', at: _daysAgo(50 + i)),
+        ],
       );
       final app = _app(api);
       await _pumpShell(tester, app);
       Future<void> toEnd() async {
-        await tester.fling(find.byType(Scrollable).first, const Offset(0, -6000), 3000);
+        await tester.fling(
+          find.byType(Scrollable).first,
+          const Offset(0, -6000),
+          3000,
+        );
         await tester.pumpAndSettle();
       }
 
@@ -650,7 +672,7 @@ void main() {
   });
 
   group('H15 フォルダ', () {
-    testWidgets('末尾のフォルダカードから下の階層へ辿れる', (tester) async {
+    testWidgets('先頭のフォルダ段のカードから下の階層へ辿れる', (tester) async {
       final api = _Api({
         'trip/': FolderPage(
           items: [_img('trip/a.jpg', at: _daysAgo(0))],
@@ -695,7 +717,48 @@ void main() {
       final folderY = tester.getTopLeft(find.text('day1')).dy;
       final photoY = tester.getTopLeft(_tile('trip/p0.jpg')).dy;
       expect(folderY, lessThan(photoY));
-      expect(find.text('フォルダ 2'), findsOneWidget);
+      expect(find.byKey(const ValueKey('folderStrip')), findsOneWidget);
+      expect(find.text('フォルダ 2', findRichText: true), findsOneWidget);
+    });
+
+    testWidgets('フォルダが多い時は段を横に送って末尾のカードから辿れ、写真は動かない（#74）', (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final api = _Api({
+        'trip/': FolderPage(
+          items: [
+            for (var i = 0; i < 250; i++) _img('trip/p$i.jpg', at: _daysAgo(0)),
+          ],
+          folders: [for (var i = 0; i < 12; i++) 'trip/f$i/'],
+        ),
+        'trip/f11/': FolderPage(
+          items: [_img('trip/f11/z.jpg', at: _daysAgo(0))],
+        ),
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          home: FolderBrowseScreen(app: _app(api), lib: 'a', prefix: 'trip/'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final strip = find.byKey(const ValueKey('folderStrip'));
+      expect(strip, findsOneWidget);
+      final photoYBefore = tester.getTopLeft(_tile('trip/p0.jpg')).dy;
+      // 12 枚×(112+8) は 390 幅に収まらないので、末尾のカードは最初は描かれていない
+      expect(find.text('f11'), findsNothing);
+
+      // dragUntilVisible は最後に縦の ensureVisible も走らせ写真の y を動かすので、横だけ送る
+      final row = find.descendant(of: strip, matching: find.byType(Scrollable));
+      await tester.drag(row, const Offset(-2000, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('f11'), findsOneWidget);
+      expect(tester.getTopLeft(_tile('trip/p0.jpg')).dy, photoYBefore);
+
+      await tester.tap(find.text('f11'));
+      await tester.pumpAndSettle();
+      expect(api.folderCalls.last.prefix, 'trip/f11/');
+      expect(_tile('trip/f11/z.jpg'), findsOneWidget);
     });
 
     testWidgets('下位フォルダが無い時はフォルダの段ごと出ない（#74）', (tester) async {
@@ -708,6 +771,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      // 有る時に findsOneWidget を確かめる上のテストと対にして、key が無いだけで通る事を防ぐ
+      expect(_tile('trip/a.jpg'), findsOneWidget);
       expect(find.byKey(const ValueKey('folderStrip')), findsNothing);
     });
 
@@ -726,11 +791,13 @@ void main() {
   group('書き込みガード', () {
     testWidgets('長押しの「ゴミ箱へ」も、書けないライブラリなら送らず理由を出す', (tester) async {
       final api = _Api({
-        '': FolderPage(items: [
-          _img('t1.jpg', at: _daysAgo(0)),
-          // 一覧に無いライブラリの項目（書けるか分からないので送らない）
-          _img('x.jpg', at: _daysAgo(0), lib: 'zz'),
-        ]),
+        '': FolderPage(
+          items: [
+            _img('t1.jpg', at: _daysAgo(0)),
+            // 一覧に無いライブラリの項目（書けるか分からないので送らない）
+            _img('x.jpg', at: _daysAgo(0), lib: 'zz'),
+          ],
+        ),
       });
       await _pumpShell(tester, _app(api));
       await tester.longPress(_tile('t1.jpg'));
@@ -740,8 +807,7 @@ void main() {
       await tester.tap(find.text('ゴミ箱へ').last);
       await tester.pumpAndSettle();
       expect(api.trashed, isEmpty);
-      expect(find.text('接続先にライブラリが見つかりません。接続先と権限を確認してください。'),
-          findsOneWidget);
+      expect(find.text('接続先にライブラリが見つかりません。接続先と権限を確認してください。'), findsOneWidget);
     });
   });
 }

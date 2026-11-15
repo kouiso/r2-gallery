@@ -182,11 +182,33 @@ class _MediaGridState extends State<MediaGrid> {
       key: const ValueKey('folderStrip'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: Text(
-            'フォルダ ${widget.folders.length}',
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        // デザイン（ReviewFolder.dc.html）の見出し行は 48 高で、数だけ淡色・細字にして名前と区別する
+        SizedBox(
+          height: 48,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text.rich(
+                TextSpan(
+                  text: 'フォルダ ',
+                  children: [
+                    TextSpan(
+                      text: '${widget.folders.length}',
+                      style: const TextStyle(
+                        color: AppColors.textDim,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+                style: const TextStyle(
+                  fontSize: 14,
+                  height: 20 / 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
           ),
         ),
         SizedBox(
@@ -223,12 +245,13 @@ class _MediaGridState extends State<MediaGrid> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Icon(Icons.folder, color: AppColors.accent),
+                // デザインは線のフォルダアイコン
+                const Icon(Icons.folder_outlined, color: AppColors.accent),
                 Text(
                   name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13),
+                  style: const TextStyle(fontSize: 13, height: 18 / 13),
                 ),
               ],
             ),

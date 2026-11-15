@@ -1,4 +1,9 @@
-HANDOFF 2026-11-15T09:55Z (RESUME run by managing session side-personal; result: DONE-FOR-NOW, lane stopped; new work in this period goes to Horsemanager)
+HANDOFF 2026-11-15T10:12Z (PAUSE from managing session, allowance guard; lane was already DONE-FOR-NOW; resume only on RESUME)
+  done since the previous handoff: nothing (no work between DONE-FOR-NOW 09:5xZ and this PAUSE)
+  half done: none in flight; branch feat/design-c4-albums-tab f19e357 stays as listed below (held: no new features)
+  next step on RESUME: as in the HANDOFF just below (open PR list with the one thing each waits for; merges need owner approval because main = production)
+  machine: no subagent running; every branch pushed (notes/r2-gallery, fix/pin-test-isolate-timing d907948, feat/design-c1a-theme-nav f1a71c8, feat/design-c4-albums-tab f19e357 all == origin, 0 dirty files)
+STATE PAUSED 2026-11-15T10:12Z | PAUSE (allowance) while DONE-WAITING: owner merge approval for 16 gate-ready PRs (main = production); #118 owner+device; #152 its author (Devin); #119 #146 never merged
   RESUME rules applied: Opus lead, no Fable, no new issue/branch/feature, open PRs first (owner: 「現在の起票されているPRの解消を全て達成してから新規タスクに臨む。」).
   CHECKED at 2026-11-15T09:55Z: main == pages-dist .source-sha == c089e5e (no merge since 2026-11-14T20:20Z); 20 open PRs; no PR head moved since the PAUSE handoff below; one new PR #152 (Devin).
   DECIDED 2026-11-15T09:55Z | no merges this run | reason: every remaining merge is to main, and a merge to main deploys production (Pages web + FAD APK; DEPLOY lines, web-deploy.yml:4-6,33-48, CLAUDE.md:48-49); the rules file G5 / section 10 and the night order 8 keep production merges for the owner, and the RESUME message did not lift that | revert: managing session or owner writes "merge the gate-ready PRs" -> merge in the order below, each re-checked on the merge result with current main, GATE head == merged head, confirm pages-dist + fad-dist-state after

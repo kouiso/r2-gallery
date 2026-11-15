@@ -261,3 +261,4 @@ HANDOFF 2026-11-14T21:08Z
   prod state: main c089e5e; pages-dist .source-sha == c089e5e; worker changes wait RG-24.
   container facts (lost on restart): Flutter 3.44.6 at /opt/flutter-sdk, gitleaks 8.24.3, /workspace/lc.sh (merge-with-main check script), /workspace/shot.js (from doc/handoff/scratch on PR #146), worktrees under /workspace/wt.
 RESUME 2026-11-15T01:02Z | #131 parked GATE comment posted | next #137 wants
+#137 | implementer done 01:18Z: head e1be9db (main merged); wants 1-3 + nits (heading 14/20 700 + count #9C9AA8, 48 row, outlined icon, name line 18); flutter 498 pass, analyze 7; evidence 137-e1be9db-app-390/-app-1440/-design.png (real web build + local worker, 250 photos, 3 folders); remaining design diffs listed in body | Fable review running

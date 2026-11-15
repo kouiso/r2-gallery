@@ -39,6 +39,59 @@ npx wrangler secret put SIGNING_SECRET
 npx wrangler deploy
 ```
 
+## 手元で動かす
+
+`worker/wrangler.toml` は git 管理の外なので、手元ではテスト用の設定 `worker/wrangler.test.toml`
+（ローカルの R2 / D1 だけを使い、実バケットや本番の秘密は参照しない）で Worker を起動する。
+
+```sh
+pnpm install
+# リポジトリのルートで実行する（lockfile で固定した wrangler と hono はルートの node_modules にある）。
+# 旧来の `cd worker && npx wrangler dev` は worker/wrangler.toml が git 管理外で無いため、そのままでは起動しない
+pnpm exec wrangler dev --local --port 8787 \
+  --config worker/wrangler.test.toml --persist-to worker/.wrangler/state
+curl http://127.0.0.1:8787/health   # {"ok":true}
+```
+
+- 仮のトークン: `ACCESS_TOKEN = test-access-token`（`worker/wrangler.test.toml`）。API は
+  `Authorization: Bearer test-access-token` で呼ぶ。ライブラリは `a`（書き込み可）と `b`（読み取り専用）。
+- Maestro 用の設定は `.maestro/wrangler.maestro.toml`（トークン `live-token`）。`.maestro/prepare.sh` が
+  `worker/` に写して起動する。
+- 永続先 `worker/.wrangler/` は git 管理外。消せば空の状態に戻る。
+- 確認用の画像は PUT で入れる（キーには拡張子が要る）:
+
+```sh
+TOKEN=test-access-token
+curl -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: image/jpeg" \
+  --data-binary @photo.jpg "http://127.0.0.1:8787/v1/a/objects?key=photo.jpg"
+```
+
+### アプリから手元の Worker につなぐ
+
+接続画面（手入力・`r2g://setup` リンク）は `https://` で始まる接続先しか受け付けないので、手元の
+`http://` の Worker にはつなげない。つなぐには、ビルド時に接続先とトークンを焼き込む:
+
+```sh
+cd flutter
+flutter pub get
+flutter build web --release \
+  --dart-define=R2_BAKED_ENDPOINT=http://127.0.0.1:8787 \
+  --dart-define=R2_BAKED_TOKEN=test-access-token
+python3 -m http.server 8080 --directory build/web   # http://localhost:8080 を開く
+```
+
+- 前提: 焼き込み値が使われるのは、ブラウザに保存済みの接続が無い時だけ（保存済みの接続が先に使われる。
+  `flutter/lib/src/state/app_state.dart` の `_initOnce`）。同じオリジンで前に別の接続先やトークンでつないでいた場合は、
+  サイトデータを消すか、新しいプロファイルで開く。
+- 焼き込み値は起動時に `/v1/libraries` を呼んで確かめ、通れば保存して一覧へ進む。通らなければ接続画面に戻る。
+- Worker 側の CORS は全オリジンを許すので、Web 版を別ポートで配ってもつながる。
+- Android のエミュレータでは `adb reverse tcp:8787 tcp:8787` で端末の `127.0.0.1:8787` に見せ、
+  同じ `--dart-define` で `flutter build apk --release` する。`http` はリリース版では既定で禁止なので、
+  確認用 APK だけ manifest に `android:usesCleartextTraffic="true"` を足す手順を
+  `.github/workflows/maestro.yml` が取っている。この APK は配らない。
+- 焼き込んだビルドにはトークンが入る。成果物を公開・配布しない（Pages や FAD には載せない）。
+- 手元の `http` を接続画面で許すかどうかは未決定。許すと決まったら、その変更の PR でこの節を書き直す。
+
 ### Index format
 
 Albums are read from `META/.system/index-<library id>.json`:

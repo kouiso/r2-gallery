@@ -1,4 +1,31 @@
-HANDOFF 2026-11-15T09:01Z (PAUSE from managing session side-personal; lane stopped, resumes only on RESUME)
+HANDOFF 2026-11-15T09:55Z (RESUME run by managing session side-personal; result: DONE-FOR-NOW, lane stopped; new work in this period goes to Horsemanager)
+  RESUME rules applied: Opus lead, no Fable, no new issue/branch/feature, open PRs first (owner: 「現在の起票されているPRの解消を全て達成してから新規タスクに臨む。」).
+  CHECKED at 2026-11-15T09:55Z: main == pages-dist .source-sha == c089e5e (no merge since 2026-11-14T20:20Z); 20 open PRs; no PR head moved since the PAUSE handoff below; one new PR #152 (Devin).
+  DECIDED 2026-11-15T09:55Z | no merges this run | reason: every remaining merge is to main, and a merge to main deploys production (Pages web + FAD APK; DEPLOY lines, web-deploy.yml:4-6,33-48, CLAUDE.md:48-49); the rules file G5 / section 10 and the night order 8 keep production merges for the owner, and the RESUME message did not lift that | revert: managing session or owner writes "merge the gate-ready PRs" -> merge in the order below, each re-checked on the merge result with current main, GATE head == merged head, confirm pages-dist + fad-dist-state after
+  DONE (whole personal-account period): #150 and #151 built, reviewed (fresh reviewers, PASS on the current heads), GATE posted, parked. Merged 0, closed 0.
+  OPEN PULL REQUESTS — the one thing each waits for:
+    #143 CI secrets-scan range ............ owner merge approval (gate-ready; merge first: security)
+    #145 transfer queue stage cleanup ...... owner merge approval (gate-ready; likely also fixes the transfer_queue_test flake, OBS 4)
+    #150 pin test deterministic ............ owner merge approval (gate-ready, head d907948)
+    #134 flutter analyze 0 ................. owner merge approval (gate-ready)
+    #125 worker test compat date ........... owner merge approval (gate-ready)
+    #151 C1a nav theme ..................... owner merge approval (gate-ready, head f1a71c8)
+    #129 -> #130 -> #131 settings stack .... owner merge approval, in that order (gate-ready; #131 also owner answer: block endpoint change during transfers, default keep)
+    #132 detected duration ................. owner merge approval (gate-ready)
+    #133 detected thumbs ................... owner merge approval (gate-ready)
+    #137 folders above photos .............. owner merge approval (gate-ready)
+    #138 web manifest ...................... owner merge approval + description wording OK (default yes)
+    #139 KMP-era docs ...................... owner merge approval (gate-ready)
+    #140 feature parity T3 docs ............ owner merge approval (gate-ready)
+    #142 README run locally ................ owner merge approval (gate-ready; check README for the curl Authorization example flagged on stale branch docs/run-locally, OBS 5)
+    #118 video auto-PiP .................... owner answers (#118 features 1/3/4) + Pixel real-device video (DEVICE)
+    #152 character albums tool (Devin) ..... its author: Devin is still fixing 6 Devin-review findings (badge on the PR, opened 09:46Z); not touched by this lane (another agent's live branch); after that: independent review; merge also needs owner approval (main = production)
+    #119 lane NOTES (draft) ................ never merged (bookkeeping)
+    #146 handoff 2026-11-14 ................ never merged/closed (managing session's rule)
+  LEFT, not a PR: branch feat/design-c4-albums-tab f19e357 (half-done C4; see the PAUSE handoff below for its missing steps) — held by the RESUME rule "start no new feature"; resume only when new tasks are allowed again.
+  owner / device lists: unchanged (see "needs owner (night lane, 2026-11-15T01:22Z)" and DEVICE further down) + merges #150 #151.
+  machine: no subagent running; nothing unpushed.
+STATE DONE-WAITING 2026-11-15T09:55Z | waiting on: owner merge approval for 16 gate-ready PRs (main = production); #118 owner+device; #152 its author (Devin fixing); #119 #146 never merged
   DONE this session (personal account): #150 pin-test fix -> gate-ready, parked (head d907948, re-review PASS, GATE https://github.com/kouiso/r2-gallery/pull/150#issuecomment-6891366876) | #151 C1a nav theme -> gate-ready, parked (head f1a71c8, fable re-review PASS, GATE https://github.com/kouiso/r2-gallery/pull/151#issuecomment-6891731951) | merged 0, closed 0 (every merge to main = production web + FAD; needs owner approval)
   HALF DONE: C4 albums tab design. Branch feat/design-c4-albums-tab pushed at f19e357 (1 commit on main c089e5e): flutter/lib/src/ui/albums_tab.dart (+332/-74 region), flutter/test/albums_tab_design_test.dart (new, 567 lines). Implementer was stopped at PAUSE; its last word: full flutter test 508 pass / 0 fail on 2nd run (1st run 507/1 = known main flake transfer_queue_test). NOT done: CI_SCAN_BASE=origin/main node .github/ci/run.mjs fast; node tools/sync-ai-rules.mjs --check; flutter analyze count not reported to lead (re-run); fail-before counts not reported (re-run tests against main's albums_tab.dart); side-by-side evidence PNG (none committed: no evidence/c4-* file); PR not opened; LOCAL-CHECK not posted; no review. Open questions from the implementer: none received (it was stopped before reporting) -> the next implementer must re-check remaining differences against doc/design/project/Albums.dc.html and design-parity.md (on this NOTES branch) section 3.2.
   NEXT STEP on RESUME: (1) C4: one implementer finishes the list above from branch feat/design-c4-albums-tab (worktree add; Flutter 3.44.6 + gitleaks 8.24.3 must be reinstalled in a new container), opens the PR, posts LOCAL-CHECK + evidence; fresh reviewer; GATE; park. (2) then C1b (contested tokens; after #151 merges) / C1c icons / C2 (carry #151 want: assert nav icon size 22 + 2 comment nits) per judge-design-1.md build order. (3) if the owner approves merges: order #143 -> #145 -> #150 -> #134 -> #125 -> #151 -> #129 -> #130 -> #131 -> #132 -> #133 -> #137 -> #138 -> #139 -> #140 -> #142, each re-checked on the merge result with current main, GATE head == merged head, confirm pages-dist + fad-dist-state after.

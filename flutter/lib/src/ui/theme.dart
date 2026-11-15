@@ -12,7 +12,8 @@ class AppColors {
   static const textPrimary = Color(0xFFF2F0EA);
   static const textDim = Color(0xFF9C9AA8);
   static const danger = Color(0xFFE0605E);
-  // Foundation ボードの success / onAccent。以前は各画面に直書きされていた
+  // Foundation ボードの success / onAccent。settings_tab・gallery_tab・
+  // selection_widgets にはまだ同じ値の直書きが残っており、画面側の作業で置き換える
   static const success = Color(0xFF7FD1A8);
   static const onAccent = Color(0xFF1A1408);
 }
@@ -71,6 +72,8 @@ ThemeData buildAppTheme() {
       titleTextStyle: TextStyle(
         color: AppColors.textPrimary,
         fontSize: 20,
+        // Foundation の title は 20／28。指定しないと行の高さが書体任せになる
+        height: 28 / 20,
         fontWeight: FontWeight.w700,
       ),
     ),
@@ -112,10 +115,17 @@ ThemeData buildAppTheme() {
       elevation: 0,
       indicatorColor: AppColors.accentSoft,
       indicatorShape: const _NavPillBorder(),
+      // デザインのピルと文字の間は 4px。ピルは枠の下端から 1px 内側にあるので、
+      // 既定の 4 から 1 引く
+      labelPadding: const EdgeInsets.only(top: 3),
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
         final selected = states.contains(WidgetState.selected);
+        // Foundation の caption は 12／16 で字間なし。指定しないと bodyMedium の
+        // 字間 0.25・行の高さ 1.43 を引き継ぐ
         return TextStyle(
           fontSize: 12,
+          height: 16 / 12,
+          letterSpacing: 0,
           fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
           color: selected ? AppColors.textPrimary : AppColors.textDim,
         );

@@ -2,7 +2,11 @@
 # Local R2 only; no real buckets or secrets are referenced here.
 name = "r2-gallery-worker-test"
 main = "src/index.ts"
-compatibility_date = "2026-09-01"
+# 理由: 固定中の @cloudflare/vitest-pool-workers 0.12.21 が同梱する workerd は 2026-03-10 までしか
+# 対応せず、これより新しい日付だと実行のたびに切り下げ警告が出て他の警告が埋もれるため揃えている。
+# 上位版 (0.13 以降) は vitest 4 系が必須で、tools 側の vitest も巻き込む大きな版上げになるので別途行う。
+# 本番の日付 (wrangler.example.toml 等は 2026-09-01) とは差があるので、日付依存の挙動を足す時はこの差を意識すること。
+compatibility_date = "2026-03-10"
 
 [[r2_buckets]]
 binding = "LIB_A"

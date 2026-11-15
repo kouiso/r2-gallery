@@ -136,7 +136,7 @@ class ApiClient {
       'order': 'recent',
       // 並び順は Worker に渡して全体に対して並べさせる。古い Worker は無視して新着順で返す
       'sort': ?sort,
-      if (cursor != null) 'cursor': cursor,
+      'cursor': ?cursor,
     });
   }
 
@@ -218,7 +218,7 @@ class ApiClient {
       );
     }, query: {
       'limit': limit,
-      if (cursor != null) 'cursor': cursor,
+      'cursor': ?cursor,
     });
   }
 
@@ -304,7 +304,7 @@ class ApiClient {
       return TrashPage(items, r.data['cursor'] as String?,
           retentionDays: (r.data['retentionDays'] as num?)?.toInt());
     }, query: {
-      if (cursor != null) 'cursor': cursor,
+      'cursor': ?cursor,
     });
   }
 

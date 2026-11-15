@@ -1,4 +1,4 @@
-STATE RUNNING 2026-11-15T01:02Z | resumed (RESUME 10:02 JST); cap: 1 subagent alive
+STATE DONE-WAITING 2026-11-15T01:22Z | waiting on: owner merge approval for 14 parked gate-ready PRs (#143 #145 #134 #125 #129 #130 #131 #132 #133 #137 #138 #139 #140 #142); owner+device for #118; owner decisions #149 #147 #148 #65 #44 #29 #32 #104 RG-24, design Q1-Q3; device list unchanged; new-PR work held by managing session rule
 mission: それぞれのプロジェクトに書いてあるプランに書いてある作業をやること / どのプロジェクトもまず既存のPRを本質的に対処することを作業を優先してください。そうしないと溜まってばっかりなので
 model fable (lead, night order 3) ; manager+reviewers fable, implementers opus, mechanical sonnet | advisor unknown | github via connector | push via git | png ok (playwright chromium)
 goal: lane r2-gallery [cloud] until cycle DONE or DONE-WAITING or PAUSE (set 2026-11-14 night) | DONE-WAITING satisfies it: yes
@@ -114,13 +114,13 @@ stream C done: t3 69aad36 / run-locally-v2 3572d44 / kmp-era b16b51e (fresh LOCA
 (from packet; owner col of RG-17..23, RG-26 read as agent per plan.md:98 — packet 2-1)
 | id | state | who | note |
 |---|---|---|---|
-| RG-10 | doing | agent | #118 open; evidence video = DEVICE |
-| RG-11 | doing | agent | re-review of #118 after fixes |
+| RG-10 | blocked | wait | #118 code PASS; DEVICE: 6-scene Pixel video + PiP closes; OWNER: feature answers 1/3/4 |
+| RG-11 | done | agent | #118 re-review PASS at 174bd20 |
 | RG-12 | done | owner | answered 2026-11-14: 中身がokなら問題ない |
-| RG-17 | todo | agent | #41 via #42 #43 |
-| RG-18 | todo | agent | #44 via #45 #46 |
-| RG-19 | todo | agent | #48 via #49 |
-| RG-20 | todo | agent | #51 via #52 |
+| RG-17 | done | agent | #121 #135 merged; worker part waits RG-24; #43 DEVICE |
+| RG-18 | done | agent | #127 merged dfd39d1; server sort effective after RG-24; #44 index = OWNER decision |
+| RG-19 | done | agent | #120 #141 merged; effective after RG-24 |
+| RG-20 | done | agent | #122 04dc5d8 + #136 c089e5e merged; effective after RG-24; follow-ups #147 #148 |
 | RG-21 | done | agent | #123 merged; #54 waits RG-24 |
 | RG-22 | done | agent | #124 merged 13:27Z |
 | RG-23 | blocked | owner | #64 merged (#126); #65 needs owner decision |
@@ -264,3 +264,23 @@ RESUME 2026-11-15T01:02Z | #131 parked GATE comment posted | next #137 wants
 #137 | implementer done 01:18Z: head e1be9db (main merged); wants 1-3 + nits (heading 14/20 700 + count #9C9AA8, 48 row, outlined icon, name line 18); flutter 498 pass, analyze 7; evidence 137-e1be9db-app-390/-app-1440/-design.png (real web build + local worker, 250 photos, 3 folders); remaining design diffs listed in body | Fable review running
 #137 | GATE-READY (not merged: scope) | review PASS must0 want1 nit1 at e1be9db https://github.com/kouiso/r2-gallery/pull/137#issuecomment-6887210887; want (date-header diff not listed) + nit (broken link) fixed in body only | GATE https://github.com/kouiso/r2-gallery/pull/137#issuecomment-6887217217 | note for design work: date header media_grid.dart:144-154 differs from design (padding 16/16/8, weight 700) -> do in grid design item
 #130 | body corrected 01:21Z (test counts 481 + 4, frame/spacing notes, evidence links) | all existing PRs now merged or gate-ready/parked | manager audit (scene c) + judge on new-PR work requested
+PROD #136: fad-dist-state .source-sha == c089e5e (lead + manager verified); pages-dist == c089e5e; main == c089e5e
+AUDIT (manager, scene c) 2026-11-15T01:22Z | #127 #122 #136: no gate breach (GATE before merge, merged head == GATE head, review PASS names head, local check on merge result, non-empty scan range, RG-24 + order stated, evidence on notes branch; main tree == checked tree 1109573) | slips: #122 was merged before fad-dist-state had moved to #127's SHA (no harm; now c089e5e); FAD line for #136 was missing (added above) | notes: final reviews of those three were opus 5.5 from the previous lane (independent, name the head); earlier PASSes on #136 missed a regression the PR introduced -> every reviewer brief should demand fail-before + mutation
+JUDGE (manager) | new-PR work: B = stop as DONE-WAITING; "land" is the managing session's word and not the lane's to loosen; pin-test flake blocked nothing tonight (every full run 0 failures)
+HOUR 2026-11-15T01:22Z | merged 0 this hour (tonight 3: #127 #122 #136) | closed 0 | fixed 4 gate-ready tonight (#145 #138 #131 #137) + bodies #129 #130 #132 #133 #140 | blocked: owner merge approval (14 parked) + managing-session hold on new PRs | rules 2/3 moved 0 (board unreadable) | skipped (-ux): 0
+
+## needs owner (night lane, 2026-11-15T01:22Z)
+1. Merge the parked gate-ready PRs to main one at a time (each merge = production web + FAD APK)? Default: yes. Suggested order: #143 (CI secrets-scan scans 0 commits today: security) -> #145 -> #134 -> #125 -> #129 -> #130 -> #131 -> #132 -> #133 -> #137 -> #138 -> #139 -> #140 -> #142. Before each merge: re-run the local check on the merge result with current main (c089e5e or later), post GATE, confirm pages-dist + fad-dist-state after. Conflict cluster: #129/#130/#131 (settings_tab), #137 (media_grid), C1a branch (theme) touch neighbouring files; merge in the order above and re-check.
+2. #138: is the web description 「R2 に置いた写真・動画を見る、個人用のギャラリー」 OK? Default: yes.
+3. #131: endpoint change is BLOCKED while transfers are unfinished, and the current token is reused only for the same host. OK, or prefer a warning instead of a block? Default: keep the block.
+4. #149: offline-saved items are not keyed by endpoint — pick option 1-4 and a/b in the issue. Default: option 1 + b.
+5. #147 / #148 (worker follow-ups from #136): do them as normal backlog? Default: yes.
+6. Unchanged from handoff PR #146: #118 features 1/3/4, #65, #44, #29, #32, #104, #114/#115 (which save failed), RG-24 worker deploy, design Q1-Q3.
+DEVICE (unchanged): #118 6-scene Pixel video + PiP closes; #43 #68 #75 #80 #94 #107 #110 #113 #115; #1 #2 #3 #4 #15 #24 #25 #28.
+
+## for main session (night lane, 2026-11-15T01:22Z)
+- HELD by your rule "no new PRs before the existing ones land" (existing ones wait only for the owner's merge approval): 1) pin-test PR (branch fix/pin-test-isolate-timing fd15d68 ready; needs checks + PR), 2) C1a design PR (feat/design-c1a-theme-nav f99d6aa; needs checks + side-by-side images + PR), 3) design conformance C4, C1b, C1c, C7 ... (judge-design-1.md; incl. date header media_grid.dart:144-154), 4) flaky detected_thumb_test, 5) issues (iteration board unreadable from cloud: no ProjectV2 tool). Lift the hold or have the owner approve merges, then RESUME.
+- 課題 review band: ready (NOTES = this file; design = doc/design/project, artifact link in handoff).
+- advisor setting not visible from this lane (unknown). GitHub via connector (gh token invalid). New containers lack Flutter/gitleaks: a setup script installing Flutter 3.44.6 + gitleaks 8.24.3 would save ~5 min per start.
+- Model note: lead ran as the session model; manager + reviewers Fable, implementers Opus, mechanical Sonnet (night order 3).
+

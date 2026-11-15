@@ -145,6 +145,7 @@ class TransferQueue extends ChangeNotifier {
     this.makeThumb,
     this.parallel = 2,
     this.netRetryDelay = const Duration(seconds: 15),
+    this.stagedDeleteTimeout = const Duration(seconds: 5),
     this.multipartThreshold = ApiClient.multipartThreshold,
     this.partSize = 8 * 1024 * 1024,
     bool? persist,
@@ -159,6 +160,7 @@ class TransferQueue extends ChangeNotifier {
   final FileThumbMaker? makeThumb;
   final int parallel;
   final Duration netRetryDelay;
+  final Duration stagedDeleteTimeout;
   final int multipartThreshold;
   final int partSize;
   final LedgerStore _ledger;
@@ -211,6 +213,17 @@ class TransferQueue extends ChangeNotifier {
       if (t.id == id) return t;
     }
     return null;
+  }
+
+  /// 完了待ち（サーバーが受け取り済みで、退避ファイルを消している途中）か。画面はこの間ボタンを止める。
+  bool isCompleting(String id) => _completing.any((t) => t.id == id);
+
+  /// 操作（一時停止・再開・やり直し・取り消し・一覧から消す）の対象。完了待ちの行は返さない。
+  /// 退避パスはもう消えているので、ここで再開・やり直しを通すと退避し直し、done の行に退避ファイルが残る。
+  /// 完了待ちに入る前に止めた行（サムネ作成中の一時停止など）も同じなので、入口ごとではなくここで弾く
+  TransferTask? _operable(String id) {
+    final t = _find(id);
+    return t == null || _completing.contains(t) ? null : t;
   }
 
   void _changed() {
@@ -533,14 +546,20 @@ class TransferQueue extends ChangeNotifier {
       // 台帳から外し終えてから完了にする。完了にした途端に転送中の通知（サービス）が外れ、
       // 画面を消された後なら残しておいたエンジンも畳まれる。書き終える前に畳まれると次の起動で送り直してしまう
       _completing.add(t);
+      _changed();
       try {
         await _persist();
+        // 退避ファイルは完了を報告する前に消し終える。先に done にすると、完了を見た側
+        // （画面・テスト）が掃除の途中の退避ファイルを見てしまう。
+        // 消し終えて done になるまで _completing に残す。外すと別の行の書き込みが
+        // 「転送中」で書き戻し、再起動で二重に上がる。
+        // この間の操作は受け付けない（_operable で弾く）。サーバーが受け取った後なので完了を優先する
+        await _dropStaged(t);
+        t.status = TransferStatus.done;
+        t.loaded = t.size;
       } finally {
         _completing.remove(t);
       }
-      t.status = TransferStatus.done;
-      t.loaded = t.size;
-      await _dropStaged(t);
       if (!_done.isClosed) _done.add(t);
     } catch (e) {
       if (token.isCancelled || !_owns(t, gen)) {
@@ -813,10 +832,17 @@ class TransferQueue extends ChangeNotifier {
     if (p == null) return;
     try {
       final f = File(p);
-      if (await f.exists()) await f.delete();
+      // 削除が返らなくても完了の報告を止めない（止まるとサービスが残り続ける）
+      await (() async {
+        if (await f.exists()) await f.delete();
+      })()
+          .timeout(stagedDeleteTimeout);
     } on FileSystemException catch (e) {
       // 消し損ねても次の起動時の掃除で消える
       debugPrint('staged upload not removed: $e');
+    } on TimeoutException {
+      // 残ったファイルは次の起動時の掃除に任せる
+      debugPrint('staged upload delete timed out: $p');
     }
   }
 
@@ -824,7 +850,7 @@ class TransferQueue extends ChangeNotifier {
 
   /// 一時停止。退避したファイル・uploadId・確定済みパートは残し、再開で続きから送る。
   void pause(String id) {
-    final t = _find(id);
+    final t = _operable(id);
     if (t == null || !t.active) return;
     t._gen++;
     t.status = TransferStatus.paused;
@@ -836,7 +862,7 @@ class TransferQueue extends ChangeNotifier {
   }
 
   void resume(String id) {
-    final t = _find(id);
+    final t = _operable(id);
     if (t == null || t.status != TransferStatus.paused) return;
     t._gen++;
     _requeue(t);
@@ -844,7 +870,7 @@ class TransferQueue extends ChangeNotifier {
 
   /// 失敗・取り消しの行をやり直す。
   void retry(String id) {
-    final t = _find(id);
+    final t = _operable(id);
     if (t == null ||
         (t.status != TransferStatus.error &&
             t.status != TransferStatus.cancelled)) {
@@ -886,7 +912,7 @@ class TransferQueue extends ChangeNotifier {
 
   /// 取り消し。動いている処理が止まるのを待ってから、退避ファイルと multipart を片付けて行を消す。
   Future<void> cancel(String id) async {
-    final t = _find(id);
+    final t = _operable(id);
     if (t == null || t.status == TransferStatus.done) return;
     final gen = ++t._gen;
     t.status = TransferStatus.cancelled;
@@ -919,7 +945,7 @@ class TransferQueue extends ChangeNotifier {
 
   /// 完了・取り消しの行を一覧から消す。
   void dismiss(String id) {
-    final t = _find(id);
+    final t = _operable(id);
     if (t == null ||
         (t.status != TransferStatus.done &&
             t.status != TransferStatus.cancelled)) {
@@ -932,8 +958,9 @@ class TransferQueue extends ChangeNotifier {
 
   /// 終わった行（完了・失敗・取り消し）をまとめて消す。失敗の行の退避ファイルも片付ける。
   Future<void> clearFinished() async {
-    final gone = _tasks.where((t) => t.finished).toList();
-    _tasks.removeWhere((t) => t.finished);
+    bool removable(TransferTask t) => t.finished && !_completing.contains(t);
+    final gone = _tasks.where(removable).toList();
+    _tasks.removeWhere(removable);
     _changed();
     for (final t in gone) {
       await _cleanup(t);

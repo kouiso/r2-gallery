@@ -1,4 +1,4 @@
-STATE PAUSED 2026-11-14T21:08Z (PAUSE from managing session: allowance guard; resume on RESUME)
+STATE RUNNING 2026-11-15T01:02Z | resumed (RESUME 10:02 JST); cap: 1 subagent alive
 mission: それぞれのプロジェクトに書いてあるプランに書いてある作業をやること / どのプロジェクトもまず既存のPRを本質的に対処することを作業を優先してください。そうしないと溜まってばっかりなので
 model fable (lead, night order 3) ; manager+reviewers fable, implementers opus, mechanical sonnet | advisor unknown | github via connector | push via git | png ok (playwright chromium)
 goal: lane r2-gallery [cloud] until cycle DONE or DONE-WAITING or PAUSE (set 2026-11-14 night) | DONE-WAITING satisfies it: yes
@@ -260,3 +260,4 @@ HANDOFF 2026-11-14T21:08Z
   queues: LAND 0 | FIX 1 (#137) | gate-ready, OWNER merge scope: #143 (first), #145, #138 (+ description wording), #131 (after #129, #130), #125 #129 #130 #132 #133 #134 #139 #140 #142 — each needs a re-check on the merge result with current main (c089e5e or later) right before merging | OWNER+DEVICE: #118 | OWNER decisions: #149 (offline-store key), #147 #148 (worker follow-ups), plus the list in handoff PR #146 | never merge/close #119 #146
   prod state: main c089e5e; pages-dist .source-sha == c089e5e; worker changes wait RG-24.
   container facts (lost on restart): Flutter 3.44.6 at /opt/flutter-sdk, gitleaks 8.24.3, /workspace/lc.sh (merge-with-main check script), /workspace/shot.js (from doc/handoff/scratch on PR #146), worktrees under /workspace/wt.
+RESUME 2026-11-15T01:02Z | #131 parked GATE comment posted | next #137 wants

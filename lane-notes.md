@@ -284,3 +284,7 @@ DEVICE (unchanged): #118 6-scene Pixel video + PiP closes; #43 #68 #75 #80 #94 #
 - advisor setting not visible from this lane (unknown). GitHub via connector (gh token invalid). New containers lack Flutter/gitleaks: a setup script installing Flutter 3.44.6 + gitleaks 8.24.3 would save ~5 min per start.
 - Model note: lead ran as the session model; manager + reviewers Fable, implementers Opus, mechanical Sonnet (night order 3).
 
+HANDOFF 2026-11-15T01:35Z (PAUSE while already DONE-WAITING; line 1 STATE stays DONE-WAITING)
+  no subagent running; nothing unpushed (work branches #131 a8265ed, #137 e1be9db, #145 8f62e7e, #138 4b1f70f all on origin; main c089e5e)
+  next item on RESUME: nothing actionable inside the lane until (a) the owner approves merges of the 14 parked gate-ready PRs (order in "needs owner" 1; re-check each on the merge result with current main, GATE, merge, confirm pages-dist + fad-dist-state), or (b) the managing session lifts the new-PR hold (then: pin-test PR -> C1a PR -> C4 ...; see "for main session")
+  queues: LAND 0 | FIX 0 | OWNER 14 parked PRs + decisions | OWNER+DEVICE #118 | DEVICE list unchanged | never merge/close #119 #146

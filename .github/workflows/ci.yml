@@ -67,7 +67,8 @@ jobs:
       - name: gitleaks
         env:
           CI_SCAN_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-          CI_SCAN_HEAD: ${{ github.sha }}
+          # PR は検出対象を PR 自身の先頭にする（github.sha は PR のマージ参照で、base..merge が空に近くなる）
+          CI_SCAN_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
         run: node .github/ci/run.mjs gitleaks
       - name: Hygiene scan (forbidden words / emails / tracked files)
         run: node .github/ci/run.mjs hygiene

@@ -1,3 +1,9 @@
+MERGED 2026-11-15T23:58Z (owner rule 「ソースコードレビューして問題なければマージ。修正点があれば治してマージ」; fresh source review per PR, merge result with main re-checked, review comment on each PR)
+  #143 045135d | #145 82ec65d | #150 36a0092 | #134 e5025b3 (main merged into the branch first: client.dart cursor/sort conflict, head 8bc2fa7) | #125 84ccb54 | #151 f141270 | #129 a8d5beb | #130 3f846e4 (base retargeted to main) | #139 3241ef1 | #140 452a3c6 | #142 1e2fa63 (gitleaks 8.24.3 on its commits: 0)
+  main == 1e2fa63. Intermediate ci/maestro/web-deploy runs on main were cancelled by concurrency; the runs for 1e2fa63 were pending at 2026-11-15T23:58Z -> confirm pages-dist .source-sha afterwards.
+  NOT YET: #131 FIX-FIRST (base retargeted to main; 3 fixes in flight on feat/connect-edit: fake folder() lacks `sort` -> test does not compile on main; old endpoint's libraries/activeLib survive a switch; probe accepts any <400 incl. HTML 200) | #132 #133 #137 #138 fresh review in flight | #160 self-review loop in flight | #118 #152 #153 untouched.
+  new issue #161: pairing deep link switches the endpoint without the #131 guard.
+  OBS: repo CI does not run `flutter test` (the build lane in the other repo does); flutter results quoted on PRs are local runs. Container has 4 CPUs -> at most 2 workflow agents at a time.
 RESUME 2026-11-15T15:34Z (owner, direct, in cloud session https://claude.ai/code/session_01BTMj32vzHfqbVHLKS5iyW4; branch ccr-cbfd24d9-akrcp4)
   owner goal (verbatim): 「r2gallalyを完成させたい。PRとissue全部解消して。デザインも全部反映して完成させて欲しい」
   OWNER ANSWERS 2026-11-15T15:34Z (asked in that session; these lift the earlier OWNER waits):

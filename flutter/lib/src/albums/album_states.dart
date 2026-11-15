@@ -80,14 +80,85 @@ class AlbumsHomeState extends ChangeNotifier with _SafeNotify {
     return null;
   }
 
-  Future<String?> create(String lib, String title) =>
-      _run(lib, () => api.albumCreate(lib, title));
+  /// 作成中で、まだサーバーの id が来ていないアルバム。開く・書き換えるのは id が来てから
+  final Set<String> pending = {};
+  int _tempSeq = 0;
 
-  Future<String?> rename(String lib, String albumId, String title) =>
-      _run(lib, () => api.albumRename(lib, albumId, title));
+  bool isPending(String albumId) => pending.contains(albumId);
 
-  Future<String?> delete(String lib, String albumId) =>
-      _run(lib, () => api.albumDelete(lib, albumId));
+  /// 結果を待たずに一覧へ足し、失敗したら外す。作成は id が要るので仮の id で出して差し替える。
+  Future<String?> create(String lib, String title) async {
+    final tempId = 'pending:${++_tempSeq}';
+    pending.add(tempId);
+    albums = [...albums, Album(id: tempId, title: title, readOnly: false)];
+    notifyListeners();
+    String? err;
+    try {
+      final id = await api.albumCreate(lib, title);
+      albums = [
+        for (final a in albums)
+          if (a.id == tempId)
+            Album(id: id, title: a.title, count: a.count, readOnly: false)
+          else
+            a,
+      ];
+    } on ApiError catch (e) {
+      albums = albums.where((a) => a.id != tempId).toList();
+      err = e.toString();
+    }
+    pending.remove(tempId);
+    notifyListeners();
+    return err;
+  }
+
+  /// 名前はすぐ書き換え、失敗したら元の名前へ戻す。
+  Future<String?> rename(String lib, String albumId, String title) async {
+    final before = albums.where((a) => a.id == albumId).firstOrNull;
+    if (before == null) return null;
+    _replace(albumId, _withTitle(before, title));
+    try {
+      await api.albumRename(lib, albumId, title);
+      return null;
+    } on ApiError catch (e) {
+      // 送る間に別の名前へ変えていたら、そちらを潰さない
+      if (albums.any((a) => a.id == albumId && a.title == title)) {
+        _replace(albumId, before);
+      }
+      return e.toString();
+    }
+  }
+
+  /// 一覧からすぐ外し、失敗したら元の位置へ戻す。
+  Future<String?> delete(String lib, String albumId) async {
+    final at = albums.indexWhere((a) => a.id == albumId);
+    if (at < 0) return null;
+    final removed = albums[at];
+    albums = [...albums]..removeAt(at);
+    notifyListeners();
+    try {
+      await api.albumDelete(lib, albumId);
+      return null;
+    } on ApiError catch (e) {
+      if (!albums.any((a) => a.id == albumId)) {
+        albums = [...albums]..insert(at.clamp(0, albums.length), removed);
+        notifyListeners();
+      }
+      return e.toString();
+    }
+  }
+
+  void _replace(String albumId, Album next) {
+    albums = [for (final a in albums) a.id == albumId ? next : a];
+    notifyListeners();
+  }
+
+  static Album _withTitle(Album a, String title) => Album(
+      id: a.id,
+      title: title,
+      subtitle: a.subtitle,
+      count: a.count,
+      coverUrl: a.coverUrl,
+      readOnly: a.readOnly);
 
   Future<String?> mkdir(String lib, String name) =>
       _run(lib, () => api.mkdir(lib, name));
@@ -227,16 +298,34 @@ class AlbumDetailState extends _PagedMediaState {
     return moveItem(picked.single, delta);
   }
 
+  bool _same(MediaItem a, MediaItem b) =>
+      a.key == b.key && (a.lib ?? lib) == (b.lib ?? lib);
+
+  String _id(MediaItem it) => '${it.lib ?? lib}:${it.key}';
+
+  /// 操作前の並び [before] へ戻す。送っている間に続きのページが載っていたら、その分は後ろに残す。
+  void _rollbackTo(List<MediaItem> before) {
+    final known = {for (final it in before) _id(it)};
+    items = [...before, ...items.where((it) => !known.contains(_id(it)))];
+  }
+
   /// 1件を前後へ動かす（長押しメニューの「前に移す／後ろに移す」と共用）。
+  /// 見えている並びはすぐ動かし、書き戻せなかったら元の並びへ戻す。
   Future<String?> moveItem(MediaItem item, int delta) async {
     if (opsBusy) return null;
     opsBusy = true;
+    final before = items;
+    final shown = before.indexWhere((it) => _same(it, item));
+    if (shown >= 0) {
+      final to = (shown + delta).clamp(0, before.length - 1);
+      items = [...before]..removeAt(shown);
+      items.insert(to, item);
+    }
     notifyListeners();
     String? err;
     try {
       final all = await api.albumAll(lib, albumId);
-      final at = all.indexWhere(
-          (it) => it.key == item.key && (it.lib ?? lib) == (item.lib ?? lib));
+      final at = all.indexWhere((it) => _same(it, item));
       if (at < 0) {
         err = '並び替えに失敗しました';
       } else {
@@ -250,9 +339,10 @@ class AlbumDetailState extends _PagedMediaState {
     } on ApiError {
       err = '並び替えに失敗しました';
     }
+    // 失敗したら動かす前の並びへ戻す。読み直しは要らない（手元の並びがサーバーと同じ）
+    if (err != null) _rollbackTo(before);
     opsBusy = false;
     notifyListeners();
-    if (err == null) await refresh();
     return err;
   }
 
@@ -264,24 +354,43 @@ class AlbumDetailState extends _PagedMediaState {
   }
 
   /// [targets] をアルバムから外す（長押しメニューの「このアルバムから外す」と共用）。
+  /// 行はすぐ外し、外せなかったライブラリの分だけ元の位置へ戻す。
   Future<String?> removeItems(List<MediaItem> targets) async {
     if (opsBusy || targets.isEmpty) return null;
     opsBusy = true;
+    final before = items;
+    final shownCount = count;
+    items = before.where((it) => !targets.any((t) => _same(t, it))).toList();
+    count = (count - (before.length - items.length)).clamp(0, count);
     notifyListeners();
     String? err;
     final byLib = <String, List<String>>{};
     for (final it in targets) {
       byLib.putIfAbsent(it.lib ?? lib, () => []).add(it.key);
     }
-    try {
-      for (final e in byLib.entries) {
+    final failedLibs = <String>{};
+    for (final e in byLib.entries) {
+      try {
         await api.albumRemove(e.key, albumId, e.value);
+      } on ApiError {
+        failedLibs.add(e.key);
+        err = 'アルバムから外せませんでした';
       }
-    } on ApiError {
-      err = 'アルバムから外せませんでした';
+    }
+    if (failedLibs.isNotEmpty) {
+      // 外せた分は外したまま、外せなかった分を元の並びの位置へ戻す
+      final gone = {
+        for (final t in targets)
+          if (!failedLibs.contains(t.lib ?? lib)) _id(t),
+      };
+      _rollbackTo([
+        for (final it in before)
+          if (!gone.contains(_id(it))) it,
+      ]);
+      count = (shownCount - gone.length).clamp(0, shownCount);
     }
     opsBusy = false;
-    await refresh();
+    notifyListeners();
     return err;
   }
 }

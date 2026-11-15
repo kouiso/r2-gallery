@@ -37,7 +37,15 @@ OfflineHooks? offlineHooksFor(AppState app) => app.offlineSupported
       )
     : null;
 
+/// ビューワーの「ゴミ箱へ」を呼び出し側に任せた時に、閉じる時に返す印。
+class ViewerTrashRequest {
+  final MediaItem item;
+  const ViewerTrashRequest(this.item);
+}
+
 /// 一覧からビューワーを開く。閉じた時にゴミ箱へ送っていたら「元に戻す」を出して [onChanged] を呼ぶ。
+/// [onTrash] を渡すと、ビューワーは送るのを待たずに閉じ、送るのは呼び出し側が受け持つ
+/// （一覧から先に外して裏で送る。待たせると操作がもたつくため）。
 Future<void> openViewer(
   BuildContext context, {
   required AppState app,
@@ -50,12 +58,13 @@ Future<void> openViewer(
   Listenable? source,
   List<MediaItem> Function()? readItems,
   VoidCallback? onNearEnd,
+  Future<void> Function(MediaItem item)? onTrash,
   @visibleForTesting BaseCacheManager? imageCacheManager,
 }) async {
   if (items.isEmpty) return;
   // ビューワーを閉じた後に出すので、開く前の画面のものを掴んでおく
   final messenger = ScaffoldMessenger.of(context);
-  final receipt = await Navigator.of(context).push<TrashReceipt>(
+  final result = await Navigator.of(context).push<Object>(
     MaterialPageRoute(
       fullscreenDialog: true,
       builder: (_) => ViewerScreen(
@@ -68,11 +77,17 @@ Future<void> openViewer(
         source: source,
         readItems: readItems,
         onNearEnd: onNearEnd,
+        deferTrash: onTrash != null,
         imageCacheManager: imageCacheManager,
       ),
     ),
   );
-  if (receipt == null) return;
+  if (result is ViewerTrashRequest && onTrash != null) {
+    await onTrash(result.item);
+    return;
+  }
+  if (result is! TrashReceipt) return;
+  final receipt = result;
   onChanged?.call();
   await offerTrashUndo(messenger, app.api, [receipt], onRestored: onChanged);
 }
@@ -95,6 +110,9 @@ class ViewerScreen extends StatefulWidget {
   /// 末尾の近くまで来た時に、一覧側へ続きの取得を頼む。
   final VoidCallback? onNearEnd;
 
+  /// 「ゴミ箱へ」で送らずに [ViewerTrashRequest] を返して閉じる（送るのは呼び出し側）。
+  final bool deferTrash;
+
   /// 原本のキャッシュの差し替え口。テストでだけ使う。
   @visibleForTesting
   final BaseCacheManager? imageCacheManager;
@@ -110,6 +128,7 @@ class ViewerScreen extends StatefulWidget {
     this.source,
     this.readItems,
     this.onNearEnd,
+    this.deferTrash = false,
     this.imageCacheManager,
   }) : assert(items.length > 0);
 
@@ -253,6 +272,10 @@ class _ViewerScreenState extends State<ViewerScreen>
     final it = _item;
     final l = _libOf(it);
     if (!ensureWritable(context, widget.app, l, WriteAction.trash)) return;
+    if (widget.deferTrash) {
+      Navigator.of(context).pop(ViewerTrashRequest(it));
+      return;
+    }
     setState(() => _busy = true);
     try {
       final key = await widget.app.api.trash(l, it.key);
@@ -274,10 +297,12 @@ class _ViewerScreenState extends State<ViewerScreen>
     final res = await pickAlbumAndAdd(context, widget.app,
         lib: l, targets: [(l, it.key)]);
     if (res == null || !mounted) return;
-    if (res.ok) {
-      _flash('アルバムに追加しました');
-    } else {
-      await _alert(res.error ?? 'アルバムへの追加に失敗しました');
+    // 送り終わるのを待たずに知らせ、失敗した時だけ後から理由を出す
+    _flash('アルバムに追加しました');
+    final err = await res.done;
+    if (err != null && mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      await _alert(err);
     }
   }
 

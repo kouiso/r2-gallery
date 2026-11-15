@@ -25,6 +25,9 @@ class UploadSource {
 
   /// パスで渡せない元（content:// など）を読む口。再起動後には読み直せない。
   final Stream<List<int>> Function()? reader;
+
+  /// 確認シートの重複確認で計算した中身の SHA-256（16進）。計算しなかった物は null。
+  final String? sha256;
   const UploadSource({
     required this.name,
     required this.size,
@@ -32,7 +35,17 @@ class UploadSource {
     this.path,
     this.bytes,
     this.reader,
+    this.sha256,
   });
+
+  UploadSource withSha256(String? hash) => UploadSource(
+      name: name,
+      size: size,
+      mime: mime,
+      path: path,
+      bytes: bytes,
+      reader: reader,
+      sha256: hash);
 }
 
 /// 転送1件。KMP 版 TransferTask の up / down に対応する（ネット取り込みは WebTransferQueue）。
@@ -66,6 +79,9 @@ class TransferTask {
   String? stagedPath;
   String? sourcePath;
   Uint8List? memory;
+
+  /// 重複確認で計算済みの中身のハッシュ。一括PUTの時だけ Worker へ添える。
+  String? sha256;
 
   // オフライン保存
   String? itemKey;
@@ -111,6 +127,7 @@ class TransferTask {
         if (parts.isNotEmpty) 'parts': [for (final p in parts) p.toJson()],
         if (stagedPath != null) 'stagedPath': stagedPath,
         if (sourcePath != null) 'sourcePath': sourcePath,
+        'sha256': ?sha256,
         if (itemKey != null) 'itemKey': itemKey,
         if (itemType != null) 'itemType': itemType,
       };
@@ -338,6 +355,9 @@ class TransferQueue extends ChangeNotifier {
       return t;
     }
     if (kind != 'up') return null;
+    // 古い台帳の行には無い。無ければ添えずに送るだけ
+    final hash = e['sha256'];
+    if (hash is String) t.sha256 = hash;
     final staged = e['stagedPath'], source = e['sourcePath'];
     final key = e['key'], uploadId = e['uploadId'], parts = e['parts'];
     var stagedOk = false;
@@ -387,6 +407,7 @@ class TransferQueue extends ChangeNotifier {
       )
         ..sourcePath = s.path
         ..memory = s.bytes
+        ..sha256 = s.sha256
         .._reader = s.reader;
       if (t.memory != null) {
         t.size = t.memory!.length;
@@ -663,8 +684,8 @@ class TransferQueue extends ChangeNotifier {
     if (size <= multipartThreshold) {
       final bytes = await _readAll(t);
       _checkCancelled(token);
-      await api.putObject(t.lib, key, bytes, t.mime, cancelToken: token,
-          onProgress: (s) {
+      await api.putObject(t.lib, key, bytes, t.mime,
+          cancelToken: token, sha256: t.sha256, onProgress: (s) {
         t.loaded = s;
         _progress();
       });

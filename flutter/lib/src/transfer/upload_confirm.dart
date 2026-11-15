@@ -4,6 +4,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../duplicates/content_hash.dart';
+import '../duplicates/upload_check.dart';
+import '../duplicates/upload_check_panel.dart';
 import '../state/app_state.dart';
 import '../ui/theme.dart';
 import '../webdl/media_name.dart';
@@ -54,6 +57,9 @@ class UploadConfirmContent extends StatelessWidget {
   final bool noLibrary;
   final VoidCallback onConfirm;
   final VoidCallback onCancel;
+
+  /// 重複確認の欄（#101）。書き込めない保存先では照合しないので null。
+  final Widget? duplicateCheck;
   const UploadConfirmContent({
     super.key,
     required this.summary,
@@ -62,6 +68,7 @@ class UploadConfirmContent extends StatelessWidget {
     required this.noLibrary,
     required this.onConfirm,
     required this.onCancel,
+    this.duplicateCheck,
   });
 
   @override
@@ -87,6 +94,7 @@ class UploadConfirmContent extends StatelessWidget {
                     style: const TextStyle(
                         color: AppColors.textDim, fontSize: 12)),
               ),
+            ?duplicateCheck,
             if (blocked)
               Padding(
                 padding: const EdgeInsets.only(top: 12),
@@ -198,11 +206,29 @@ class _PreviewRow extends StatelessWidget {
 }
 
 /// 確認シートを出し、「アップロード」を押された時だけ積む。積んだ件数を返す。
+/// シートを開いた時点で重複の照合を裏で始め、同じ物はスキップを既定にする（#101）。
+/// [hasher] はテストでどれを計算したか数えるための差し替え口。
 Future<int> confirmAndUpload(
-    BuildContext context, AppState app, String lib, List<UploadSource> sources) async {
+    BuildContext context, AppState app, String lib, List<UploadSource> sources,
+    {UploadHasher? hasher}) async {
   if (sources.isEmpty) return 0;
   final libs = app.libraries;
   final found = libs.where((l) => l.id == lib).toList();
+  final writable = found.isNotEmpty && !found.first.readOnly;
+  final check = writable
+      ? (UploadCheckController(
+          sources,
+          (cancelled) => runUploadCheck(
+            check: app.api.checkObjects,
+            lib: lib,
+            sources: sources,
+            hasher: hasher ?? hashUploadSource,
+            cancelled: cancelled,
+          ),
+        )..start())
+      : null;
+  // シートを閉じた後に知らせるので、開く前の画面のものを掴んでおく
+  final messenger = ScaffoldMessenger.maybeOf(context);
   final ok = await showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
@@ -214,10 +240,27 @@ Future<int> confirmAndUpload(
       noLibrary: found.isEmpty,
       onConfirm: () => Navigator.pop(ctx, true),
       onCancel: () => Navigator.pop(ctx, false),
+      duplicateCheck: check == null ? null : UploadCheckPanel(controller: check),
     ),
   );
-  if (ok != true) return 0;
-  return app.upload(lib, sources);
+  try {
+    if (ok != true || check == null) {
+      return ok == true ? app.upload(lib, sources) : 0;
+    }
+    final picked = check.toUpload();
+    final skipped = sources.length - picked.length;
+    // 照合の途中で押された時は止めずに上げる。確かめていないことだけは伝える
+    final msg = check.checking
+        ? '重複の確認ができませんでした'
+        : skipped > 0
+            ? '同じ物 $skipped件をスキップしました'
+            : null;
+    if (msg != null) messenger?.showSnackBar(SnackBar(content: Text(msg)));
+    if (picked.isEmpty) return 0;
+    return app.upload(lib, picked);
+  } finally {
+    check?.dispose();
+  }
 }
 
 /// 端末のピッカーで写真・動画を選ばせ、確認シートを経てアップロードに積む。

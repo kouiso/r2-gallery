@@ -121,11 +121,16 @@ class FolderPage {
   final String? cursor;
   final String prefix;
   final List<String> folders;
+
+  /// Worker が実際に適用した並び順。古い Worker は返さないので null になり、
+  /// その場合は端末側で並べ直す。
+  final String? sort;
   const FolderPage({
     required this.items,
     this.cursor,
     this.prefix = '',
     this.folders = const [],
+    this.sort,
   });
 }
 

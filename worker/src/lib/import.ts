@@ -1,5 +1,7 @@
+import { journalBestEffort, rowOf } from "./catalog";
 import { IMPORT_MAX_DEFAULT, MAX_REDIRECTS, MEDIA_EXT } from "./const";
 import type { Env } from "./env";
+import { recordHashBestEffort, sha256OfBytes } from "./hashes";
 import { HttpError, json, readJson, assertUserKey } from "./http";
 import { writable } from "./env";
 import { createOnly, dropThumbBestEffort } from "./objects";
@@ -123,5 +125,12 @@ export async function handleImport(req: Request, env: Env, lib: string): Promise
   });
   if (!put) throw new HttpError(409, "destination_exists");
   await dropThumbBestEffort(env, lib, key);
+  await journalBestEffort(env, lib, { put: [rowOf(put)], unthumb: [key] });
+  // 全バイトを持っているので、重複判定用のハッシュをここで記録しておく
+  await recordHashBestEffort(env, lib, key, {
+    size: put.size,
+    etag: put.etag,
+    sha256: await sha256OfBytes(data),
+  });
   return json({ key, size: put.size }, 201);
 }

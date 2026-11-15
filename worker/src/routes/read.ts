@@ -2,6 +2,17 @@ import { MEDIA_EXT, OTHER_ALBUM_ID, SYSTEM_PREFIX, TRASH_PREFIX } from "../lib/c
 import type { Env } from "../lib/env";
 import { bucketFor, libraries, writable } from "../lib/env";
 import { assertUserKey, json } from "../lib/http";
+import {
+  buildView,
+  catalogEnabled,
+  indexAfter,
+  loadCatalog,
+  rowOf,
+  type Catalog,
+  type FolderSort,
+  type FolderView,
+  type SortPoint,
+} from "../lib/catalog";
 import { trashRetentionDays } from "../lib/objects";
 import { loadAlbums, loadIndex, mediaFor, otherAlbum } from "../lib/store";
 import type { GlobalAlbum, GlobalAlbumItem, IndexAlbum } from "../lib/store";
@@ -157,6 +168,7 @@ export async function handleAlbum(
   lib: string,
   id: string,
   url: URL,
+  ctx?: Pick<ExecutionContext, "waitUntil">,
 ): Promise<Response> {
   if (!bucketFor(env, lib)) return json({ error: "unknown_library" }, 404);
   let album: IndexAlbum | GlobalAlbum | null = null;
@@ -173,8 +185,33 @@ export async function handleAlbum(
   const cursor = Math.max(0, Number(url.searchParams.get("cursor") ?? "0") || 0);
   const limit = Math.min(200, Math.max(1, Number(url.searchParams.get("limit") ?? "60") || 60));
   const slice = album.items.slice(cursor, cursor + limit);
+  const libOf = (i: IndexAlbum["items"][number]) => (i as GlobalAlbumItem).lib ?? lib;
+  // サムネの有無は索引から引く。1 件ずつ head すると 60 件のページで 60 回になる
+  const catalogs = new Map<string, Catalog>();
+  if (catalogEnabled(env)) {
+    await Promise.all(
+      [...new Set(slice.filter((i) => !i.thumb).map(libOf))].map(async (id) => {
+        const target = bucketFor(env, id);
+        if (!target) return;
+        try {
+          catalogs.set(id, await loadCatalog(env, id, target.bucket, { ctx }));
+        } catch (e) {
+          // 索引が読めない時は従来どおり 1 件ずつ確かめる
+          console.error("catalog_unavailable", id, e);
+        }
+      }),
+    );
+  }
   const items = await Promise.all(
-    slice.map((i) => mediaFor(env, origin, (i as GlobalAlbumItem).lib ?? lib, i)),
+    slice.map((i) =>
+      mediaFor(
+        env,
+        origin,
+        libOf(i),
+        i,
+        i.thumb ? undefined : catalogs.get(libOf(i))?.hasThumb(i.key),
+      ),
+    ),
   );
   const next = cursor + limit < album.items.length ? String(cursor + limit) : null;
   return json({
@@ -187,34 +224,8 @@ export async function handleAlbum(
   });
 }
 
-export type FolderSort = "new" | "old" | "name" | "size";
 const FOLDER_SORTS: readonly string[] = ["new", "old", "name", "size"];
 const isFolderSort = (v: string): v is FolderSort => FOLDER_SORTS.includes(v);
-
-// 同じ値の物が並ぶと位置が一つに決まらないので、key を決め手に足して全順序にする
-interface SortPoint {
-  primary: number | string;
-  key: string;
-}
-
-function sortPoint(sort: FolderSort, o: { key: string; size: number; uploaded: Date }): SortPoint {
-  switch (sort) {
-    case "name":
-      // アプリの名前順と同じく、末尾の名前を小文字にして比べる
-      return { primary: (o.key.split("/").pop() ?? o.key).toLowerCase(), key: o.key };
-    case "size":
-      return { primary: o.size, key: o.key };
-    default:
-      return { primary: o.uploaded.getTime(), key: o.key };
-  }
-}
-
-// 続きのカーソルは「この位置より後」を比較で探すため、並べる時と同じ比較を使う
-function compareFolderSort(sort: FolderSort, a: SortPoint, b: SortPoint): number {
-  const dir = sort === "new" || sort === "size" ? -1 : 1;
-  const p = a.primary < b.primary ? -1 : a.primary > b.primary ? 1 : 0;
-  return p * dir || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
-}
 
 const formatFolderCursor = (p: SortPoint): string =>
   `${encodeURIComponent(String(p.primary))}|${encodeURIComponent(p.key)}`;
@@ -232,80 +243,76 @@ function parseFolderCursor(sort: FolderSort, cursor: string | undefined): SortPo
   }
 }
 
+const isReserved = (key: string) => key.startsWith(SYSTEM_PREFIX) || key.startsWith(TRASH_PREFIX);
+
 export async function handleFolders(
   env: Env,
   origin: string,
   lib: string,
   bucket: R2Bucket,
   url: URL,
+  ctx?: Pick<ExecutionContext, "waitUntil">,
 ): Promise<Response> {
   const prefix = url.searchParams.get("prefix") ?? "";
-  // TEMP E2E TEST HOOK — revert after testing: hang "e2e-slow" folder probes.
-  if (prefix.includes("e2e-slow")) await new Promise((r) => setTimeout(r, 120_000));
   const cursor = url.searchParams.get("cursor") ?? undefined;
   // recursive=1 returns every media item under the prefix — the gallery
   // "all media" view — instead of one-level folder browsing.
   const recursive = url.searchParams.get("recursive") === "1";
   // sort=new|old|name|size: R2 は辞書順でしか列挙できず、日付・サイズ・名前で並べるには
-  // 全件を集めるしかない。端末側で読み込み済みの分だけ並べると先頭ページ以外が
-  // 順序に入らない(#44)ので、並べ替えはここで全体に対して行う。
+  // 全件が要る。端末側で読み込み済みの分だけ並べると先頭ページ以外が順序に入らない(#44)ので、
+  // 並べ替えはここで全体に対して行う。全件は毎回列挙せず、索引(lib/catalog.ts)から読む。
   // order=recent は sort=new の旧名。古いアプリが送り続けるのでそのまま受ける。
   const sortParam = url.searchParams.get("sort");
   if (sortParam !== null && !isFolderSort(sortParam)) return json({ error: "invalid_sort" }, 400);
   const sort: FolderSort | null =
     (sortParam as FolderSort | null) ?? (url.searchParams.get("order") === "recent" ? "new" : null);
   if (sort) {
-    const all: Awaited<ReturnType<R2Bucket["list"]>>["objects"] = [];
-    const prefixes = new Set<string>();
-    let cur: string | undefined;
-    do {
-      const page = await bucket.list(
-        recursive
-          ? { prefix, cursor: cur, limit: 1000 }
-          : { prefix, delimiter: "/", cursor: cur, limit: 1000 },
+    // 直下だけの一覧は、1000 件に収まるなら R2 に直接聞く。アプリは上げた直後に
+    // 「その key が今あるか」をこの口で確かめるので、索引への追記が遅れても正しく答える。
+    const fresh = url.searchParams.get("fresh") === "1";
+    const directly = recursive ? null : bucket.list({ prefix, delimiter: "/", limit: 1000 });
+    // 索引を毎回作り直す設定の時は、直接聞いて足りる一覧のために全件を列挙しない
+    const [direct, loaded] = await Promise.all([
+      directly,
+      catalogEnabled(env) || recursive ? loadCatalog(env, lib, bucket, { ctx, fresh }) : null,
+    ]);
+    const small = !!direct && !direct.truncated;
+    const catalog = loaded ?? (small ? null : await loadCatalog(env, lib, bucket, { ctx, fresh }));
+    let view: FolderView;
+    if (direct && small) {
+      view = buildView(
+        direct.objects.filter((o) => !isReserved(o.key)).map(rowOf),
+        prefix,
+        false,
+        sort,
       );
-      all.push(...page.objects);
-      for (const p of page.delimitedPrefixes) prefixes.add(p);
-      cur = page.truncated ? page.cursor : undefined;
-    } while (cur);
-    const files = all
-      .filter(
-        (o) =>
-          MEDIA_EXT.test(o.key) &&
-          (!recursive || (!o.key.startsWith(SYSTEM_PREFIX) && !o.key.startsWith(TRASH_PREFIX))),
-      )
-      .sort((a, b) => compareFolderSort(sort, sortPoint(sort, a), sortPoint(sort, b)));
+      view.folders = direct.delimitedPrefixes.filter((p) => !isReserved(p));
+    } else {
+      view = catalog!.view(prefix, recursive, sort);
+    }
     // 位置カーソル(<並べ替えの値>|<key>)で続きを探す。件数オフセットだと、先頭に
     // 新しい物が入った時に既に出した分をもう一度出してしまう。
-    let start = 0;
     const at = parseFolderCursor(sort, cursor);
-    if (at) {
-      start = files.findIndex((o) => compareFolderSort(sort, sortPoint(sort, o), at) > 0);
-      if (start < 0) start = files.length;
-    }
-    const slice = files.slice(start, start + 200);
+    const start = at ? indexAfter(sort, view.points, at) : 0;
+    const slice = view.files.slice(start, start + 200);
     const items = await Promise.all(
-      slice.map((o) =>
-        mediaFor(env, origin, lib, { key: o.key, createdAt: o.uploaded.getTime() }).then((m) => ({
-          ...m,
-          size: o.size,
-        })),
+      slice.map(([key, size, uploaded]) =>
+        mediaFor(env, origin, lib, { key, createdAt: uploaded }, catalog?.hasThumb(key)).then(
+          (m) => ({ ...m, size }),
+        ),
       ),
     );
-    const last = slice[slice.length - 1];
+    const last = view.points[start + slice.length - 1];
     return json({
       prefix,
       // 適用した並び順を返す。古い Worker は返さないので、アプリはこれで
       // 「サーバーが並べた」か「端末側で並べ直す」かを決める。
       sort,
-      folders: recursive
-        ? []
-        : [...prefixes].filter((p) => !p.startsWith(SYSTEM_PREFIX) && !p.startsWith(TRASH_PREFIX)),
+      folders: view.folders,
       items,
-      cursor:
-        last && start + slice.length < files.length
-          ? formatFolderCursor(sortPoint(sort, last))
-          : null,
+      // この一覧の全件数。アプリが「何件中」を出したり、先読みの量を決めるのに使う
+      total: view.files.length,
+      cursor: last && start + slice.length < view.files.length ? formatFolderCursor(last) : null,
     });
   }
   const listed = await bucket.list(

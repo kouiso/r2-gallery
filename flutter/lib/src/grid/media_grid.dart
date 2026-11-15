@@ -182,31 +182,29 @@ class _MediaGridState extends State<MediaGrid> {
       key: const ValueKey('folderStrip'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // デザイン（ReviewFolder.dc.html）の見出し行は 48 高で、数だけ淡色・細字にして名前と区別する
-        SizedBox(
-          height: 48,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text.rich(
-                TextSpan(
-                  text: 'フォルダ ',
-                  children: [
-                    TextSpan(
-                      text: '${widget.folders.length}',
-                      style: const TextStyle(
-                        color: AppColors.textDim,
-                        fontWeight: FontWeight.w500,
-                      ),
+        // デザイン（ReviewFolder.dc.html）の見出し行は上下 8 の余白に 48 高の行で、数だけ淡色・細字にして名前と区別する
+        Container(
+          height: 64,
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text.rich(
+              TextSpan(
+                text: 'フォルダ ',
+                children: [
+                  TextSpan(
+                    text: '${widget.folders.length}',
+                    style: const TextStyle(
+                      color: AppColors.textDim,
+                      fontWeight: FontWeight.w500,
                     ),
-                  ],
-                ),
-                style: const TextStyle(
-                  fontSize: 14,
-                  height: 20 / 14,
-                  fontWeight: FontWeight.w700,
-                ),
+                  ),
+                ],
+              ),
+              style: const TextStyle(
+                fontSize: 14,
+                height: 20 / 14,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),

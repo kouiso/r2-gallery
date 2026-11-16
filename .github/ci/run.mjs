@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const check = [['pnpm', ['lint']], ['pnpm', ['worker:typecheck']]];
-const tests = [['pnpm', ['test']]];
+const tests = [['pnpm', ['test']], ['bash', ['tools/android-probes.sh']]];
 const scan = [['bash', ['.github/ci/gitleaks.sh']]];
 const hygiene = [[process.execPath, ['tools/leak-check.mjs']]];
 const fast = [...check, ...tests, ...scan, ...hygiene];

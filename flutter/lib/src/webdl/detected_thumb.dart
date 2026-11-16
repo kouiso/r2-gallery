@@ -167,7 +167,9 @@ class DetectedThumbs {
           ? dataUrlBytes(d.poster, maxImageBytes)
           : await _fetchBounded(d.poster, d.headers, maxImageBytes,
               origin: d.url);
-      if (bytes.isNotEmpty) return _shrink(bytes);
+      // await が無いと縮小の失敗がここの catch に届かず、呼び出し側の次の手段
+      // （動画からの直接コマ抜き）を試さないまま null になってしまう（#39）
+      if (bytes.isNotEmpty) return await _shrink(bytes);
     } on Exception {
       // 表紙が取れなければ、従来の取り方に回る
     }
@@ -233,7 +235,8 @@ class DetectedThumbs {
     final bytes = await _fetchBounded(d.url, d.headers, maxImageBytes);
     if (bytes.isEmpty) return null;
     // 原寸のまま持つと、一覧を見ている間に最大 120 件分の画像がメモリに残る。縮小した物だけ持つ
-    return _shrink(bytes);
+    // （await: 失敗を外側の catch で「サムネなし」として捕まえるため）
+    return await _shrink(bytes);
   }
 
   Future<Uint8List?> _hls(DetectedItem d) async {

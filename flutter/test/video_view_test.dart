@@ -262,19 +262,19 @@ void main() {
 
   testWidgets('P2: 操作ロック中はタップしても操作が出ず、解除で戻る', (tester) async {
     await _pump(tester);
-    await tester.tap(find.byTooltip('操作ロック'));
+    await tester.tap(find.byTooltip('ロック'));
     await tester.pump();
     expect(find.byTooltip('一時停止'), findsNothing);
-    expect(find.byTooltip('操作ロックを解除'), findsOneWidget);
+    expect(find.byTooltip('解除'), findsOneWidget);
 
     await tester.tapAt(const Offset(400, 300));
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.byTooltip('一時停止'), findsNothing);
 
-    await tester.tap(find.byTooltip('操作ロックを解除'));
+    await tester.tap(find.byTooltip('解除'));
     await tester.pump();
     expect(find.byTooltip('一時停止'), findsOneWidget);
-    expect(find.byTooltip('操作ロックを解除'), findsNothing);
+    expect(find.byTooltip('解除'), findsNothing);
     await _dispose(tester);
   });
 
@@ -841,7 +841,7 @@ void main() {
 
     testWidgets('操作ロック中は縦ドラッグでも値を変えない', (tester) async {
       final rig = await _pump(tester);
-      await tester.tap(find.byTooltip('操作ロック'));
+      await tester.tap(find.byTooltip('ロック'));
       await tester.pump();
       await drag(tester, const Offset(200, 300), -150);
       expect(rig.system.brightSets, isEmpty);

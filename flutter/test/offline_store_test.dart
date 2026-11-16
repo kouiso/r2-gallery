@@ -66,7 +66,7 @@ void main() {
     expect(raw.length, 12 + plain.length + 16);
     expect(utf8.decode(raw, allowMalformed: true), isNot(contains('secret photo')));
     expect(blob.path.endsWith(OfflineStore.fileNameFor(
-        '\u0000${OfflineStore.entryKey('lib', 'p/a.jpg')}')), isTrue);
+        OfflineStore.entryKey('lib', 'p/a.jpg'))), isTrue);
     expect(await store.readBytes('lib', 'p/a.jpg'), plain);
     expect(store.hasCached('lib', 'p/a.jpg'), isTrue);
     expect(await store.count(), 1);

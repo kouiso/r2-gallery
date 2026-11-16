@@ -160,7 +160,10 @@ class AppState extends ChangeNotifier {
   void _revokeConnection() {
     if (_transfersWired) transfers.pauseOfflineDownloads();
     ++_libraryGeneration;
+    // 切断→別の接続先で繋ぎ直す時も、直前の送り先を見て未送信転送を止められるよう残す
+    _lastEndpoint = api.conn?.endpoint ?? _lastEndpoint;
     api.setConnection(null);
+    connectionGen++;
     _offlineLibrariesKnown = false;
     connected = false;
     browseOnly = false;
@@ -477,6 +480,7 @@ class AppState extends ChangeNotifier {
         .probe(input.endpoint, input.token)
         .timeout(_bakedProbeBudget, onTimeout: () => false);
     if (!ok || intent != _connectionIntent) return connectFailedMessage;
+    _pauseUnsentIfSwitching(input.endpoint);
     _revokeConnection();
     if (intent != _connectionIntent) return connectFailedMessage;
     final next = Connection(input.endpoint, input.token);

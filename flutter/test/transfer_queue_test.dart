@@ -30,6 +30,9 @@ class FakeWorker {
   final Completer<void> holdRelease = Completer<void>();
   // 受け取ったサムネ PUT のキー（送った筈のない物が送られていないか見る）
   final List<String?> thumbs = [];
+  // アルバムへの追加要求。albumId → 追加を求められたキー列
+  final Map<String, List<String>> albumAdds = {};
+  bool failAlbumAdd = false;
   // このキーの単発 PUT を受け取ったまま返さずに止めておく（完了が重なる瞬間を作る）
   String? holdPutKey;
   final Completer<void> holdPutSeen = Completer<void>();
@@ -134,6 +137,16 @@ class FakeWorker {
     if (r.method == 'PUT' && p.endsWith('/thumb')) {
       await _body(r);
       thumbs.add(key);
+      return _json(r, {});
+    }
+    if (r.method == 'POST' && p.contains('/albums/') && p.endsWith('/items')) {
+      final b = jsonDecode(utf8.decode(await _body(r))) as Map<String, dynamic>;
+      if (failAlbumAdd) return _json(r, {'error': 'x'}, 500);
+      final albumId =
+          Uri.decodeComponent(p.split('/albums/')[1].split('/').first);
+      albumAdds
+          .putIfAbsent(albumId, () => [])
+          .addAll([for (final k in b['keys'] as List) k as String]);
       return _json(r, {});
     }
     if (r.method == 'PUT' && p.endsWith('/objects')) {
@@ -383,6 +396,69 @@ void main() {
       expect(jsonDecode(ledger.value!), isEmpty);
       // 元のファイルには触らない
       expect(File(path).existsSync(), isTrue);
+    });
+
+    test('アルバムを選んで上げると、確定したキーがそのアルバムに入る', () async {
+      final q = make();
+      await q.restore();
+      await q.enqueueUploads('lib', [
+        UploadSource(name: 'a.jpg', size: 3, mime: 'image/jpeg', bytes: bytesOf(3)),
+      ], albumId: 'al1');
+      await until(() => q.tasks.single.status == TransferStatus.done);
+      expect(w.albumAdds, {'al1': ['a.jpg']});
+      expect(q.tasks.single.albumAdded, isTrue);
+      expect(q.tasks.single.albumError, isNull);
+    });
+
+    test('同名で改名された時は、改名後のキーがアルバムに入る', () async {
+      w.objects['a.jpg'] = bytesOf(9);
+      final q = make();
+      await q.restore();
+      await q.enqueueUploads('lib', [
+        UploadSource(name: 'a.jpg', size: 3, mime: 'image/jpeg', bytes: bytesOf(3)),
+      ], albumId: 'al1');
+      await until(() => q.tasks.single.status == TransferStatus.done);
+      // サーバーが確定した名前（name (2)）で入る。選んだ時の名前ではない
+      expect(w.albumAdds, {'al1': ['a (2).jpg']});
+      expect(w.objects['a (2).jpg'], isNotNull);
+    });
+
+    test('アルバムへの追加だけ失敗しても、物は完了のまま残り上げ直しにならない', () async {
+      w.failAlbumAdd = true;
+      final q = make();
+      await q.restore();
+      await q.enqueueUploads('lib', [
+        UploadSource(name: 'a.jpg', size: 3, mime: 'image/jpeg', bytes: bytesOf(3)),
+      ], albumId: 'al1');
+      await until(() => q.tasks.single.status == TransferStatus.done);
+      expect(w.objects['a.jpg'], isNotNull);
+      expect(q.tasks.single.albumError, isNotNull);
+      expect(rowOfTask(q.tasks.single, q, online: true).label, contains('アルバム'));
+    });
+
+    test('アルバム追加の前に落とされても、次の起動で入れ直す', () async {
+      // 送り済み（キー確定）だがアルバム未追加の行を台帳に残す
+      ledger.value = jsonEncode([
+        {
+          'id': 'u1',
+          'kind': 'up',
+          'lib': 'lib',
+          'name': 'a.jpg',
+          'size': 3,
+          'mime': 'image/jpeg',
+          'status': 'queued',
+          'key': 'a.jpg',
+          'albumId': 'al9',
+          'stagedPath': await source('rest.jpg', bytesOf(3)),
+        },
+      ]);
+      w.objects['a.jpg'] = bytesOf(3);
+      final q = make();
+      await q.restore();
+      await q.idle();
+      expect(w.albumAdds, {'al9': ['a.jpg']});
+      expect(q.tasks.single.status, TransferStatus.done);
+      expect(q.tasks.single.albumError, isNull);
     });
 
     test('完了を報告した時点で退避ファイルは消えている（掃除が遅くても）', () async {
@@ -1051,7 +1127,7 @@ void main() {
       expect(await offline.readBytes('lib', 'p.jpg'), bytesOf(100));
     });
 
-    // #114/#117 の回帰: 何百件まとめて積んでもキューは全部回し切る
+    // #117: 数百件まとめて保存しても途中の1件の失敗が残りを止めない回帰テスト
     test('300件まとめて積んでも全部終わる', () async {
       for (var i = 0; i < 300; i++) {
         w.media['img$i.jpg'] = bytesOf(64, i & 0xff);

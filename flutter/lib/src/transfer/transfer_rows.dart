@@ -55,7 +55,7 @@ TransferRow rowOfTask(TransferTask t, TransferQueue q, {required bool online}) {
     TransferStatus.running => t.isUpload
         ? 'アップロード中 ${_pct(t.percent)}'
         : 'オフライン保存中 ${_pct(t.percent)}',
-    TransferStatus.done => '完了',
+    TransferStatus.done => t.albumError ?? '完了',
     TransferStatus.error => '失敗: ${t.error ?? ''}',
     TransferStatus.cancelled => '取り消しました',
     TransferStatus.paused =>

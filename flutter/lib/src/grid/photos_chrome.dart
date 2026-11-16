@@ -18,6 +18,9 @@ abstract class SelectionSurface implements Listenable {
   int get selectedCount;
   bool get allSelected;
   void toggleAll();
+
+  /// 「すべて選択」が残りページを取り切っている最中。バーに読み込み中を出してボタンを止める
+  bool get selectingAll => false;
   void clearSelection();
 
   /// 選択バーに並べる操作。読み取り専用や未実装の操作はここで外す。

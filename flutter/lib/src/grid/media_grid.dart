@@ -159,10 +159,7 @@ class _MediaGridState extends State<MediaGrid> {
               padding: const EdgeInsets.symmetric(vertical: 12),
               child: Text(
                 label,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: AppText.label,
               ),
             ),
           ),
@@ -211,11 +208,7 @@ class _MediaGridState extends State<MediaGrid> {
                   ),
                 ],
               ),
-              style: const TextStyle(
-                fontSize: 14,
-                height: 20 / 14,
-                fontWeight: FontWeight.w700,
-              ),
+              style: AppText.label,
             ),
           ),
         ),
@@ -248,7 +241,7 @@ class _MediaGridState extends State<MediaGrid> {
       height: 88,
       child: Material(
         color: AppColors.surfaceHigh,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.medium),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: () => widget.onOpenFolder?.call(prefix),
@@ -264,7 +257,7 @@ class _MediaGridState extends State<MediaGrid> {
                   name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13, height: 18 / 13),
+                  style: AppText.caption,
                 ),
               ],
             ),

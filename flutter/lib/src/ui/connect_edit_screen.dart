@@ -125,8 +125,7 @@ class _ConnectEditScreenState extends State<ConnectEditScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label,
-            style: const TextStyle(
-                color: AppColors.textDim, fontSize: 13, height: 20 / 13)),
+            style: AppText.caption.copyWith(color: AppColors.textDim)),
         const SizedBox(height: 6),
         SizedBox(
           height: 52,
@@ -136,11 +135,10 @@ class _ConnectEditScreenState extends State<ConnectEditScreen> {
             keyboardType: type,
             obscureText: obscure,
             onChanged: (_) => _edited(),
-            style: const TextStyle(color: AppColors.textPrimary, fontSize: 15),
+            style: AppText.body.copyWith(color: AppColors.textPrimary),
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle:
-                  const TextStyle(color: AppColors.textDim, fontSize: 15),
+              hintStyle: AppText.body.copyWith(color: AppColors.textDim),
               filled: true,
               fillColor: AppColors.surfaceHigh,
               contentPadding: const EdgeInsets.symmetric(horizontal: 16),
@@ -156,20 +154,20 @@ class _ConnectEditScreenState extends State<ConnectEditScreen> {
   }
 
   static final _fieldBorder = OutlineInputBorder(
-    borderRadius: BorderRadius.circular(14),
+    borderRadius: BorderRadius.circular(AppRadius.medium),
     borderSide: const BorderSide(color: _outline),
   );
   // デザインの入力枠・ボタン枠の色
-  static const _outline = Color(0xFF6E6C7C);
-  static const _okColor = Color(0xFF7FD1A8);
+  static const _outline = AppColors.borderStrong;
+  static const _okColor = AppColors.success;
 
   @override
   Widget build(BuildContext context) {
     final conn = widget.app.api.conn;
     final host = conn == null ? null : hostOf(conn.endpoint);
     final buttonShape =
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(14));
-    const buttonText = TextStyle(fontSize: 15, fontWeight: FontWeight.w700);
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.medium));
+    const buttonText = AppText.label;
     return Scaffold(
       appBar: AppBar(title: const Text('接続先を変更')),
       body: SafeArea(
@@ -183,7 +181,7 @@ class _ConnectEditScreenState extends State<ConnectEditScreen> {
                 decoration: BoxDecoration(
                   color: AppColors.surface,
                   border: Border.all(color: AppColors.border),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(AppRadius.large),
                 ),
                 child: Row(children: [
                   Container(
@@ -198,18 +196,14 @@ class _ConnectEditScreenState extends State<ConnectEditScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('今の接続先',
-                            style: TextStyle(
-                                color: AppColors.textDim,
-                                fontSize: 13,
-                                height: 20 / 13)),
+                        Text('今の接続先',
+                            style: AppText.caption.copyWith(
+                                color: AppColors.textDim)),
                         Text(host,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                color: AppColors.textPrimary,
-                                fontSize: 15,
-                                height: 22 / 15)),
+                            style: AppText.body.copyWith(
+                                color: AppColors.textPrimary)),
                       ],
                     ),
                   ),
@@ -223,10 +217,9 @@ class _ConnectEditScreenState extends State<ConnectEditScreen> {
             _field('アクセストークン', _token, '変えない時は空のまま',
                 obscure: true, fieldKey: const Key('tokenField')),
             const SizedBox(height: 12),
-            const Text(
+            Text(
               'r2g://setup… のペアリング文字列を、どちらの欄に貼り付けても入ります。',
-              style: TextStyle(
-                  color: AppColors.textDim, fontSize: 12, height: 18 / 12),
+              style: AppText.caption.copyWith(color: AppColors.textDim),
             ),
             if (_okDetail != null) ...[
               const SizedBox(height: 16),
@@ -237,7 +230,7 @@ class _ConnectEditScreenState extends State<ConnectEditScreen> {
                 decoration: BoxDecoration(
                   color: AppColors.surface,
                   border: Border.all(color: AppColors.border),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(AppRadius.large),
                 ),
                 child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -252,16 +245,12 @@ class _ConnectEditScreenState extends State<ConnectEditScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('接続できました',
-                                style: TextStyle(
-                                    color: AppColors.textPrimary,
-                                    fontSize: 14,
-                                    height: 20 / 14)),
+                            Text('接続できました',
+                                style: AppText.body.copyWith(
+                                    color: AppColors.textPrimary)),
                             Text(_okDetail!,
-                                style: const TextStyle(
-                                    color: AppColors.textDim,
-                                    fontSize: 12,
-                                    height: 18 / 12)),
+                                style: AppText.caption.copyWith(
+                                    color: AppColors.textDim)),
                           ],
                         ),
                       ),
@@ -301,13 +290,13 @@ class _ConnectEditScreenState extends State<ConnectEditScreen> {
             if (_error != null)
               Text(_error!,
                   key: const Key('errorNote'),
-                  style: const TextStyle(
-                      color: AppColors.danger, fontSize: 12, height: 18 / 12))
+                  style: AppText.caption.copyWith(
+                      color: AppColors.danger))
             else
-              const Text(
+              Text(
                 'つながらなかった時は保存されず、今の接続のまま使えます。',
-                style: TextStyle(
-                    color: AppColors.textDim, fontSize: 12, height: 18 / 12),
+                style: AppText.caption.copyWith(
+                    color: AppColors.textDim),
               ),
           ],
         ),

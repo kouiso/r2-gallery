@@ -36,14 +36,14 @@ class TrashInfoBanner extends StatelessWidget {
         margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-            color: AppColors.surface, borderRadius: BorderRadius.circular(12)),
+            color: AppColors.surface, borderRadius: BorderRadius.circular(AppRadius.large)),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Icon(Icons.info_outline, size: 20, color: AppColors.textDim),
           const SizedBox(width: 12),
           Expanded(
               child: Text(text,
-                  style: const TextStyle(
-                      color: AppColors.textDim, fontSize: 12, height: 1.5))),
+                  style: AppText.caption.copyWith(
+                      color: AppColors.textDim, height: 1.5))),
         ]),
       );
 }
@@ -60,11 +60,11 @@ class TrashErrorBanner extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
         decoration: BoxDecoration(
             color: AppColors.danger.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(12)),
+            borderRadius: BorderRadius.circular(AppRadius.large)),
         child: Row(children: [
           const Icon(Icons.error_outline, size: 20, color: AppColors.danger),
           const SizedBox(width: 12),
-          Expanded(child: Text(text, style: const TextStyle(fontSize: 13))),
+          Expanded(child: Text(text, style: AppText.body)),
           TextButton(onPressed: onRetry, child: const Text('再試行')),
         ]),
       );
@@ -93,7 +93,7 @@ class TrashStateView extends StatelessWidget {
           Icon(icon, size: 56, color: iconColor),
           const SizedBox(height: 16),
           Text(title,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              style: AppText.heading,
               textAlign: TextAlign.center),
           const SizedBox(height: 8),
           Text(body,
@@ -128,9 +128,9 @@ class TrashRow extends StatelessWidget {
     final video = isVideoKey(item.key);
     return Material(
       color: selected ? AppColors.accentSoft : AppColors.surface,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(AppRadius.medium),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.medium),
         onTap: onTap,
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 72),
@@ -142,7 +142,7 @@ class TrashRow extends StatelessWidget {
                 height: 56,
                 decoration: BoxDecoration(
                     color: AppColors.surfaceHigh,
-                    borderRadius: BorderRadius.circular(8)),
+                    borderRadius: BorderRadius.circular(AppRadius.small)),
                 child: Icon(
                   selected
                       ? Icons.check_circle
@@ -162,8 +162,8 @@ class TrashRow extends StatelessWidget {
                           maxLines: 1, overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 2),
                       Text(trashRowMeta(item, now),
-                          style: const TextStyle(
-                              color: AppColors.textDim, fontSize: 12)),
+                          style: AppText.caption.copyWith(
+                              color: AppColors.textDim)),
                     ]),
               ),
               if (canRestore)

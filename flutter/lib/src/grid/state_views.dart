@@ -40,7 +40,7 @@ class StateView extends StatelessWidget {
             Text(
               title,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              style: AppText.heading,
             ),
             if (body != null) ...[
               const SizedBox(height: 16),
@@ -101,7 +101,7 @@ class ErrorBanner extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Text(
                   message,
-                  style: const TextStyle(color: AppColors.danger, fontSize: 12),
+                  style: AppText.caption.copyWith(color: AppColors.danger),
                 ),
               ),
             ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../viewer/level_gesture.dart';
+import 'theme.dart';
 
 /// ドラッグ中に出す「何を・いくつに」。動かす前から現在値を見せる。
 class LevelBadge extends StatelessWidget {
@@ -22,15 +23,15 @@ class LevelBadge extends StatelessWidget {
       child: ExcludeSemantics(
         child: Container(
           decoration: BoxDecoration(
-            color: const Color(0xCC000000),
-            borderRadius: BorderRadius.circular(12),
+            color: AppColors.scrimPanel,
+            borderRadius: BorderRadius.circular(AppRadius.small),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             Icon(icon, color: Colors.white),
             const SizedBox(width: 10),
             Text(label,
-                style: const TextStyle(color: Colors.white, fontSize: 14)),
+                style: AppText.body.copyWith(color: AppColors.onScrimText)),
             const SizedBox(width: 10),
             SizedBox(
               width: 100,
@@ -45,7 +46,7 @@ class LevelBadge extends StatelessWidget {
               width: 44,
               child: Text('$percent%',
                   textAlign: TextAlign.end,
-                  style: const TextStyle(color: Color(0xFFFFAE00))),
+                  style: AppText.body.copyWith(color: AppColors.accent)),
             ),
           ]),
         ),
@@ -56,7 +57,7 @@ class LevelBadge extends StatelessWidget {
 
 /// 案内の背景（黒 60%）と文字色。真っ白な動画の上でも文字のコントラスト比が
 /// 4.5 以上になる値（白動画 + 黒 60% = 灰 102 に白文字で約 5.7）。
-const kLevelHintScrim = Color(0x99000000);
+const kLevelHintScrim = AppColors.scrimPanel;
 const kLevelHintForeground = Colors.white;
 
 /// 操作バーが出ている間、画面の左右の端に「ここを上下にドラッグすると何が変わるか」を置く。
@@ -73,7 +74,7 @@ class LevelEdgeHint extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             color: kLevelHintScrim,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppRadius.large),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -81,7 +82,8 @@ class LevelEdgeHint extends StatelessWidget {
             Icon(icon, color: kLevelHintForeground, size: 20),
             const SizedBox(height: 2),
             Text(label,
-                style: const TextStyle(color: kLevelHintForeground, fontSize: 11)),
+                style: AppText.caption.copyWith(
+                    color: kLevelHintForeground)),
             const Icon(Icons.keyboard_arrow_down,
                 color: kLevelHintForeground, size: 18),
           ]),
@@ -126,8 +128,8 @@ class LevelPanel extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 6),
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       decoration: BoxDecoration(
-        color: const Color(0xCC000000),
-        borderRadius: BorderRadius.circular(12),
+        color: AppColors.scrimPanel,
+        borderRadius: BorderRadius.circular(AppRadius.large),
       ),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         _row(
@@ -150,12 +152,12 @@ class LevelPanel extends StatelessWidget {
           unavailable: volumeReadable == false ? '音量はこの環境では変えられません' : null,
           onChanged: onVolume,
         ),
-        const Padding(
-          padding: EdgeInsets.only(top: 4),
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
           child: Text(
             '画面の左側を上下になぞると明るさ、右側を上下になぞると音量が変わります。'
             '動画を閉じるか別のアプリへ移ると、明るさは端末の設定に戻ります。',
-            style: TextStyle(color: Colors.white70, fontSize: 11),
+            style: AppText.caption.copyWith(color: AppColors.onScrimDim),
           ),
         ),
       ]),
@@ -178,8 +180,8 @@ class LevelPanel extends StatelessWidget {
       SizedBox(
         width: 44,
         child: Text(label,
-            style: TextStyle(
-                color: enabled ? Colors.white : Colors.white38, fontSize: 13)),
+            style: AppText.caption.copyWith(
+                color: enabled ? Colors.white : Colors.white38)),
       ),
       Expanded(
         child: enabled
@@ -202,14 +204,14 @@ class LevelPanel extends StatelessWidget {
                 child: Text(unavailable ?? '読み取り中…',
                     key: ValueKey('level-$label-unavailable'),
                     style:
-                        const TextStyle(color: Colors.white54, fontSize: 12)),
+                        AppText.caption.copyWith(color: AppColors.onScrimDim)),
               ),
       ),
       SizedBox(
         width: 44,
         child: Text(pct == null ? '--' : '$pct%',
             textAlign: TextAlign.end,
-            style: const TextStyle(color: Color(0xFFFFAE00), fontSize: 13)),
+            style: AppText.caption.copyWith(color: AppColors.accent)),
       ),
     ]);
   }

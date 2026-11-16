@@ -16,7 +16,7 @@ class UploadCheckPanel extends StatelessWidget {
       builder: (context, _) {
         final o = controller.outcome;
         if (o == null) {
-          return const Padding(
+          return Padding(
             padding: EdgeInsets.symmetric(vertical: 8),
             child: Row(children: [
               SizedBox(
@@ -25,7 +25,7 @@ class UploadCheckPanel extends StatelessWidget {
                   child: CircularProgressIndicator(strokeWidth: 2)),
               SizedBox(width: 12),
               Text('重複を確認中…',
-                  style: TextStyle(color: AppColors.textDim, fontSize: 13)),
+                  style: AppText.caption.copyWith(color: AppColors.textDim)),
             ]),
           );
         }
@@ -61,7 +61,7 @@ class _Note extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Text(text,
-            style: const TextStyle(color: AppColors.textDim, fontSize: 13)),
+            style: AppText.caption.copyWith(color: AppColors.textDim)),
       );
 }
 
@@ -83,7 +83,7 @@ class _FlagRow extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.medium),
         border: Border.all(color: AppColors.border),
       ),
       child: Column(
@@ -93,17 +93,17 @@ class _FlagRow extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 4),
+          SizedBox(height: 4),
           Text(
             stored != null ? 'ライブラリに同じ物があります' : '選んだ物の中に同じ物があります',
-            style: const TextStyle(color: AppColors.accent, fontSize: 13),
+            style: AppText.caption.copyWith(color: AppColors.accent),
           ),
           if (stored != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Row(children: [
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(AppRadius.small),
                   child: SizedBox(
                     width: 44,
                     height: 44,
@@ -115,13 +115,13 @@ class _FlagRow extends StatelessWidget {
                             url: stored.thumbUrl!, stored: stored.thumbStored),
                   ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: 12),
                 Expanded(
                   child: Text(stored.key,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          color: AppColors.textDim, fontSize: 12)),
+                      style: AppText.caption.copyWith(
+                          color: AppColors.textDim)),
                 ),
               ]),
             )
@@ -131,8 +131,8 @@ class _FlagRow extends StatelessWidget {
               child: Text('同じ物: ${controller.sources[same].name}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style:
-                      const TextStyle(color: AppColors.textDim, fontSize: 12)),
+                  style: AppText.caption.copyWith(
+                      color: AppColors.textDim)),
             ),
           const SizedBox(height: 8),
           Wrap(spacing: 8, runSpacing: 4, children: [

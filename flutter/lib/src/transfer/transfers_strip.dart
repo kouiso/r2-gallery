@@ -144,8 +144,7 @@ class _TransfersStripState extends State<TransfersStrip> {
                                   Text(summary.detail,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                          fontSize: 12,
+                                      style: AppText.caption.copyWith(
                                           color: summary.failed > 0
                                               ? AppColors.danger
                                               : AppColors.textDim)),

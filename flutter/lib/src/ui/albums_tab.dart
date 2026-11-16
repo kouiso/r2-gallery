@@ -302,24 +302,21 @@ class _TrashEntry extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
+          Padding(
             padding: EdgeInsets.only(left: 4, bottom: 8),
             child: Text('その他',
-                style: TextStyle(
-                    color: AppColors.textDim,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700)),
+                style: AppText.label.copyWith(color: AppColors.textDim)),
           ),
           Material(
             color: AppColors.surfaceHigh,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppRadius.large),
             clipBehavior: Clip.antiAlias,
             child: ListTile(
               minTileHeight: 64,
               leading: const Icon(Icons.delete_outline),
               title: const Text('ゴミ箱'),
-              subtitle: const Text('移した項目の確認と復元',
-                  style: TextStyle(color: AppColors.textDim, fontSize: 12)),
+              subtitle: Text('移した項目の確認と復元',
+                  style: AppText.caption.copyWith(color: AppColors.textDim)),
               trailing: const Icon(Icons.chevron_right),
               onTap: onTap,
             ),
@@ -339,14 +336,14 @@ class _NewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: AppColors.surfaceHigh,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(AppRadius.medium),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.medium),
         onTap: onTap,
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           const Icon(Icons.add, color: AppColors.textDim),
           const SizedBox(height: 4),
-          Text(label, style: const TextStyle(fontSize: 12)),
+          Text(label, style: AppText.caption),
         ]),
       ),
     );
@@ -366,7 +363,7 @@ class _AlbumCard extends StatelessWidget {
       onTap: onTap,
       onLongPress: onLongPress,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.medium),
         child: Stack(fit: StackFit.expand, children: [
           ColoredBox(
             color: AppColors.surfaceHigh,
@@ -384,7 +381,7 @@ class _AlbumCard extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.bottomCenter,
                   end: Alignment.topCenter,
-                  colors: [Colors.black87, Colors.transparent],
+                  colors: [AppColors.scrimPanel, Colors.transparent],
                 ),
               ),
               child: Column(
@@ -392,13 +389,12 @@ class _AlbumCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(album.title,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w700, fontSize: 13),
+                      style: AppText.label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis),
                   Text('${album.count} 件',
                       style: const TextStyle(
-                          color: AppColors.textDim, fontSize: 11)),
+                          color: AppColors.textDim)),
                 ],
               ),
             ),

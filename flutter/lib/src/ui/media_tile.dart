@@ -110,7 +110,7 @@ class MediaTile extends StatelessWidget {
               Padding(
                 padding: EdgeInsets.all(inset),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(selected ? 8 : 0),
+                  borderRadius: BorderRadius.circular(selected ? AppRadius.small : 0),
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
@@ -160,8 +160,8 @@ class OfflineBadge extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(3),
           decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.55),
-            borderRadius: BorderRadius.circular(8),
+            color: AppColors.scrimBar,
+            borderRadius: BorderRadius.circular(AppRadius.small),
           ),
           child: const Icon(Icons.download_done,
               size: 16, color: AppColors.accent),

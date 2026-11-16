@@ -233,10 +233,7 @@ class _ImportBrowserTabState extends State<ImportBrowserTab> {
                     padding: EdgeInsets.only(left: 4),
                     child: Text(
                       'ネットから取り込む',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: AppText.heading,
                     ),
                   ),
                 ),

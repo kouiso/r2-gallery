@@ -178,9 +178,10 @@ void main() {
           app.pairingNeedsConfirm(
               Uri.parse('r2g://setup?e=https%3A%2F%2Fa.example%2Fx%2F#tb')),
           isFalse);
+      // 旧形式の endpoint= は正規化せず isSameEndpoint に渡るので、スキーム省略でも比較に届く
       expect(
           app.pairingNeedsConfirm(
-              Uri.parse('r2g://setup?e=a.example%2Fx#tb')),
+              Uri.parse('r2g://setup?endpoint=a.example%2Fx&token=tb')),
           isFalse);
       // 同じホストでもパスが違えば別の送り先。別ホストはもちろん確認が要る
       expect(

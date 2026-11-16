@@ -73,6 +73,8 @@ class _R2GalleryAppState extends State<R2GalleryApp>
   /// 未接続（初回のペアリング）と同じ送り先へのリンクは、これまで通り確認なしで繋ぐ
   Future<void> onPairingLink(Uri u) async {
     if (u.scheme != 'r2g' || u.host != 'setup') return;
+    // 保存した接続の復元が終わる前に判定すると、繋がっているのに未接続として扱ってしまう
+    await app.ready;
     final params = app.pairingParams(u);
     if (params == null) return;
     if (app.pairingNeedsConfirm(u)) {
@@ -105,7 +107,14 @@ class _R2GalleryAppState extends State<R2GalleryApp>
       );
       if (ok != true) return;
     }
-    await app.connectFromUri(u);
+    // 確認を出している間に未送信が積まれた時など、止まった理由は黙って捨てない
+    final err = await app.connect(params.endpoint, params.token);
+    if (err == null) return;
+    final ctx = _navKey.currentContext;
+    if (ctx != null && ctx.mounted) {
+      ScaffoldMessenger.of(ctx)
+          .showSnackBar(SnackBar(content: Text(err)));
+    }
   }
 
   @override

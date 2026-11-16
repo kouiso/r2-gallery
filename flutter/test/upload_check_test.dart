@@ -132,6 +132,10 @@ class _RecordingTransferApi implements TransferApi {
   @override
   Future<void> multipartAbort(String lib, String key, String uploadId) async {}
   @override
+  Future<void> multipartAbortOn(String endpoint, String token, String lib,
+          String key, String uploadId) =>
+      multipartAbort(lib, key, uploadId);
+  @override
   Future<void> putThumb(String lib, String key, Uint8List bytes) async {}
   @override
   Future<Uint8List> fetchBytes(String url,

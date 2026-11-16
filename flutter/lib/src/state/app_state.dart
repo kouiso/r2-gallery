@@ -43,7 +43,8 @@ class AppState extends ChangeNotifier {
     OfflineStore? offline,
     ListingCache? listingCache,
   })  : api = api ?? ApiClient(),
-        offline = offline ?? OfflineStore(),
+        offline = offline ??
+            OfflineStore(endpoint: () => api?.conn?.endpoint),
         listingCache = listingCache ?? ListingCache.platform(),
         transferPlatform = transferPlatform ?? PlatformTransferBridge(),
         deviceAuth = deviceAuth ?? LocalDeviceAuth(),
@@ -126,6 +127,7 @@ class AppState extends ChangeNotifier {
     // Web 版は内蔵ブラウザが無く取り込み自体を使わない
     ledger: kIsWeb ? null : const KvWebLedgerStore(),
     persistentStageDir: kIsWeb ? null : WebTransferQueue.defaultStageDir,
+    connOf: () => api.conn,
   );
 
   /// 転送を裏でも続けるサービスと回線の知らせ。
@@ -143,6 +145,7 @@ class AppState extends ChangeNotifier {
     offline: offline,
     makeThumb: thumbFromFile,
     configured: () => api.conn != null,
+    connOf: () => api.conn,
   );
 
   // 写真タブは IndexedStack で生き続けて一覧を持ち続ける。ゴミ箱から戻すなど写真タブの外で中身が
@@ -189,6 +192,7 @@ class AppState extends ChangeNotifier {
     for (final t in webQueue.tasks) {
       if (t.status == WebTaskStatus.error) webQueue.retry(t.id);
     }
+    webQueue.wake();
   }
 
   /// オフライン保存を出せる環境か（暗号化して端末に置ける時だけ）。
@@ -219,7 +223,14 @@ class AppState extends ChangeNotifier {
     return (await transfers.enqueueUploads(lib, sources)).length;
   }
 
-  Future<void> init() async {
+  /// 起動時の復元。ペアリングリンクの処理など、保存した接続が戻ってからでないと
+  /// 判定を誤る処理はこれを待つ。init を呼んでいなければ null
+  Future<void>? get ready => _inited;
+  Future<void>? _inited;
+
+  Future<void> init() => _inited ??= _init();
+
+  Future<void> _init() async {
     startupError = null;
     try {
       await _initOnce().timeout(_initBudget);
@@ -261,6 +272,8 @@ class AppState extends ChangeNotifier {
     }
     loading = true;
     notifyListeners();
+    // 再試行なので前の復元を待っていても意味がない。もう一度取り直す
+    _inited = null;
     await init();
   }
 
@@ -332,7 +345,25 @@ class AppState extends ChangeNotifier {
     await _loadLibraries();
   }
 
-  Future<String?> connect(String endpoint, String token) async {
+  // 確かめてから差し替えるまでの間に別の接続が割り込まんよう、接続の確かめと適用は1本に並べる
+  Future<void>? _connectLock;
+
+  Future<T> _connectSerial<T>(Future<T> Function() body) async {
+    final prev = _connectLock;
+    final done = Completer<void>();
+    _connectLock = done.future;
+    try {
+      if (prev != null) await prev;
+      return await body();
+    } finally {
+      done.complete();
+    }
+  }
+
+  Future<String?> connect(String endpoint, String token) =>
+      _connectSerial(() => _connectNow(endpoint, token));
+
+  Future<String?> _connectNow(String endpoint, String token) async {
     String? err;
     final input = _validInput(endpoint, token, (e) => err = e);
     if (input == null) return err;
@@ -354,7 +385,10 @@ class AppState extends ChangeNotifier {
 
   /// 接続先の変更画面の保存。connect と違い、届かない／トークンが違うを区別した理由を返す。
   /// 確かめて成功した時だけ接続を差し替え、失敗では今の接続にも保存値にも触れない。
-  Future<String?> saveConnection(String endpoint, String token) async {
+  Future<String?> saveConnection(String endpoint, String token) =>
+      _connectSerial(() => _saveConnectionNow(endpoint, token));
+
+  Future<String?> _saveConnectionNow(String endpoint, String token) async {
     String? err;
     final input = _validInput(endpoint, token, (e) => err = e);
     if (input == null) return err;
@@ -455,19 +489,35 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// r2g://setup ペアリングリンクからの接続。tools/pairing-url.mjs と KMP 版が作る
-  /// `?e=<endpoint>#<token>` を読む。以前の Flutter 版の `?endpoint=..&token=..` も受ける。
-  /// 読めないリンクは無視する（落とさない）。
-  Future<bool> connectFromUri(Uri uri) async {
+  /// r2g://setup のリンクが運ぶ接続先とトークンを読む。tools/pairing-url.mjs と KMP 版が作る
+  /// `?e=<endpoint>#<token>` 形式と、以前の Flutter 版の `?endpoint=..&token=..` の両方を受ける。
+  /// 読めないリンクは null（呼ぶ側は無視してよい）。
+  ({String endpoint, String token})? pairingParams(Uri uri) {
     final p = parsePairingString(uri.toString());
-    String? ep = p?.endpoint;
-    String? tk = p?.token;
-    if (p == null) {
-      ep = uri.queryParameters['endpoint'];
-      tk = uri.queryParameters['token'];
-    }
-    if (ep == null || tk == null) return false;
-    final err = await connect(ep, tk);
+    if (p != null) return (endpoint: p.endpoint, token: p.token);
+    final ep = uri.queryParameters['endpoint'];
+    final tk = uri.queryParameters['token'];
+    if (ep == null || tk == null) return null;
+    return (endpoint: ep, token: tk);
+  }
+
+  /// リンクが、今の接続とは別の送り先を指すか。切り替える前に確認を取るかどうかの判定で、
+  /// 未接続（初回ペアリング）・同じ送り先・読めないリンクは false（確認なしでよい）。
+  /// トークンの差し替えだけなら同じ送り先なので、パスまで見て比べる
+  bool pairingNeedsConfirm(Uri uri) {
+    final p = pairingParams(uri);
+    final cur = api.conn;
+    if (p == null || cur == null) return false;
+    return !isSameEndpoint(cur.endpoint, p.endpoint);
+  }
+
+  /// r2g://setup ペアリングリンクからの接続。
+  /// 読めないリンクは無視する（落とさない）。別の送り先への切り替えに見えるリンクを
+  /// ここへ直接渡すと確認なしで切り替わるので、UI 側は先に [pairingNeedsConfirm] で確かめる
+  Future<bool> connectFromUri(Uri uri) async {
+    final p = pairingParams(uri);
+    if (p == null) return false;
+    final err = await connect(p.endpoint, p.token);
     return err == null;
   }
 

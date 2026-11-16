@@ -4,6 +4,7 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 
 import 'src/state/app_state.dart';
+import 'src/state/pairing.dart';
 import 'src/store/lock_platform.dart';
 import 'src/ui/app_lock_layer.dart';
 import 'src/ui/connect_screen.dart';
@@ -39,6 +40,7 @@ class _R2GalleryAppState extends State<R2GalleryApp>
       widget.secureWindow ?? PlatformSecureWindow();
   bool? _secureApplied;
   StreamSubscription<Uri>? _linkSub;
+  final _navKey = GlobalKey<NavigatorState>();
 
   @override
   void initState() {
@@ -60,16 +62,59 @@ class _R2GalleryAppState extends State<R2GalleryApp>
   void _listenDeepLinks() {
     final appLinks = AppLinks();
     // r2g://setup?endpoint=..&token=.. のペアリングリンクを受ける
-    _linkSub = appLinks.uriLinkStream.listen((u) {
-      if (u.scheme == 'r2g' && u.host == 'setup') {
-        app.connectFromUri(u);
-      }
-    });
+    _linkSub = appLinks.uriLinkStream.listen(onPairingLink);
     appLinks.getInitialLink().then((u) {
-      if (u != null && u.scheme == 'r2g' && u.host == 'setup') {
-        app.connectFromUri(u);
-      }
+      if (u != null) onPairingLink(u);
     });
+  }
+
+  /// ペアリングリンクの受け口。繋がっている時に別の送り先を指すリンクは、踏んだだけで
+  /// 待っているアップロードの送り先が変わるので、切り替える前に確認を取る。
+  /// 未接続（初回のペアリング）と同じ送り先へのリンクは、これまで通り確認なしで繋ぐ
+  Future<void> onPairingLink(Uri u) async {
+    if (u.scheme != 'r2g' || u.host != 'setup') return;
+    // 保存した接続の復元が終わる前に判定すると、繋がっているのに未接続として扱ってしまう
+    await app.ready;
+    final params = app.pairingParams(u);
+    if (params == null) return;
+    if (app.pairingNeedsConfirm(u)) {
+      final ctx = _navKey.currentContext;
+      if (ctx == null || !ctx.mounted) return;
+      // 設定からの切り替えと同じ理由で止める。connect 側でも止まるが、黙って返さず理由を見せる
+      if (app.hasUnsentTransfers) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+            const SnackBar(content: Text(AppState.unsentTransfersMessage)));
+        return;
+      }
+      final cur = app.api.conn?.endpoint ?? '';
+      final ok = await showDialog<bool>(
+        context: ctx,
+        builder: (dctx) => AlertDialog(
+          title: const Text('接続先を変更しますか？'),
+          content: Text(
+              '接続先を ${hostOf(cur)} から ${hostOf(params.endpoint)} に変えます。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dctx, false),
+              child: const Text('やめる'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dctx, true),
+              child: const Text('変更する'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
+    // 確認を出している間に未送信が積まれた時など、止まった理由は黙って捨てない
+    final err = await app.connect(params.endpoint, params.token);
+    if (err == null) return;
+    final ctx = _navKey.currentContext;
+    if (ctx != null && ctx.mounted) {
+      ScaffoldMessenger.of(ctx)
+          .showSnackBar(SnackBar(content: Text(err)));
+    }
   }
 
   @override
@@ -95,6 +140,7 @@ class _R2GalleryAppState extends State<R2GalleryApp>
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: _navKey,
       title: 'R2 Gallery',
       theme: buildAppTheme(),
       debugShowCheckedModeBanner: false,

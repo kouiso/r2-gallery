@@ -212,6 +212,14 @@ Future<int> confirmAndUpload(
     BuildContext context, AppState app, String lib, List<UploadSource> sources,
     {UploadHasher? hasher}) async {
   if (sources.isEmpty) return 0;
+  // 一覧が拾う拡張子以外は上げても一覧に一生出てこないので、確認の前に除く（#63）
+  final rejected = sources.where((s) => !hasListedExtension(s.name)).length;
+  if (rejected > 0) {
+    sources = sources.where((s) => hasListedExtension(s.name)).toList();
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(content: Text('一覧に出ない形式 ${rejected}件を除きました')));
+    if (sources.isEmpty) return 0;
+  }
   final libs = app.libraries;
   final found = libs.where((l) => l.id == lib).toList();
   final writable = found.isNotEmpty && !found.first.readOnly;

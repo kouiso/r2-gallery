@@ -345,6 +345,34 @@ void main() {
       await tester.pumpAndSettle();
     });
 
+    testWidgets('一覧に出ない形式は除かれ、残りだけが上がる', (tester) async {
+      final app = await openSheet(tester, _Checker({}),
+          [_src('a.heic', 'x'), _src('b.jpg', 'y')]);
+      await pressUpload(tester);
+      expect(app.uploads.single.map((s) => s.name), ['b.jpg']);
+      expect(find.text('一覧に出ない形式 1件を除きました'), findsOneWidget);
+    });
+
+    testWidgets('全部が一覧に出ない形式ならシートを出さずに知らせる', (tester) async {
+      final app = _UploadApp(_CheckApi(_Checker({})));
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (ctx) => TextButton(
+              onPressed: () =>
+                  result = confirmAndUpload(ctx, app, 'lib', [_src('a.heic', 'x')]),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ));
+      await tester.tap(find.text('open'));
+      await tester.pump();
+      expect(await result, 0);
+      expect(app.uploads, isEmpty);
+      expect(find.text('一覧に出ない形式 1件を除きました'), findsOneWidget);
+    });
+
     testWidgets('読み取り専用のライブラリでは照合しない', (tester) async {
       final checker = _Checker({});
       await openSheet(tester, checker, [_src('a.jpg', 'same')], readOnly: true);

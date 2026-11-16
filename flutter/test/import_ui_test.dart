@@ -436,6 +436,45 @@ group('検出候補の除外（#37/#38）', () {
   });
 });
 
+group('検出一覧の種別絞り込み（#26）', () {
+  test('写真・動画の絞り込みは除外と別に効き、reset で表示条件も戻る', () {
+    final f = _filter();
+    const items = [_video, _image, _image2, _audio];
+    f.viewKind = DetectedView.photo;
+    expect(f.visibleOf(items), [_image, _image2]);
+    f.viewKind = DetectedView.video;
+    // HLS も動画として扱う
+    expect(f.visibleOf(items), [_video]);
+    // 絞り込み中に除外した物は、絞り込みを解いても戻らない
+    f.excludeImages(items);
+    expect(f.visibleOf(items), [_video]);
+    f.viewKind = DetectedView.all;
+    expect(f.visibleOf(items), [_video, _audio]);
+    // ページ移動の reset は除外も絞り込みも両方元に戻す
+    f.viewKind = DetectedView.photo;
+    f.reset();
+    expect(f.view, DetectedView.all);
+    expect(f.visibleOf(items), items);
+  });
+
+  testWidgets('シートのチップで写真・動画へ絞り込める', (tester) async {
+    final f = _filter();
+    addTearDown(f.dispose);
+    await tester.pumpWidget(_sheet(const [_video, _image, _image2], f));
+    await tester.tap(find.text('写真'));
+    await tester.pump();
+    expect(find.text('検出されたメディア（2件）'), findsOneWidget);
+    expect(find.text('pic.jpg'), findsOneWidget);
+    expect(find.text('clip.mp4'), findsNothing);
+    await tester.tap(find.text('動画'));
+    await tester.pump();
+    expect(find.text('検出されたメディア（1件）'), findsOneWidget);
+    await tester.tap(find.text('すべて'));
+    await tester.pump();
+    expect(find.text('検出されたメディア（3件）'), findsOneWidget);
+  });
+});
+
 }
 
 const _image = DetectedItem(

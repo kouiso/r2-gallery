@@ -248,7 +248,7 @@ Future<int> confirmAndUpload(
   if (rejected > 0) {
     sources = sources.where((s) => hasListedExtension(s.name)).toList();
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(content: Text('一覧に出ない形式 ${rejected}件を除きました')));
+        SnackBar(content: Text('一覧に出ない形式 $rejected件を除きました')));
     if (sources.isEmpty) return 0;
   }
   final libs = app.libraries;

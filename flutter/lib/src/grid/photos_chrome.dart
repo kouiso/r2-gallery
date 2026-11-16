@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
+import 'media_kind.dart';
 import 'sort_mode.dart';
 
 /// 選択バーの1操作。アイコンの下に必ず文字を付ける（KMP 版 SelAction と同じ）。
@@ -35,6 +36,15 @@ class PhotosChrome extends ChangeNotifier {
   set sort(SortMode m) {
     if (m == _sort) return;
     _sort = m;
+    notifyListeners();
+  }
+
+  // 種別の絞り込みも並び順と同じく画面の状態として持ち越す（#26）
+  MediaKind _kind = MediaKind.all;
+  MediaKind get kind => _kind;
+  set kind(MediaKind k) {
+    if (k == _kind) return;
+    _kind = k;
     notifyListeners();
   }
 

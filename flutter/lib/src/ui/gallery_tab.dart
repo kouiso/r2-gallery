@@ -91,11 +91,13 @@ class _GalleryTabState extends State<GalleryTab> {
         .listen((lib) => _states[lib]?.softRefresh(lib));
   }
 
-  // 並び順は Worker に渡して取り直す。端末側の並べ替えだと読み込み済みの分にしか効かない
+  // 並び順・種別の絞り込みは Worker に渡して取り直す。端末側の処理だと読み込み済みの分にしか効かない
   void _onSortChanged() {
-    final sort = widget.app.photosChrome.sort;
+    final chrome = widget.app.photosChrome;
     final s = _states[widget.lib];
-    if (s != null && s.sort != sort) s.changeSort(sort, widget.lib);
+    if (s == null) return;
+    if (s.sort != chrome.sort) s.changeSort(chrome.sort, widget.lib);
+    if (s.kind != chrome.kind) s.changeKind(chrome.kind, widget.lib);
   }
 
   void _onImportsChanged() {
@@ -124,9 +126,11 @@ class _GalleryTabState extends State<GalleryTab> {
     final cached = _states[widget.lib];
     if (cached == null) {
       _stateFor(widget.lib);
-    } else if (cached.sort != widget.app.photosChrome.sort) {
-      // 離れている間に並び順が変わっていた
+    } else if (cached.sort != widget.app.photosChrome.sort ||
+        cached.kind != widget.app.photosChrome.kind) {
+      // 離れている間に並び順・絞り込みが変わっていた
       cached.changeSort(widget.app.photosChrome.sort, widget.lib);
+      cached.changeKind(widget.app.photosChrome.kind, widget.lib);
     } else if (!cached.loading) {
       cached.softRefresh(widget.lib);
     }
@@ -220,7 +224,7 @@ class _GalleryTabState extends State<GalleryTab> {
                 // ライブラリごとに別の一覧として作り直し、先頭から見せる（KMP 版と同じ）。
                 // 並び順も入れるのは、グリッドが「続きを頼んだ件数」を覚えており、並び替えで
                 // 件数が戻ると 2 ページ目を頼まなくなるため
-                gridKey: ValueKey('grid-${widget.lib}-${g.sort.apiValue}'),
+                gridKey: ValueKey('grid-${widget.lib}-${g.sort.apiValue}-${g.kind.apiValue}'),
                 onOpenItem: (i) => _openPlayer(sorted, i),
                 errorActions: [
                   StatePrimaryButton('再試行', _refresh),

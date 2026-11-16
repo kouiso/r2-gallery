@@ -19,7 +19,7 @@ class _PagedApi extends ApiClient {
 
   @override
   Future<FolderPage> folder(String libId,
-      {String prefix = '', String? cursor, bool recursive = false, String? sort, bool fresh = false}) async {
+      {String prefix = '', String? cursor, bool recursive = false, String? sort, String? type, bool fresh = false}) async {
     folderCalls++;
     if (failFolder) throw const ApiError(0, 'offline');
     return FolderPage(items: [_item('a.mp4', 'video')], cursor: 'next');
@@ -38,7 +38,7 @@ class _ThreePageApi extends _PagedApi {
 
   @override
   Future<FolderPage> folder(String libId,
-      {String prefix = '', String? cursor, bool recursive = false, String? sort, bool fresh = false}) async {
+      {String prefix = '', String? cursor, bool recursive = false, String? sort, String? type, bool fresh = false}) async {
     folderCalls++;
     if (cursor == null) {
       return FolderPage(items: [_item('p1-0.jpg', 'image')], cursor: 'c1');
@@ -71,7 +71,7 @@ class _MultiPageApi extends _PagedApi {
 
   @override
   Future<FolderPage> folder(String libId,
-      {String prefix = '', String? cursor, bool recursive = false, String? sort, bool fresh = false}) async {
+      {String prefix = '', String? cursor, bool recursive = false, String? sort, String? type, bool fresh = false}) async {
     folderCalls++;
     final i = calls++;
     if (failAt >= 0 && i >= failAt) throw const ApiError(0, 'offline');

@@ -57,7 +57,8 @@ class _Api extends ApiClient {
       String? cursor,
       bool recursive = false,
       bool fresh = false,
-      String? sort}) async {
+      String? sort,
+      String? type}) async {
     folderCalls.add('$_host/$libId');
     return FolderPage(items: [
       MediaItem(

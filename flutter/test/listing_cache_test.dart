@@ -37,6 +37,7 @@ class _GateApi extends ApiClient {
       String? cursor,
       bool recursive = false,
       String? sort,
+      String? type,
       bool fresh = false}) {
     calls.add((lib: libId, sort: sort, fresh: fresh));
     final c = Completer<FolderPage>();

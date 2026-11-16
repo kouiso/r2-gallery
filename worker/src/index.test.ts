@@ -120,6 +120,7 @@ interface Folders {
     createdAt: number | null;
   }[];
   cursor: string | null;
+  total?: number;
 }
 
 async function folders(lib: string, prefix = ""): Promise<Folders> {

@@ -53,7 +53,18 @@ class MediaController extends ChangeNotifier implements SelectionSurface {
   bool get allSelected => _g?.allSelected(_lib) ?? false;
 
   @override
-  void toggleAll() => g.toggleAll(_lib);
+  bool get selectingAll => _g?.selectAllBusy ?? false;
+
+  @override
+  void toggleAll() {
+    if (allSelected) {
+      g.toggleAll(_lib);
+    } else {
+      // 残りページを取り切ってから選ぶ。読み込み済み分だけ選ぶと
+      // 「全部選んだはずなのに保存されない」に見える
+      unawaited(g.selectAllFully(_lib));
+    }
+  }
 
   @override
   void clearSelection() => g.clearSelection();

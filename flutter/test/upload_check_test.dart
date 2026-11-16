@@ -87,12 +87,9 @@ class _UploadApp extends AppState {
     activeLib = 'lib';
   }
   final List<List<UploadSource>> uploads = [];
-  final List<String?> uploadAlbums = [];
   @override
-  Future<int> upload(String lib, List<UploadSource> sources,
-      {String? albumId}) async {
+  Future<int> upload(String lib, List<UploadSource> sources) async {
     uploads.add(sources);
-    uploadAlbums.add(albumId);
     return sources.length;
   }
 }
@@ -100,20 +97,10 @@ class _UploadApp extends AppState {
 class _CheckApi extends ApiClient {
   _CheckApi(this.checker);
   final _Checker checker;
-  List<Album> albumList = [];
-  final Map<String, String> createdAlbums = {};
   @override
   Future<ObjectCheck> checkObjects(
           String libId, List<({int size, String? sha256})> items) =>
       checker.call(libId, items);
-  @override
-  Future<List<Album>> albums(String libId) async => albumList;
-  @override
-  Future<String> albumCreate(String libId, String title) async {
-    final id = 'al-${createdAlbums.length + 1}';
-    createdAlbums[id] = title;
-    return id;
-  }
 }
 
 /// 単発PUTに添えたハッシュと multipart の開始を記録する転送 API。
@@ -162,8 +149,6 @@ class _RecordingTransferApi implements TransferApi {
       false;
   @override
   Future<String?> itemUrl(String lib, String key) async => null;
-  @override
-  Future<void> albumAdd(String lib, String albumId, List<String> keys) async {}
 }
 
 class _MemKv implements SecretKv {
@@ -270,12 +255,8 @@ void main() {
 
     Future<_UploadApp> openSheet(WidgetTester tester, _Checker checker,
         List<UploadSource> sources,
-        {_Hasher? hasher,
-        bool readOnly = false,
-        void Function(_CheckApi)? configureApi}) async {
-      final api = _CheckApi(checker);
-      configureApi?.call(api);
-      final app = _UploadApp(api, readOnly: readOnly);
+        {_Hasher? hasher, bool readOnly = false}) async {
+      final app = _UploadApp(_CheckApi(checker), readOnly: readOnly);
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
           body: Builder(
@@ -351,49 +332,6 @@ void main() {
       expect(find.textContaining('重複'), findsNothing);
       await pressUpload(tester);
       expect(app.uploads.single.map((s) => s.name), ['a.jpg']);
-    });
-
-    testWidgets('アルバム欄は既定「なし」で、既存アルバムを選ぶとその id で上がる',
-        (tester) async {
-      final app = await openSheet(
-          tester, _Checker({}), [_src('a.jpg', 'unique')],
-          configureApi: (api) => api.albumList = [
-                const Album(id: 'al1', title: '旅行', readOnly: false),
-              ]);
-      expect(find.text('アルバム'), findsOneWidget);
-      expect(find.text('なし'), findsOneWidget);
-
-      await tester.tap(find.text('なし'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('旅行（0）'));
-      await tester.pumpAndSettle();
-      expect(find.text('旅行'), findsOneWidget);
-
-      await pressUpload(tester);
-      expect(app.uploadAlbums.single, 'al1');
-    });
-
-    testWidgets('新しい名前を選ぶと、アップロードの時に1回だけ作ってその id で上がる',
-        (tester) async {
-      late _CheckApi api;
-      final app = await openSheet(
-          tester, _Checker({}), [_src('a.jpg', 'unique')],
-          configureApi: (a) => api = a);
-
-      await tester.tap(find.text('なし'));
-      await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), '新しい入れ物');
-      await tester.pump();
-      await tester.tap(find.text('作成して追加'));
-      await tester.pumpAndSettle();
-      expect(find.text('アルバムに追加'), findsNothing);
-      expect(find.text('新しい入れ物'), findsWidgets);
-      // シートを開いている間はまだ作らない。押した時に1回だけ
-      expect(api.createdAlbums, isEmpty);
-
-      await pressUpload(tester);
-      expect(api.createdAlbums, {'al-1': '新しい入れ物'});
-      expect(app.uploadAlbums.single, 'al-1');
     });
 
     testWidgets('照合が終わる前に押しても全部上げ、確認できなかったと知らせる', (tester) async {

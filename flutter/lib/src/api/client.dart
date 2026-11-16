@@ -58,7 +58,10 @@ class ApiClient {
   Never _toApiError(Object e) {
     if (e is ApiError) throw e;
     if (e is DioException) {
-      throw ApiError(e.response?.statusCode ?? 0, e.message ?? 'network error');
+      final body = e.response?.data;
+      final code = body is Map ? body['error'] : null;
+      throw ApiError(e.response?.statusCode ?? 0, e.message ?? 'network error',
+          code: code is String ? code : null);
     }
     throw ApiError(0, e.toString());
   }
@@ -148,7 +151,11 @@ class ApiClient {
           .toList());
 
   Future<FolderPage> folder(String libId,
-      {String prefix = '', String? cursor, bool recursive = false}) {
+      {String prefix = '',
+      String? cursor,
+      bool recursive = false,
+      String? sort,
+      bool fresh = false}) {
     return _get('${_lib(libId)}/folders', (r) {
       final items = ((r.data['items'] as List?) ?? const [])
           .map((e) => MediaItem.fromJson(e as Map<String, dynamic>))
@@ -158,13 +165,19 @@ class ApiClient {
         cursor: r.data['cursor'] as String?,
         prefix: (r.data['prefix'] as String?) ?? prefix,
         folders: ((r.data['folders'] as List?) ?? const []).cast<String>(),
+        sort: r.data['sort'] as String?,
+        total: (r.data['total'] as num?)?.toInt(),
       );
     }, query: {
       'prefix': prefix,
       if (recursive) 'recursive': '1',
       // 名前順だとゴミ箱等の先頭キーに新規アップが埋もれて出てこない（新着順に揃える）
       'order': 'recent',
-      if (cursor != null) 'cursor': cursor,
+      // 並び順は Worker に渡して全体に対して並べさせる。古い Worker は無視して新着順で返す
+      'sort': ?sort,
+      'cursor': ?cursor,
+      // 利用者が引っ張って取り直した時だけ、Worker の索引ではなくバケットを数え直させる
+      if (fresh) 'fresh': '1',
     });
   }
 
@@ -246,7 +259,7 @@ class ApiClient {
       );
     }, query: {
       'limit': limit,
-      if (cursor != null) 'cursor': cursor,
+      'cursor': ?cursor,
     });
   }
 
@@ -260,6 +273,77 @@ class ApiClient {
     final res = await _post('${_lib(libId)}/ops/restore', {'trashKey': trashKey},
         (r) => r.data as Map<String, dynamic>);
     return (res['key'] as String?) ?? '';
+  }
+
+  // ---- 重複の確認（#100 / #101）----
+
+  /// Worker 側のハッシュ計算を1回分進める。pending が 0 になるまで呼び直す。
+  /// 古い Worker は 404 を返す（重複の確認に未対応）。
+  Future<DuplicateScan> duplicateScan(String libId) =>
+      _post('${_lib(libId)}/duplicates/scan', const <String, Object>{}, (r) {
+        final d = r.data;
+        int n(String k) => d is Map ? (d[k] as num?)?.toInt() ?? 0 : 0;
+        return DuplicateScan(
+            pending: n('pending'), hashed: n('hashed'), skipped: n('skipped'));
+      });
+
+  /// 中身が同じ項目の組を、空けられる容量の大きい順に読む。ハッシュ計算はしない。
+  Future<DuplicatePage> duplicates(String libId,
+      {String? cursor, int limit = 50}) {
+    return _get('${_lib(libId)}/duplicates', (r) {
+      final d = r.data;
+      int n(String k) => d is Map ? (d[k] as num?)?.toInt() ?? 0 : 0;
+      return DuplicatePage(
+        groups: ((d is Map ? d['groups'] as List? : null) ?? const [])
+            .map((e) => DuplicateGroup.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        cursor: d is Map ? d['cursor'] as String? : null,
+        total: n('total'),
+        reclaimable: n('reclaimable'),
+        pending: n('pending'),
+        skipped: n('skipped'),
+      );
+    }, query: {
+      'limit': limit,
+      'cursor': ?cursor,
+    });
+  }
+
+  /// 重複の片方をゴミ箱へ。[keep] は残す方で、Worker が消す方のアルバム所属を移す。
+  /// 残す方が消えていれば 409 keeper_missing、同じ中身と記録されていなければ 409 not_duplicate。
+  Future<String> trashDuplicate(String libId, String key,
+      {required String keep}) async {
+    final res = await _post('${_lib(libId)}/ops/trash',
+        {'key': key, 'duplicateOf': keep}, (r) => r.data);
+    final tk = res is Map ? res['trashKey'] : null;
+    return tk is String ? tk : '';
+  }
+
+  /// アップロード前の照合。results[i] が items[i] に答える（1回 1000 件まで）。
+  /// sha256 を付けない項目はサイズの一致数だけを返す。
+  Future<ObjectCheck> checkObjects(
+      String libId, List<({int size, String? sha256})> items) {
+    return _post('${_lib(libId)}/objects/check', {
+      'items': [
+        for (final i in items) {'size': i.size, 'sha256': ?i.sha256},
+      ],
+    }, (r) {
+      final d = r.data;
+      final results = ((d is Map ? d['results'] as List? : null) ?? const [])
+          .map((e) {
+        final m = e as Map<String, dynamic>;
+        return ObjectCheckResult(
+          sizeMatches: (m['sizeMatches'] as num?)?.toInt() ?? 0,
+          matches: ((m['matches'] as List?) ?? const [])
+              .map((x) => MediaItem.fromJson(x as Map<String, dynamic>))
+              .toList(),
+        );
+      }).toList();
+      return ObjectCheck(
+        results: results,
+        pending: d is Map ? (d['pending'] as num?)?.toInt() ?? 0 : 0,
+      );
+    });
   }
 
   /// そのキーのファイルが今あれば返す。無ければ null。
@@ -332,7 +416,7 @@ class ApiClient {
       return TrashPage(items, r.data['cursor'] as String?,
           retentionDays: (r.data['retentionDays'] as num?)?.toInt());
     }, query: {
-      if (cursor != null) 'cursor': cursor,
+      'cursor': ?cursor,
     });
   }
 
@@ -345,6 +429,7 @@ class ApiClient {
     void Function(int sent, int total)? onProgress,
     CancelToken? cancelToken,
     bool verifyStorage = false,
+    String? sha256,
   }) async {
     try {
       final res = await _dio.put(
@@ -354,6 +439,8 @@ class ApiClient {
           'Content-Type':
               contentType.isEmpty ? 'application/octet-stream' : contentType,
           'Content-Length': bytes.length,
+          // 重複確認で計算済みの値だけ添える。R2 が照合し、Worker が重複の記録に使う
+          'x-content-sha256': ?sha256,
         }),
         onSendProgress: onProgress,
         cancelToken: cancelToken,

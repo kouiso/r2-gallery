@@ -22,7 +22,7 @@ class _GalleryApi extends ApiClient {
 
   @override
   Future<FolderPage> folder(String libId,
-      {String prefix = '', String? cursor, bool recursive = false}) async {
+      {String prefix = '', String? cursor, bool recursive = false, String? sort, bool fresh = false}) async {
     if (recursive) galleryCalls.update(libId, (n) => n + 1, ifAbsent: () => 1);
     return FolderPage(items: [
       for (final item in items[libId] ?? <MediaItem>[])
@@ -65,9 +65,10 @@ class _SyntheticFetcher extends WebFetcher {
 }
 
 class _App extends AppState {
+  final WebTransferQueue _queue;
   @override
-  final WebTransferQueue webQueue;
-  _App(_GalleryApi api, this.webQueue)
+  WebTransferQueue get webQueue => _queue;
+  _App(_GalleryApi api, this._queue)
       : super(api: api, bakedEndpoint: '', bakedToken: '');
 }
 

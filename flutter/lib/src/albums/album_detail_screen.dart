@@ -134,12 +134,16 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
         final res = await pickAlbumAndAdd(context, widget.app,
             lib: itLib, targets: [(itLib, it.key)]);
         if (res == null || !mounted) return;
-        if (!res.ok) return _showError(res.error);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('1件をアルバムに追加しました')));
-          s.refresh();
+        // 送り終わるのを待たずに知らせ、失敗した時だけ後から理由を出す
+        final shown = ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('1件をアルバムに追加しました')));
+        final err = await res.done;
+        if (err != null) {
+          shown.close();
+          return _showError(err);
         }
+        // このアルバム自身へ足した時は中身が変わるので読み直す（従来どおり）
+        if (mounted) s.refresh();
       case ItemAction.trash:
         if (!_can(WriteAction.trash)) return;
         final res = await trashAll(widget.app.api,

@@ -25,6 +25,9 @@ class UploadSource {
 
   /// パスで渡せない元（content:// など）を読む口。再起動後には読み直せない。
   final Stream<List<int>> Function()? reader;
+
+  /// 確認シートの重複確認で計算した中身の SHA-256（16進）。計算しなかった物は null。
+  final String? sha256;
   const UploadSource({
     required this.name,
     required this.size,
@@ -32,7 +35,17 @@ class UploadSource {
     this.path,
     this.bytes,
     this.reader,
+    this.sha256,
   });
+
+  UploadSource withSha256(String? hash) => UploadSource(
+      name: name,
+      size: size,
+      mime: mime,
+      path: path,
+      bytes: bytes,
+      reader: reader,
+      sha256: hash);
 }
 
 /// 転送1件。KMP 版 TransferTask の up / down に対応する（ネット取り込みは WebTransferQueue）。
@@ -66,6 +79,9 @@ class TransferTask {
   String? stagedPath;
   String? sourcePath;
   Uint8List? memory;
+
+  /// 重複確認で計算済みの中身のハッシュ。一括PUTの時だけ Worker へ添える。
+  String? sha256;
 
   // オフライン保存
   String? itemKey;
@@ -111,6 +127,7 @@ class TransferTask {
         if (parts.isNotEmpty) 'parts': [for (final p in parts) p.toJson()],
         if (stagedPath != null) 'stagedPath': stagedPath,
         if (sourcePath != null) 'sourcePath': sourcePath,
+        'sha256': ?sha256,
         if (itemKey != null) 'itemKey': itemKey,
         if (itemType != null) 'itemType': itemType,
       };
@@ -145,6 +162,7 @@ class TransferQueue extends ChangeNotifier {
     this.makeThumb,
     this.parallel = 2,
     this.netRetryDelay = const Duration(seconds: 15),
+    this.stagedDeleteTimeout = const Duration(seconds: 5),
     this.multipartThreshold = ApiClient.multipartThreshold,
     this.partSize = 8 * 1024 * 1024,
     bool? persist,
@@ -159,6 +177,7 @@ class TransferQueue extends ChangeNotifier {
   final FileThumbMaker? makeThumb;
   final int parallel;
   final Duration netRetryDelay;
+  final Duration stagedDeleteTimeout;
   final int multipartThreshold;
   final int partSize;
   final LedgerStore _ledger;
@@ -211,6 +230,17 @@ class TransferQueue extends ChangeNotifier {
       if (t.id == id) return t;
     }
     return null;
+  }
+
+  /// 完了待ち（サーバーが受け取り済みで、退避ファイルを消している途中）か。画面はこの間ボタンを止める。
+  bool isCompleting(String id) => _completing.any((t) => t.id == id);
+
+  /// 操作（一時停止・再開・やり直し・取り消し・一覧から消す）の対象。完了待ちの行は返さない。
+  /// 退避パスはもう消えているので、ここで再開・やり直しを通すと退避し直し、done の行に退避ファイルが残る。
+  /// 完了待ちに入る前に止めた行（サムネ作成中の一時停止など）も同じなので、入口ごとではなくここで弾く
+  TransferTask? _operable(String id) {
+    final t = _find(id);
+    return t == null || _completing.contains(t) ? null : t;
   }
 
   void _changed() {
@@ -338,6 +368,9 @@ class TransferQueue extends ChangeNotifier {
       return t;
     }
     if (kind != 'up') return null;
+    // 古い台帳の行には無い。無ければ添えずに送るだけ
+    final hash = e['sha256'];
+    if (hash is String) t.sha256 = hash;
     final staged = e['stagedPath'], source = e['sourcePath'];
     final key = e['key'], uploadId = e['uploadId'], parts = e['parts'];
     var stagedOk = false;
@@ -387,6 +420,7 @@ class TransferQueue extends ChangeNotifier {
       )
         ..sourcePath = s.path
         ..memory = s.bytes
+        ..sha256 = s.sha256
         .._reader = s.reader;
       if (t.memory != null) {
         t.size = t.memory!.length;
@@ -533,14 +567,20 @@ class TransferQueue extends ChangeNotifier {
       // 台帳から外し終えてから完了にする。完了にした途端に転送中の通知（サービス）が外れ、
       // 画面を消された後なら残しておいたエンジンも畳まれる。書き終える前に畳まれると次の起動で送り直してしまう
       _completing.add(t);
+      _changed();
       try {
         await _persist();
+        // 退避ファイルは完了を報告する前に消し終える。先に done にすると、完了を見た側
+        // （画面・テスト）が掃除の途中の退避ファイルを見てしまう。
+        // 消し終えて done になるまで _completing に残す。外すと別の行の書き込みが
+        // 「転送中」で書き戻し、再起動で二重に上がる。
+        // この間の操作は受け付けない（_operable で弾く）。サーバーが受け取った後なので完了を優先する
+        await _dropStaged(t);
+        t.status = TransferStatus.done;
+        t.loaded = t.size;
       } finally {
         _completing.remove(t);
       }
-      t.status = TransferStatus.done;
-      t.loaded = t.size;
-      await _dropStaged(t);
       if (!_done.isClosed) _done.add(t);
     } catch (e) {
       if (token.isCancelled || !_owns(t, gen)) {
@@ -624,92 +664,102 @@ class TransferQueue extends ChangeNotifier {
   Future<void> _upload(TransferTask t, CancelToken token) async {
     final size = await _sourceSize(t);
     t.size = size;
-    if (t.key == null) {
-      await _freshUpload(t, token, size);
-    } else {
-      await _resumeUpload(t, token, size, t.key!);
-    }
-  }
-
-  /// 初回: 409（同名あり）なら「name (2)」…と名前を変えて試す。キーはサーバーが受け付けてから確定する。
-  Future<void> _freshUpload(TransferTask t, CancelToken token, int size) async {
-    for (var attempt = 1;; attempt++) {
+    // 台帳から再開する行だけ、最初に台帳のキーを試す。それ以外は name → name (2) … の順
+    var first = t.key;
+    var n = 0;
+    for (;;) {
       _checkCancelled(token);
-      final key = suffixedName(t.name, attempt);
+      if (first == null && ++n > maxKeyAttempts) {
+        throw const ApiError(409, '同じ名前のファイルが多すぎます');
+      }
+      final key = first ?? suffixedName(t.name, n);
+      final resumed = first != null;
+      first = null;
       try {
-        if (size > multipartThreshold) {
-          final id = await api.multipartCreate(t.lib, key, t.mime);
-          // uploadId の確定は区切り。残さんと再開時に2つ目のセッションを作り、1つ目がサーバーに残る
-          t.key = key;
-          t.uploadId = id;
-          t.parts = [];
-          await _persist();
-        } else {
-          final bytes = await _readAll(t);
-          _checkCancelled(token);
-          await api.putObject(t.lib, key, bytes, t.mime,
-              cancelToken: token, onProgress: (s) {
-            t.loaded = s;
-            _progress();
-          });
+        await _place(t, token, size, key, resumed: resumed);
+        return;
+      } on ApiError catch (e) {
+        if (e.status != 409 || token.isCancelled) rethrow;
+        // 409 は分割の開始でも完了でも起きる。「同名がある」だけでは自分の物か分からんので、
+        // 再開の時は中身を照合する。黙って完了にすると送れていないのに端末の退避まで消える
+        if (resumed && await _storedSame(t, token, key, size)) {
+          await _abortSession(t);
           t.key = key;
           await _persist();
           return;
         }
-      } on ApiError catch (e) {
-        if (e.status == 409 && attempt < maxKeyAttempts && !token.isCancelled) {
-          continue;
-        }
-        rethrow;
+        await _abortSession(t);
+        t.key = null;
+        t.loaded = 0;
+        await _persist();
       }
-      await _multipart(t, token, size);
-      return;
     }
   }
 
-  /// 再開: キーは台帳で確定済み。ここでの 409 は前回の完了が届いていたということ。
-  Future<void> _resumeUpload(
-      TransferTask t, CancelToken token, int size, String key) async {
+  /// 1つのキーへ送る。同名があれば 409 のまま投げ、呼び出し側が照合か名前の付け直しを決める。
+  Future<void> _place(
+      TransferTask t, CancelToken token, int size, String key,
+      {required bool resumed}) async {
     if (size <= multipartThreshold) {
-      try {
-        await api.putObject(t.lib, key, await _readAll(t), t.mime,
-            cancelToken: token, onProgress: (s) {
-          t.loaded = s;
-          _progress();
-        });
-      } on ApiError catch (e) {
-        if (e.status != 409) rethrow;
-      }
+      final bytes = await _readAll(t);
+      _checkCancelled(token);
+      await api.putObject(t.lib, key, bytes, t.mime,
+          cancelToken: token, sha256: t.sha256, onProgress: (s) {
+        t.loaded = s;
+        _progress();
+      });
+      t.key = key;
+      await _persist();
       return;
     }
-    final existing = t.uploadId;
+    final existing = resumed ? t.uploadId : null;
     if (existing != null) {
       try {
         await _multipart(t, token, size);
         return;
       } on ApiError catch (e) {
-        // サーバー側で uploadId が失効している。作り直して最初から送る
-        if (e.status < 400) rethrow;
-        try {
-          await api.multipartAbort(t.lib, key, existing);
-        } on ApiError catch (abortErr) {
-          debugPrint('stale multipart not aborted: $abortErr');
-        }
-        t.uploadId = null;
-        t.parts = [];
+        // 完了時の同名（409）は呼び出し側へ。それ以外はサーバー側で uploadId が失効している
+        // ので、作り直して最初から送る
+        if (e.status == 409 || e.status < 400) rethrow;
+        await _abortSession(t);
         t.loaded = 0;
         await _persist();
       }
     }
     _checkCancelled(token);
-    try {
-      t.uploadId = await api.multipartCreate(t.lib, key, t.mime);
-    } on ApiError catch (e) {
-      if (e.status == 409) return;
-      rethrow;
-    }
+    final id = await api.multipartCreate(t.lib, key, t.mime);
+    // uploadId の確定は区切り。残さんと再開時に2つ目のセッションを作り、1つ目がサーバーに残る
+    t.key = key;
+    t.uploadId = id;
+    t.parts = [];
     await _persist();
     await _multipart(t, token, size);
+  }
+
+  /// 開いたままの multipart を畳む。キーに紐づくので、名前を変える時は新しく作り直す必要がある。
+  Future<void> _abortSession(TransferTask t) async {
+    final id = t.uploadId;
+    final key = t.key;
+    t.uploadId = null;
+    t.parts = [];
+    if (id == null || key == null) return;
+    try {
+      await api.multipartAbort(t.lib, key, id);
+    } on ApiError catch (e) {
+      debugPrint('stale multipart not aborted: $e');
+    }
+  }
+
+  Future<bool> _storedSame(
+      TransferTask t, CancelToken token, String key, int size) {
+    Stream<List<int>> local() async* {
+      for (var off = 0; off < size; off += partSize) {
+        final len = off + partSize > size ? size - off : partSize;
+        yield await _readChunk(t, off, len);
+      }
+    }
+
+    return api.storedMatches(t.lib, key, size, local, cancelToken: token);
   }
 
   Future<void> _multipart(TransferTask t, CancelToken token, int size) async {
@@ -805,10 +855,17 @@ class TransferQueue extends ChangeNotifier {
     if (p == null) return;
     try {
       final f = File(p);
-      if (await f.exists()) await f.delete();
+      // 削除が返らなくても完了の報告を止めない（止まるとサービスが残り続ける）
+      await (() async {
+        if (await f.exists()) await f.delete();
+      })()
+          .timeout(stagedDeleteTimeout);
     } on FileSystemException catch (e) {
       // 消し損ねても次の起動時の掃除で消える
       debugPrint('staged upload not removed: $e');
+    } on TimeoutException {
+      // 残ったファイルは次の起動時の掃除に任せる
+      debugPrint('staged upload delete timed out: $p');
     }
   }
 
@@ -816,7 +873,7 @@ class TransferQueue extends ChangeNotifier {
 
   /// 一時停止。退避したファイル・uploadId・確定済みパートは残し、再開で続きから送る。
   void pause(String id) {
-    final t = _find(id);
+    final t = _operable(id);
     if (t == null || !t.active) return;
     t._gen++;
     t.status = TransferStatus.paused;
@@ -828,7 +885,7 @@ class TransferQueue extends ChangeNotifier {
   }
 
   void resume(String id) {
-    final t = _find(id);
+    final t = _operable(id);
     if (t == null || t.status != TransferStatus.paused) return;
     t._gen++;
     _requeue(t);
@@ -836,7 +893,7 @@ class TransferQueue extends ChangeNotifier {
 
   /// 失敗・取り消しの行をやり直す。
   void retry(String id) {
-    final t = _find(id);
+    final t = _operable(id);
     if (t == null ||
         (t.status != TransferStatus.error &&
             t.status != TransferStatus.cancelled)) {
@@ -899,7 +956,7 @@ class TransferQueue extends ChangeNotifier {
 
   /// 取り消し。動いている処理が止まるのを待ってから、退避ファイルと multipart を片付けて行を消す。
   Future<void> cancel(String id) async {
-    final t = _find(id);
+    final t = _operable(id);
     if (t == null || t.status == TransferStatus.done) return;
     final gen = ++t._gen;
     t.status = TransferStatus.cancelled;
@@ -932,7 +989,7 @@ class TransferQueue extends ChangeNotifier {
 
   /// 完了・取り消しの行を一覧から消す。
   void dismiss(String id) {
-    final t = _find(id);
+    final t = _operable(id);
     if (t == null ||
         (t.status != TransferStatus.done &&
             t.status != TransferStatus.cancelled)) {
@@ -945,8 +1002,9 @@ class TransferQueue extends ChangeNotifier {
 
   /// 終わった行（完了・失敗・取り消し）をまとめて消す。失敗の行の退避ファイルも片付ける。
   Future<void> clearFinished() async {
-    final gone = _tasks.where((t) => t.finished).toList();
-    _tasks.removeWhere((t) => t.finished);
+    bool removable(TransferTask t) => t.finished && !_completing.contains(t);
+    final gone = _tasks.where(removable).toList();
+    _tasks.removeWhere(removable);
     _changed();
     for (final t in gone) {
       await _cleanup(t);

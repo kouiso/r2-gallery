@@ -1,4 +1,5 @@
 #!/bin/bash
+# 注意: KMP 版の頃の道具。kmp/ はもう無く、このスクリプトは現行の Flutter クライアントには使えない（README 参照）
 # リポジトリの commonMain から「画面の見た目だけ」の部品を harness にコピーする
 set -e
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)

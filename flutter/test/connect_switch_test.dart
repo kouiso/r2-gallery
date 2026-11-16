@@ -45,6 +45,7 @@ class _Api extends ApiClient {
     String contentType, {
     void Function(int sent, int total)? onProgress,
     CancelToken? cancelToken,
+    String? sha256,
     bool verifyStorage = false,
   }) async {
     putCalls.add('$_host/$libId/$key');
@@ -52,7 +53,11 @@ class _Api extends ApiClient {
 
   @override
   Future<FolderPage> folder(String libId,
-      {String prefix = '', String? cursor, bool recursive = false}) async {
+      {String prefix = '',
+      String? cursor,
+      bool recursive = false,
+      bool fresh = false,
+      String? sort}) async {
     folderCalls.add('$_host/$libId');
     return FolderPage(items: [
       MediaItem(

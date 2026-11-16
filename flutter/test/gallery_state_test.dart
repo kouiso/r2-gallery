@@ -62,6 +62,26 @@ class _ThreePageApi extends _PagedApi {
   }
 }
 
+/// ページ数の決まった一覧。failAt 以降のページ取得は落とす。
+class _MultiPageApi extends _PagedApi {
+  _MultiPageApi(this.pages, {this.failAt = -1});
+  final int pages;
+  final int failAt;
+  int calls = 0;
+
+  @override
+  Future<FolderPage> folder(String libId,
+      {String prefix = '', String? cursor, bool recursive = false, String? sort, bool fresh = false}) async {
+    folderCalls++;
+    final i = calls++;
+    if (failAt >= 0 && i >= failAt) throw const ApiError(0, 'offline');
+    return FolderPage(
+      items: [_item('p$i.jpg', 'image')],
+      cursor: i + 1 < pages ? 'c$i' : null,
+    );
+  }
+}
+
 /// 最初の 1 件だけ worker に断られる。
 class _FailingThumbApi extends _PagedApi {
   @override
@@ -213,6 +233,52 @@ void main() {
       expect(peak, 1);
       expect(g.thumbBackfillFailures, 1);
       expect(api.thumbPuts, ['2.jpg', '3.mp4']);
+    });
+  });
+
+  group('すべて選択', () {
+    test('続きページが残っていても、全部取り切ってから全件を選ぶ', () async {
+      final api = _MultiPageApi(3);
+      final g = GalleryState(api);
+      await g.refresh('review');
+      expect(g.items, hasLength(1));
+      expect(g.cursor, isNotNull);
+
+      await g.selectAllFully('review');
+
+      expect(api.folderCalls, 3);
+      expect(g.items, hasLength(3));
+      expect(g.selection.length, 3);
+      expect(g.allSelected('review'), isTrue);
+      expect(g.selectAllBusy, isFalse);
+    });
+
+    test('続きの取得に失敗したら、取れた分だけ選んで帯で知らせる', () async {
+      final api = _MultiPageApi(5, failAt: 2);
+      final g = GalleryState(api);
+      await g.refresh('review');
+
+      await g.selectAllFully('review');
+
+      // 1,2 ページ目までは取れた分だけ選ぶ。失敗は黙らせず一覧の帯へ
+      expect(g.items, hasLength(2));
+      expect(g.selection.length, 2);
+      expect(g.error, isNotNull);
+      expect(g.selectAllBusy, isFalse);
+    });
+
+    test('選択の読み込み中にスクロール由来の続き読み込みが割り込まない', () async {
+      final api = _MultiPageApi(4);
+      final g = GalleryState(api);
+      await g.refresh('review');
+
+      final f = g.selectAllFully('review');
+      // selectAllBusy は await の前に立つので、ここでの loadMore は二重取得にならない
+      await g.loadMore('review');
+      await f;
+
+      expect(api.folderCalls, 4);
+      expect(g.selection.length, 4);
     });
   });
 }

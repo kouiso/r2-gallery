@@ -8,6 +8,7 @@ import 'package:r2_gallery/src/ui/import_browser_tab.dart';
 import 'package:r2_gallery/src/ui/browser_surface.dart';
 import 'package:r2_gallery/src/ui/import_parts.dart';
 import 'package:r2_gallery/src/webdl/detected.dart';
+import 'package:r2_gallery/src/webdl/detection_filter.dart';
 import 'package:r2_gallery/src/webdl/web_history.dart';
 import 'package:r2_gallery/src/webdl/web_transfer.dart';
 
@@ -362,4 +363,104 @@ void main() {
     await tester.pumpWidget(_wrap(TransfersSheetContent(queue: app.webQueue)));
     expect(find.text('song.mp3'), findsNWidgets(2));
   });
+group('検出候補の除外（#37/#38）', () {
+  test('画像をすべて除外すると画像だけ外れ、動画・音声は残る', () {
+    final f = _filter();
+    const items = [_video, _image, _image2, _audio];
+    f.excludeImages(items);
+    expect(f.visibleOf(items), [_video, _audio]);
+    expect(f.excludedOf(items), [_image, _image2]);
+    // 種類不明・動画は誤って外さない
+    expect(f.excluded, hasLength(2));
+  });
+
+  test('選択した候補だけ除外でき、戻すと対象に復帰する', () {
+    final f = _filter();
+    const items = [_video, _image, _image2];
+    f.toggle(_video.url);
+    f.toggle(_image.url);
+    f.excludeSelected();
+    expect(f.visibleOf(items), [_image2]);
+    expect(f.selected, isEmpty);
+    f.restore(_video.url);
+    expect(f.visibleOf(items), [_video, _image2]);
+  });
+
+  test('除外は再検知で同じURLが戻ってきても解除されず、reset で全て捨てる', () {
+    final f = _filter();
+    const items = [_image, _video];
+    f.excludeImages(items);
+    // 再検知で同じ一覧が届いても除外は保持（自動再通知で戻らない）
+    expect(f.visibleOf(items), [_video]);
+    f.reset();
+    expect(f.visibleOf(items), items);
+    expect(f.excluded, isEmpty);
+  });
+
+  testWidgets('シートで画像をすべて除外し、除外したメディアから戻せる', (tester) async {
+    final f = _filter();
+    addTearDown(f.dispose);
+    await tester.pumpWidget(_sheet(const [_video, _image, _image2], f));
+    expect(find.text('検出されたメディア（3件）'), findsOneWidget);
+    await tester.tap(find.text('画像をすべて除外'));
+    await tester.pump();
+    // 画像2件が一覧から外れ、動画だけ残る。件数は対象の数
+    expect(find.text('検出されたメディア（1件）'), findsOneWidget);
+    expect(find.text('clip.mp4'), findsOneWidget);
+    expect(find.text('pic.jpg'), findsNothing);
+    // 誤操作に備えて、除外済みは末尾から戻せる
+    await tester.tap(find.text('除外したメディア（2件）'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('戻す').first);
+    await tester.pump();
+    expect(find.text('検出されたメディア（2件）'), findsOneWidget);
+  });
+
+  testWidgets('行を選んでまとめて除外できる', (tester) async {
+    final f = _filter();
+    addTearDown(f.dispose);
+    await tester.pumpWidget(_sheet(const [_video, _image, _image2], f));
+    expect(
+      tester
+          .widget<TextButton>(find.widgetWithText(TextButton, '選択して除外'))
+          .onPressed,
+      isNull,
+    );
+    await tester.tap(find.byType(Checkbox).at(0));
+    await tester.tap(find.byType(Checkbox).at(1));
+    await tester.pump();
+    await tester.tap(find.text('選択した2件を除外'));
+    await tester.pump();
+    expect(find.text('検出されたメディア（1件）'), findsOneWidget);
+    expect(f.visibleOf(const [_video, _image, _image2]), [_image2]);
+  });
+});
+
 }
+
+const _image = DetectedItem(
+  'https://cdn.example.com/p/pic.jpg',
+  DetectedKind.image,
+);
+const _image2 = DetectedItem(
+  'https://cdn.example.com/p/pic2.png',
+  DetectedKind.image,
+);
+
+DetectionFilter _filter() => DetectionFilter();
+
+Widget _sheet(List<DetectedItem> items, DetectionFilter f) => _wrap(
+      SizedBox(
+        height: 700,
+        child: AnimatedBuilder(
+          animation: f,
+          builder: (context, _) => DetectedSheetContent(
+            items: items,
+            block: null,
+            onSave: (_) {},
+            filter: f,
+          ),
+        ),
+      ),
+    );
+

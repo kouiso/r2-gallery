@@ -408,14 +408,14 @@ class _ViewerScreenState extends State<ViewerScreen>
     );
   }
 
-  /// 端の「前へ」「次へ」ボタンはポインタが要る環境（Web・デスクトップ）だけに出す。
-  /// タッチ機ではスワイプがあるので重ねない。
-  bool get _showNavButtons =>
-      kIsWeb ||
-      switch (defaultTargetPlatform) {
+  /// 端の「前へ」「次へ」ボタンはポインタが要る環境（デスクトップOS）だけに出す。
+  /// タッチ機ではスワイプがあるので重ねない。Web でもモバイルブラウザは
+  /// defaultTargetPlatform が android/iOS を返すのでここで外れる。
+  bool get _showNavButtons => switch (defaultTargetPlatform) {
         TargetPlatform.linux ||
         TargetPlatform.macOS ||
-        TargetPlatform.windows => true,
+        TargetPlatform.windows =>
+          true,
         _ => false,
       };
 

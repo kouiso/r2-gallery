@@ -261,6 +261,16 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
+  testWidgets('タッチ機では端のボタンを出さない（#61）', (tester) async {
+    // モバイルブラウザの Web でも defaultTargetPlatform は android/iOS を返す
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await _open(tester, _app(_Api()), [_img('2026/a.jpg'), _img('2026/b.jpg')]);
+    expect(find.byIcon(Icons.chevron_left), findsNothing);
+    expect(find.byIcon(Icons.chevron_right), findsNothing);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
   testWidgets('P3/V1: 動画のページでは操作バーが隠れると上下バーも隠れ、隣の動画へ送ると前の動画を止める',
       (tester) async {
     final videos = <String, FakeVideo>{};

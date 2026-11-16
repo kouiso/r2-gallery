@@ -684,8 +684,8 @@ class _VideoViewState extends State<VideoView>
                 left: 10,
                 bottom: widget.bottomInset + 10,
                 child: IconButton(
-                  tooltip: '操作ロックを解除',
-                  icon: const Icon(Icons.do_not_touch, color: Colors.white),
+                  tooltip: '解除',
+                  icon: const Icon(Icons.lock, color: Colors.white),
                   onPressed: _unlockControls,
                 ),
               ),
@@ -734,8 +734,8 @@ class _VideoViewState extends State<VideoView>
           Row(
             children: [
               IconButton(
-                tooltip: '操作ロック',
-                icon: const Icon(Icons.do_not_touch_outlined, color: Colors.white),
+                tooltip: 'ロック',
+                icon: const Icon(Icons.lock_open, color: Colors.white),
                 onPressed: _lockControls,
               ),
               const Spacer(),

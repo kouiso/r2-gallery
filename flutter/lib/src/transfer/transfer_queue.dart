@@ -94,15 +94,6 @@ class TransferTask {
   String? connEndpoint;
   String? connToken;
 
-  /// アップロード時に選んだ入れ先アルバム（#102）。確定したキーで1回だけ入れる
-  String? albumId;
-
-  /// albumId への追加が済んだか。追加前に消された時は次の起動で入れ直す手掛かり
-  bool albumAdded = false;
-
-  /// 上げるのは済んだがアルバムへの追加だけ失敗した理由。失敗の行にせず完了のまま残す
-  String? albumError;
-
   // オフライン保存
   String? itemKey;
   String? itemType;
@@ -152,9 +143,6 @@ class TransferTask {
         if (itemType != null) 'itemType': itemType,
         if (connEndpoint != null) 'connEndpoint': connEndpoint,
         if (connToken != null) 'connToken': connToken,
-        if (albumId != null) 'albumId': albumId,
-        if (albumAdded) 'albumAdded': true,
-        if (albumError != null) 'albumError': albumError,
       };
 }
 
@@ -404,10 +392,6 @@ class TransferQueue extends ChangeNotifier {
     // 古い台帳の行には無い。無ければ添えずに送るだけ
     final hash = e['sha256'];
     if (hash is String) t.sha256 = hash;
-    final albumId = e['albumId'], albumErr = e['albumError'];
-    if (albumId is String) t.albumId = albumId;
-    if (e['albumAdded'] == true) t.albumAdded = true;
-    if (albumErr is String) t.albumError = albumErr;
     final staged = e['stagedPath'], source = e['sourcePath'];
     final key = e['key'], uploadId = e['uploadId'], parts = e['parts'];
     var stagedOk = false;
@@ -441,10 +425,8 @@ class TransferQueue extends ChangeNotifier {
   // ---------- 積む ----------
 
   /// 選んだファイルをアップロードに積む。退避が済んだものから順に送る。
-  /// [albumId] はアップロード時に選んだ入れ先（#102）。確定したキーで1回だけ入れる。
   Future<List<TransferTask>> enqueueUploads(
-      String lib, List<UploadSource> sources,
-      {String? albumId}) async {
+      String lib, List<UploadSource> sources) async {
     await _restored.future;
     final conn = _connOf();
     final added = <TransferTask>[];
@@ -463,7 +445,6 @@ class TransferQueue extends ChangeNotifier {
         ..sha256 = s.sha256
         ..connEndpoint = conn?.endpoint
         ..connToken = conn?.token
-        ..albumId = albumId
         .._reader = s.reader;
       if (t.memory != null) {
         t.size = t.memory!.length;
@@ -620,7 +601,6 @@ class TransferQueue extends ChangeNotifier {
       // サーバーが受け取った後は、止める操作より完了を優先する（KMP 版と同じ）
       if (t.status == TransferStatus.cancelled) return;
       if (t.isUpload) await _thumb(t);
-      if (t.isUpload) await _albumAttach(t);
       // 台帳から外し終えてから完了にする。完了にした途端に転送中の通知（サービス）が外れ、
       // 画面を消された後なら残しておいたエンジンも畳まれる。書き終える前に畳まれると次の起動で送り直してしまう
       _completing.add(t);
@@ -881,25 +861,6 @@ class TransferQueue extends ChangeNotifier {
       if (thumb != null && thumb.isNotEmpty) await api.putThumb(t.lib, key, thumb);
     } on Exception catch (e) {
       debugPrint('upload thumb skipped: $e');
-    }
-  }
-
-  /// 上げ終えた物を、選ばれたアルバムへ入れる（#102）。入れるキーはサーバーが
-  /// 確定した名前（name (2) など改名後）。失敗しても物は保存済みなので、
-  /// 完了は完了のまま「アルバムへの追加だけ失敗」として残す。追加前にアプリが
-  /// 消された場合は台帳の albumAdded=false を見て次の起動で入れ直す。
-  Future<void> _albumAttach(TransferTask t) async {
-    final albumId = t.albumId, key = t.key;
-    if (albumId == null || key == null || t.albumAdded) return;
-    // 接続が替わっていたら別の送り先のアルバムへは入れない。待機に戻して元の接続でやり直す
-    if (!_forThisConn(t)) throw _ConnSwitched();
-    try {
-      await api.albumAdd(t.lib, albumId, [key]);
-      t.albumAdded = true;
-      t.albumError = null;
-    } on Exception catch (e) {
-      debugPrint('album attach failed: $e');
-      t.albumError = 'アルバムへの追加だけ失敗しました';
     }
   }
 

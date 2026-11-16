@@ -21,9 +21,12 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - name: Flutter の版をリポジトリの正本から読む
+        id: fver
+        run: echo "v=$(cat flutter/.flutter-version)" >> "$GITHUB_OUTPUT"
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: 3.44.6
+          flutter-version: ${{ steps.fver.outputs.v }}
           cache: true
       - name: Build Flutter web distribution
         working-directory: flutter

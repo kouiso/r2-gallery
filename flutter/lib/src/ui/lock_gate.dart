@@ -117,8 +117,7 @@ class _LockGateState extends State<LockGate> {
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
         const SizedBox(height: 8),
-        // 実際は取り込み含め画面全体を覆うので、対象を列挙せず「アプリ全体」と書く
-        const Text('このアプリを開くには、ロックを解除してください。',
+        const Text('写真・アルバム・設定を開くには、ロックを解除してください。',
             textAlign: TextAlign.center,
             style: TextStyle(color: AppColors.textDim, fontSize: 13)),
         const SizedBox(height: 28),

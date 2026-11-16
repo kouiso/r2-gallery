@@ -33,7 +33,7 @@ pnpm install
 pnpm test                 # vitest (tools) + worker (miniflare)
 pnpm test:worker          # worker tests only
 pnpm lint                 # eslint + prettier over worker/tools
-cd flutter && flutter pub get && flutter analyze && flutter test
+cd flutter && flutter pub get && flutter analyze && flutter test  # SDK 版は flutter/.flutter-version に固定（README・CI・Devin 設定はそこを指す）
 cd flutter && flutter build apk --release  # FAD artifact (AOT; never ship a debug/JIT build)
 cd flutter && flutter build web --release  # Pages artifact
 pnpm exec wrangler dev --local --port 8787 --config worker/wrangler.test.toml --persist-to worker/.wrangler/state   # local API (miniflare R2/D1, token test-access-token); app side: README "手元で動かす"

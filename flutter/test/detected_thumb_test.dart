@@ -171,6 +171,26 @@ void main() {
       expect(shrunk.single, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
     });
 
+    test('動画の表紙の縮小に失敗しても、動画からの直接コマ抜きに回る（#39）', () async {
+      // 壊れた表紙: 取れるが縮小できない。縮小の失敗が _poster 内で捕まらないと
+      // 例外が呼び出し側の ?? 連鎖をすり抜け、最後の手段（動画直のコマ抜き）まで試されない
+      site.files['/v/poster.png'] = _png();
+      final t = DetectedThumbs(
+        fetcher: WebFetcher(),
+        tempDir: () async => tmp,
+        shrinkImage: (b) async => throw const FormatException('壊れた表紙'),
+        videoFrame: (video, headers) async {
+          frames.add(video);
+          return _png();
+        },
+      );
+      final d = DetectedItem('${site.base}/v/clip.mp4', DetectedKind.video,
+          const {}, '${site.base}/v/poster.png');
+      // 本体の先頭（404）→ 表紙の縮小失敗 → 動画直のコマ抜きの順で試され、結果が返る
+      expect(await t.of(d), _png());
+      expect(frames.single, '${site.base}/v/clip.mp4');
+    });
+
     group('dataUrlBytes', () {
       test('base64（大文字小文字違いも）とパーセント符号化を読む', () {
         expect(dataUrlBytes('data:image/png;base64,iVBORw==', 100),

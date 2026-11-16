@@ -6,6 +6,7 @@ import '../transfer/transfer_queue.dart';
 import '../transfer/transfer_rows.dart';
 import '../webdl/detected.dart';
 import '../webdl/detected_thumb.dart';
+import '../webdl/detection_filter.dart';
 import '../webdl/web_history.dart';
 import '../webdl/web_transfer.dart';
 import 'theme.dart';
@@ -124,16 +125,23 @@ class DetectedSheetContent extends StatelessWidget {
   final ValueChanged<DetectedItem> onSave;
   /// 行の頭に出すサムネの作り手（#164）。null なら種類のアイコンだけ出す
   final DetectedThumbs? thumbs;
+
+  /// 除外・選択の状態（#37/#38）。null の時は除外の操作を出さない
+  final DetectionFilter? filter;
   const DetectedSheetContent({
     super.key,
     required this.items,
     required this.block,
     required this.onSave,
     this.thumbs,
+    this.filter,
   });
 
   @override
   Widget build(BuildContext context) {
+    final f = filter;
+    final visible = f?.visibleOf(items) ?? items;
+    final hidden = f?.excludedOf(items) ?? const <DetectedItem>[];
     return SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -141,7 +149,7 @@ class DetectedSheetContent extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-            child: Text('検出されたメディア（${items.length}件）',
+            child: Text('検出されたメディア（${visible.length}件）',
                 style: Theme.of(context).textTheme.titleMedium),
           ),
           if (block != null)
@@ -151,13 +159,70 @@ class DetectedSheetContent extends StatelessWidget {
                   style:
                       const TextStyle(color: AppColors.danger, fontSize: 13)),
             ),
+          if (f != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 16, right: 16, bottom: 4),
+              child: Wrap(
+                spacing: 8,
+                children: [
+                  if (visible.any((d) => d.kind == DetectedKind.image))
+                    TextButton.icon(
+                      onPressed: () => f.excludeImages(visible),
+                      icon: const Icon(Icons.hide_image_outlined, size: 18),
+                      label: const Text('画像をすべて除外'),
+                    ),
+                  TextButton.icon(
+                    onPressed:
+                        f.selected.isEmpty ? null : f.excludeSelected,
+                    icon: const Icon(Icons.playlist_remove, size: 18),
+                    label: Text(f.selected.isEmpty
+                        ? '選択して除外'
+                        : '選択した${f.selected.length}件を除外'),
+                  ),
+                ],
+              ),
+            ),
+          if (visible.isEmpty && items.isNotEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              child: Text('検出はすべて除外されています',
+                  style: TextStyle(color: AppColors.textDim)),
+            ),
           Flexible(
             child: ListView.builder(
               shrinkWrap: true,
               padding: const EdgeInsets.only(bottom: 24),
-              itemCount: items.length,
+              itemCount: visible.length + (hidden.isEmpty ? 0 : 1),
               itemBuilder: (context, i) {
-                final d = items[i];
+                if (i == visible.length) {
+                  // 誤って外した物を戻せるよう、除外済みも末尾に畳んで残す
+                  return ExpansionTile(
+                    tilePadding:
+                        const EdgeInsets.symmetric(horizontal: 24),
+                    title: Text('除外したメディア（${hidden.length}件）',
+                        style: const TextStyle(
+                            color: AppColors.textDim, fontSize: 13)),
+                    children: [
+                      for (final d in hidden)
+                        ListTile(
+                          dense: true,
+                          leading: DetectedThumb(item: d, thumbs: thumbs),
+                          title: Text(
+                            d.label.isNotEmpty ? d.label : d.displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style:
+                                const TextStyle(color: AppColors.textDim),
+                          ),
+                          trailing: TextButton(
+                            onPressed: () => f!.restore(d.url),
+                            child: const Text('戻す'),
+                          ),
+                        ),
+                    ],
+                  );
+                }
+                final d = visible[i];
                 final savable = isWebSavable(d);
                 final host = d.url.contains('://')
                     ? d.url.split('://').last.split('/').first
@@ -165,9 +230,14 @@ class DetectedSheetContent extends StatelessWidget {
                 return ConstrainedBox(
                   constraints: const BoxConstraints(minHeight: 56),
                   child: Padding(
-                    padding: const EdgeInsets.only(left: 24, right: 8),
+                    padding: const EdgeInsets.only(left: 8, right: 8),
                     child: Row(
                       children: [
+                        if (f != null)
+                          Checkbox(
+                            value: f.selected.contains(d.url),
+                            onChanged: (_) => f.toggle(d.url),
+                          ),
                         DetectedThumb(item: d, thumbs: thumbs),
                         Expanded(
                           child: Padding(

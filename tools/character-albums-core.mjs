@@ -2,7 +2,11 @@
  * キャラ別アルバム仕分けの純粋ロジック（特徴量・判定・計画・適用）。
  * 画像はローカルの sharp だけで扱い、外部 AI へは一切送らない。
  */
+import { randomUUID } from "node:crypto";
 import sharp from "sharp";
+
+/** 1 回の album items 追加で worker が受け付けるキーの上限。超える分は分けて送る。 */
+export const MAX_ADD_KEYS = 500;
 
 export const DEFAULT_PARAMS = Object.freeze({
   high: 0.9,
@@ -113,10 +117,15 @@ const round = (x) => Math.round(x * 1000) / 1000;
  * 1 枚ずつ既存アルバムの参照画像と照合する。
  * 似ているだけの画像を同キャラ扱いしないよう、1 位と 2 位の差（margin）が小さいものは要確認に回す。
  */
-export function classify(target, albums, params = DEFAULT_PARAMS, targetKey = null) {
+export function classify(target, albums, params = DEFAULT_PARAMS, self = null) {
   // 対象自身が参照に入っていると自分と一致して確信度が水増しされるので外す。
+  // 同じ名前のファイルが別ライブラリにあると消えてしまうので、除外はライブラリ込みで比べる
+  const selfId = self ? `${self.lib ?? ""}:${self.key ?? self}` : null;
   const scored = albums
-    .map((a) => ({ album: a, refs: a.refs.filter((r) => !targetKey || r.key !== targetKey) }))
+    .map((a) => ({
+      album: a,
+      refs: a.refs.filter((r) => `${r.lib ?? ""}:${r.key}` !== selfId),
+    }))
     .filter((a) => a.refs.length)
     .map(({ album, refs }) => ({ album, ...albumScore(target, refs, params.topK) }))
     .sort((a, b) => b.score - a.score);
@@ -186,7 +195,10 @@ const PROVISIONAL = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
  * 判定結果を、アルバムごとの候補グループ＋新キャラ候補＋未分類にまとめる。
  * 既にどこかのアルバムに入っている画像は手動仕分けを尊重して触らない。
  */
-export function buildPlan({ lib, targets, albums, assigned, params = DEFAULT_PARAMS }) {
+export function buildPlan({ lib, targets, albums, assigned, params = DEFAULT_PARAMS, planId }) {
+  // 仮タイトルに実行ごとの id を入れる。別の実行が同じラベルを作っても、
+  // apply 時のタイトル照合が別プランのアルバムへ誤って寄せることがない
+  const runId = planId ?? randomUUID().slice(0, 8);
   const groups = new Map();
   const review = [];
   const unmatched = [];
@@ -196,7 +208,7 @@ export function buildPlan({ lib, targets, albums, assigned, params = DEFAULT_PAR
       skipped.push({ key: t.key, reason: "既にアルバムに入っている" });
       continue;
     }
-    const r = classify(t.desc, albums, params, t.key);
+    const r = classify(t.desc, albums, params, { lib, key: t.key });
     const entry = {
       key: t.key,
       score: r.score ?? null,
@@ -229,7 +241,7 @@ export function buildPlan({ lib, targets, albums, assigned, params = DEFAULT_PAR
       unclassified.push(...items);
       continue;
     }
-    const label = `キャラクター${PROVISIONAL[n % PROVISIONAL.length]}${n >= PROVISIONAL.length ? Math.floor(n / PROVISIONAL.length) : ""}（仮）`;
+    const label = `キャラクター${PROVISIONAL[n % PROVISIONAL.length]}${n >= PROVISIONAL.length ? Math.floor(n / PROVISIONAL.length) : ""}（仮・${runId}）`;
     n++;
     created.push({
       id: `create:${label}`,
@@ -246,6 +258,7 @@ export function buildPlan({ lib, targets, albums, assigned, params = DEFAULT_PAR
   return {
     version: 1,
     lib,
+    planId: runId,
     createdAt: new Date().toISOString(),
     params,
     groups: [...groups.values(), ...created],
@@ -259,7 +272,7 @@ export function buildPlan({ lib, targets, albums, assigned, params = DEFAULT_PAR
  * 作ったアルバムの id を plan に書き戻すので、再実行しても二重作成しない。
  * api: { listAlbums(lib), createAlbum(lib, title), addItems(lib, id, keys) }
  */
-export async function applyPlan(plan, api, { dryRun = false, log = () => {} } = {}) {
+export async function applyPlan(plan, api, { dryRun = false, log = () => {}, onProgress } = {}) {
   const albums = await api.listAlbums(plan.lib);
   const writable = new Map(albums.filter((a) => !a.readOnly).map((a) => [a.id, a]));
   const results = [];
@@ -284,15 +297,24 @@ export async function applyPlan(plan, api, { dryRun = false, log = () => {} } = 
       else if (dryRun) albumId = null;
       else albumId = (await api.createAlbum(plan.lib, g.title)).id;
       g.appliedAlbumId = albumId ?? undefined;
+      // 作成した id を即座に残す。途中で止まっても、やり直しはタイトル照合ではなく id で戻れる
+      await onProgress?.(plan);
     }
     if (dryRun) {
       log(`[dry-run] ${g.title}: ${keys.length} 枚を追加予定`);
       results.push({ id: g.id, status: "dry-run", count: keys.length });
       continue;
     }
-    const r = await api.addItems(plan.lib, albumId, keys);
-    log(`${g.title}: 追加 ${r.added} 枚（アルバム内 ${r.count} 枚）`);
-    results.push({ id: g.id, status: "applied", albumId, added: r.added, count: r.count });
+    // worker の上限を超える束は分けて送る
+    let added = 0;
+    let count;
+    for (let i = 0; i < keys.length; i += MAX_ADD_KEYS) {
+      const r = await api.addItems(plan.lib, albumId, keys.slice(i, i + MAX_ADD_KEYS));
+      added += r.added;
+      count = r.count;
+    }
+    log(`${g.title}: 追加 ${added} 枚（アルバム内 ${count} 枚）`);
+    results.push({ id: g.id, status: "applied", albumId, added, count });
   }
   return results;
 }

@@ -24,6 +24,9 @@ import sharp from "sharp";
 import { DEFAULT_PARAMS, applyPlan, buildPlan, describe } from "./character-albums-core.mjs";
 
 const IMAGE_RE = /\.(jpe?g|png|webp|gif|avif)$/i;
+// worker が「その他」として出す仮想アルバム。どのアルバムにも入っていない画像を
+// 集めた物なので、配属済みの判定材料にも照合先にも使わない
+const OTHER_ALBUM_ID = "__other__";
 
 const { positionals, values: args } = parseArgs({
   allowPositionals: true,
@@ -100,17 +103,36 @@ const api = {
     });
     return res.json();
   },
-  async recentKeys(lib, limit) {
+  async recentKeys(lib, limit, match = () => true) {
     const items = [];
     let cursor = "";
     while (items.length < limit) {
       const q = `recursive=1&order=recent${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`;
       const d = await getJson(`/v1/${encodeURIComponent(lib)}/folders?${q}`);
-      items.push(...(d.items ?? []));
+      for (const i of d.items ?? []) if (match(i)) items.push(i);
       if (!d.cursor) break;
       cursor = d.cursor;
     }
     return items.slice(0, limit);
+  },
+  // 明示されたキーを一覧の末尾まで探す。recent の窓で切ると、古い指定キーが見つからず落ちる
+  async findKeys(lib, wanted) {
+    const found = [];
+    const seen = new Set();
+    let cursor = "";
+    while (seen.size < wanted.size) {
+      const q = `recursive=1&order=recent${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`;
+      const d = await getJson(`/v1/${encodeURIComponent(lib)}/folders?${q}`);
+      for (const i of d.items ?? []) {
+        if (wanted.has(i.key) && !seen.has(i.key)) {
+          seen.add(i.key);
+          found.push(i);
+        }
+      }
+      if (!d.cursor) break;
+      cursor = d.cursor;
+    }
+    return found;
   },
 };
 
@@ -182,6 +204,8 @@ async function runPlan() {
   const refs = [];
   const covers = new Map();
   for (const a of all) {
+    // 「その他」は未配属の集まり。ここを数えると未分類の画像が全部「配属済み」になってしまう
+    if (a.id === OTHER_ALBUM_ID) continue;
     const items = await api.albumItems(lib, a.id);
     for (const it of items) assigned.add(`${it.lib ?? lib}:${it.key}`);
     if (!refTitles.includes(a.title)) continue;
@@ -198,7 +222,7 @@ async function runPlan() {
     const coverUris = [];
     for (const it of picked) {
       const bytes = await thumbBytes(it);
-      descs.push({ key: it.key, ...(await describe(bytes)) });
+      descs.push({ key: it.key, lib: it.lib ?? lib, ...(await describe(bytes)) });
       if (coverUris.length < 6) coverUris.push(await dataUri(bytes));
     }
     refs.push({ id: a.id, title: a.title, refs: descs });
@@ -209,12 +233,15 @@ async function runPlan() {
 
   let targetItems;
   if (wanted) {
-    const recent = await api.recentKeys(lib, Number(args.recent ?? 2000));
-    targetItems = recent.filter((i) => wanted.has(i.key));
+    // 指定されたキーは一覧の末尾まで探す。recent の窓で切ると古いキーが黙って落ちる
+    targetItems = await api.findKeys(lib, wanted);
     const notFound = [...wanted].filter((k) => !targetItems.some((i) => i.key === k));
     if (notFound.length) console.warn(`warn: 一覧に見つからないキー ${notFound.length} 件は対象外`);
   } else {
-    targetItems = await api.recentKeys(lib, Number(args.recent ?? 200));
+    // recent は画像だけ数える。動画で枠が埋まると指定より少ない枚数しか照合しない
+    targetItems = await api.recentKeys(lib, Number(args.recent ?? 200), (i) =>
+      IMAGE_RE.test(i.key),
+    );
   }
   targetItems = targetItems.filter((i) => IMAGE_RE.test(i.key));
 
@@ -252,6 +279,10 @@ async function runApply() {
   const results = await applyPlan(plan, api, {
     dryRun: args["dry-run"],
     log: (m) => console.log(m),
+    // 作ったアルバムの id をすぐ plan に残す。途中で止まっても再実行は id で続きから戻る
+    onProgress: args["dry-run"]
+      ? undefined
+      : () => writeFileSync(args.plan, JSON.stringify(plan, null, 2)),
   });
   if (!args["dry-run"]) writeFileSync(args.plan, JSON.stringify(plan, null, 2));
   const errors = results.filter((r) => r.status === "error");

@@ -106,12 +106,13 @@ suite("character-albums", () => {
       albums,
       assigned: new Set(["personal:done.png"]),
       params: DEFAULT_PARAMS,
+      planId: "run1",
     });
     expect(plan.skipped.map((s) => s.key)).toEqual(["done.png"]);
     const add = plan.groups.find((g) => g.action === "add");
     expect(add.items.map((i) => i.key)).toEqual(["p1.png"]);
     const create = plan.groups.find((g) => g.action === "create");
-    expect(create.title).toBe("キャラクターA（仮）");
+    expect(create.title).toBe("キャラクターA（仮・run1）");
     expect(create.items.map((i) => i.key).sort()).toEqual(["g1.png", "g2.png"]);
     expect(plan.groups.every((g) => g.approved === false)).toBe(true);
     expect(JSON.stringify(plan)).not.toMatch(/"vector"/);
@@ -182,6 +183,64 @@ suite("character-albums", () => {
     expect([...api.store.values()].some((s) => s.has("x.png"))).toBe(false);
   });
 
+  it("別の実行で作った同名の仮アルバムへ、新しいプランの画像を寄せない", async () => {
+    // 前の実行が残した「キャラクターA（仮・old-run）」アルバムがある状態。
+    // 新しいプランの A も同じ名前ではない（planId が違う）ので、そこへは寄せず新規作成する
+    const api = fakeApi([
+      { id: "a-old", title: "キャラクターA（仮・old-run）", readOnly: false, keys: [] },
+    ]);
+    const plan = {
+      version: 1,
+      lib: "personal",
+      planId: "new-run1",
+      groups: [
+        {
+          id: "create:A",
+          action: "create",
+          title: "キャラクターA（仮・new-run1）",
+          approved: true,
+          items: [{ key: "g1.png" }],
+        },
+      ],
+    };
+    await applyPlan(plan, api);
+    expect(api.store.get("a-old").size).toBe(0);
+    expect(api.calls.filter((c) => c[0] === "create")).toHaveLength(1);
+    // 作った id が plan に書き戻るので、再実行はタイトル照合に頼らず同じ所へ入る
+    const again = await applyPlan(plan, api);
+    expect(again[0].albumId).toBe(plan.groups[0].appliedAlbumId);
+    expect(api.calls.filter((c) => c[0] === "create")).toHaveLength(1);
+  });
+
+  it("500 枚を超える束は分けて送る", async () => {
+    const api = fakeApi([{ id: "a1", title: "ピンク", readOnly: false, keys: [] }]);
+    const keys = Array.from({ length: 1200 }, (_, i) => `k${i}.png`);
+    const plan = {
+      version: 1,
+      lib: "personal",
+      groups: [
+        {
+          id: "add:a1",
+          action: "add",
+          albumId: "a1",
+          title: "ピンク",
+          approved: true,
+          items: keys.map((key) => ({ key })),
+        },
+      ],
+    };
+    const sentSizes = [];
+    const orig = api.addItems;
+    api.addItems = (lib, id, ks) => {
+      sentSizes.push(ks.length);
+      return orig(lib, id, ks);
+    };
+    const r = await applyPlan(plan, api);
+    expect(sentSizes).toEqual([500, 500, 200]);
+    expect(r[0].added).toBe(1200);
+    expect(api.store.get("a1").size).toBe(1200);
+  });
+
   it("読み取り専用アルバムには書かない／dry-run では何も作らない", async () => {
     const api = fakeApi([{ id: "ro", title: "pipeline", readOnly: true }]);
     const plan = {
@@ -216,7 +275,31 @@ suite("character-albums leave-one-out", () => {
   it("対象自身が参照に入っていても自分とは照合しない", async () => {
     const self = await describe(await character(GREEN, BLACK));
     const albums = [{ id: "a1", title: "緑", refs: [{ key: "t.png", ...self }] }];
-    expect(classify(self, albums, DEFAULT_PARAMS, "t.png").decision).toBe("unmatched");
+    expect(classify(self, albums, DEFAULT_PARAMS, { key: "t.png" }).decision).toBe(
+      "unmatched",
+    );
     expect(classify(self, albums, DEFAULT_PARAMS).decision).toBe("match");
+  });
+
+  it("別ライブラリの同名参照は、対象と同じ名前でも参照から外さない", async () => {
+    const self = await describe(await character(GREEN, BLACK));
+    const albums = [
+      {
+        id: "a1",
+        title: "緑",
+        refs: [
+          { key: "t.png", lib: "other-lib", ...self },
+          { key: "x.png", lib: "personal", ...self },
+        ],
+      },
+    ];
+    // 個人ライブラリの t.png を対象にしても、別ライブラリの同名参照は残る
+    const r = classify(
+      await describe(await character(GREEN, BLACK)),
+      albums,
+      DEFAULT_PARAMS,
+      { lib: "personal", key: "t.png" },
+    );
+    expect(r.decision).toBe("match");
   });
 });

@@ -218,10 +218,13 @@ class AppState extends ChangeNotifier {
   bool canUploadTo(String? lib) => writeBlock(lib, WriteAction.upload) == null;
 
   /// 選んだファイルをアップロードに積む。書き込めない保存先なら積まずに 0 を返す。
-  Future<int> upload(String lib, List<UploadSource> sources) async {
+  /// [albumId] はアップロード時に選んだ入れ先（#102）。
+  Future<int> upload(String lib, List<UploadSource> sources,
+      {String? albumId}) async {
     if (!canUploadTo(lib)) return 0;
     _wireTransfers();
-    return (await transfers.enqueueUploads(lib, sources)).length;
+    return (await transfers.enqueueUploads(lib, sources, albumId: albumId))
+        .length;
   }
 
   /// 起動時の復元。ペアリングリンクの処理など、保存した接続が戻ってからでないと
@@ -838,6 +841,10 @@ class GalleryState extends ChangeNotifier {
   bool bulkBusy = false;
   String? bulkError;
 
+  /// 「すべて選択」で残りページを取り切っている最中。バーに読み込み中を出し、
+  /// スクロール由来の続き読み込みがページを二重に進めないよう止める
+  bool selectAllBusy = false;
+
   // 一覧アイテムのサムネバックフィルは1試行ずつに留める（失敗ループ防止）
   final Set<String> thumbTried = {};
 
@@ -1016,7 +1023,7 @@ class GalleryState extends ChangeNotifier {
   }
 
   Future<void> loadMore(String lib) async {
-    if (loadingMore || loading) return;
+    if (loadingMore || loading || selectAllBusy) return;
     if (_needsFirstPage) {
       await refresh(lib);
       return;
@@ -1024,6 +1031,11 @@ class GalleryState extends ChangeNotifier {
     if (cursor == null) return;
     final sinceFailure = _sinceLoadMoreFailure;
     if (sinceFailure != null && sinceFailure.elapsed < loadMoreBackoff) return;
+    await _fetchNextPage(lib);
+  }
+
+  /// 続きの 1 ページを実際に取る。入口のガード（backoff・取り合い）は呼び出し側の責務。
+  Future<void> _fetchNextPage(String lib) async {
     final e = epoch;
     loadingMore = true;
     notifyListeners();
@@ -1103,6 +1115,34 @@ class GalleryState extends ChangeNotifier {
     }
     selectionMode = selection.isNotEmpty;
     notifyListeners();
+  }
+
+  /// 「すべて選択」。続きページが残っていたら先に全部取り切ってから選ぶ。
+  /// 読み込み済み分だけ選ぶと「選んだはずの写真が保存されない」に見えるため。
+  /// 途中で取れなかった時は、取れた分だけ選ぶ（失敗は一覧の帯で知らせ済み）。
+  Future<void> selectAllFully(String fallbackLib) async {
+    if (selectAllBusy) return;
+    selectAllBusy = true;
+    notifyListeners();
+    try {
+      // スクロール由来の続き読み込みが飛んでいたら、終わるまで待ってから回り始める
+      while (loadingMore || loading) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        if (_disposed) return;
+      }
+      while (cursor != null) {
+        final before = cursor;
+        await _fetchNextPage(fallbackLib);
+        if (_disposed) return;
+        // cursor が進まない＝取得失敗（帯で知らせ済み）か、同じ続きを返すおかしな応答
+        if (cursor == before) break;
+      }
+      selection.addAll(items.map((it) => selKeyOf(it, fallbackLib)));
+      selectionMode = selection.isNotEmpty;
+    } finally {
+      selectAllBusy = false;
+      notifyListeners();
+    }
   }
 
   /// 日付見出しの丸。その日が全部選ばれていれば外し、そうでなければまとめて選ぶ。
@@ -1272,7 +1312,9 @@ class GalleryState extends ChangeNotifier {
       // 引き直しは待たずに投げる。待つ間に来た呼び出しがキューに積まれたまま取り残されるため
       _backfilling = false;
       final lib = videoLib;
-      if (lib != null && !_disposed) unawaited(_adoptStoredThumbs(lib, storedVideos));
+      if (lib != null && !_disposed) {
+        unawaited(_adoptStoredThumbs(lib, storedVideos));
+      }
     }();
   }
 

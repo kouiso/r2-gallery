@@ -1054,46 +1054,46 @@ void main() {
     // #114/#117 の回帰: 何百件まとめて積んでもキューは全部回し切る
     test('300件まとめて積んでも全部終わる', () async {
       for (var i = 0; i < 300; i++) {
-        w.media['bulk-$i.jpg'] = bytesOf(64, i & 0xff);
+        w.media['img$i.jpg'] = bytesOf(64, i & 0xff);
       }
       final q = make();
       await q.restore();
       final added = await q.enqueueDownloads('lib', [
         for (var i = 0; i < 300; i++)
           MediaItem(
-              key: 'bulk-$i.jpg',
+              key: 'img$i.jpg',
               type: 'image',
-              url: '${w.base}/m/bulk-$i.jpg?sig=fresh'),
+              url: '${w.base}/m/img$i.jpg?sig=fresh'),
       ]);
       expect(added, hasLength(300));
       await until(() => q.tasks.every((t) => t.finished),
           what: '300 downloads finished', tries: 1500);
       expect(q.tasks.where((t) => t.status == TransferStatus.error), isEmpty);
       expect(await offline.count(), 300);
-      expect(await offline.readBytes('lib', 'bulk-42.jpg'), bytesOf(64, 42));
-      expect(await offline.readBytes('lib', 'bulk-299.jpg'), bytesOf(64, 299));
+      expect(await offline.readBytes('lib', 'img42.jpg'), bytesOf(64, 42));
+      expect(await offline.readBytes('lib', 'img299.jpg'), bytesOf(64, 299));
     });
 
     test('300件の途中で取れない物があっても残りは終わり、件数と理由が行に出る',
         () async {
       for (var i = 0; i < 300; i++) {
-        if (i != 150) w.media['bulk-$i.jpg'] = bytesOf(64, i & 0xff);
+        if (i != 150) w.media['img$i.jpg'] = bytesOf(64, i & 0xff);
       }
       final q = make();
       await q.restore();
       await q.enqueueDownloads('lib', [
         for (var i = 0; i < 300; i++)
           MediaItem(
-              key: 'bulk-$i.jpg',
+              key: 'img$i.jpg',
               type: 'image',
-              url: '${w.base}/m/bulk-$i.jpg?sig=fresh'),
+              url: '${w.base}/m/img$i.jpg?sig=fresh'),
       ]);
       await until(() => q.tasks.every((t) => t.finished),
           what: '300 downloads finished', tries: 1500);
       expect(q.tasks.where((t) => t.status == TransferStatus.done),
           hasLength(299));
       final err = q.tasks.singleWhere((t) => t.status == TransferStatus.error);
-      expect(err.itemKey, 'bulk-150.jpg');
+      expect(err.itemKey, 'img150.jpg');
       expect(err.error, isNotEmpty);
       expect(await offline.count(), 299);
     });

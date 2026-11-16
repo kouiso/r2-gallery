@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'src/state/app_state.dart';
 import 'src/state/pairing.dart';
@@ -143,6 +144,11 @@ class _R2GalleryAppState extends State<R2GalleryApp>
       navigatorKey: _navKey,
       title: 'R2 Gallery',
       theme: buildAppTheme(),
+      // UI は全て日本語。ja を固定すれば、端末が英語ロケールでも
+      // CJK フォールバックは日本語字形（JIS 系）を選ぶ（#13）
+      locale: const Locale('ja'),
+      supportedLocales: const [Locale('ja')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       debugShowCheckedModeBanner: false,
       // ロックは Navigator の上に被せる。積んだ再生画面やシートもまとめて隠し、下の木は捨てない
       builder: (context, child) =>

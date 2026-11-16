@@ -22,6 +22,9 @@ tools/       ops scripts (index-upload, app-distribute, pairing-url)
 
 ## App
 
+Flutter の版は `flutter/.flutter-version` に固定する（CI・Devin 設定・この文書は
+その1か所を指す）。mise なら `mise use flutter@$(cat flutter/.flutter-version)`。
+
 ```sh
 cd flutter
 flutter pub get

@@ -38,7 +38,7 @@ initialize:
 # Install project dependencies (runs during builds, surfaced to agent at session start).
   - name: install Flutter (flutter/ client toolchain)
     run: |
-      mise use -g flutter@3.44.6
+      mise use -g "flutter@$(cat flutter/.flutter-version)"
 maintenance: |
   pnpm install
   (cd flutter && flutter pub get) || true
@@ -47,16 +47,16 @@ knowledge:
     contents: |
       pnpm lint
       node tools/sync-ai-rules.mjs --check
-      cd flutter && mise exec flutter@3.44.6 -- flutter analyze
+      cd flutter && mise exec "flutter@$(cat .flutter-version)" -- flutter analyze
   - name: test
     contents: |
       pnpm test   # tools + Worker Vitest
-      cd flutter && mise exec flutter@3.44.6 -- flutter test
+      cd flutter && mise exec "flutter@$(cat .flutter-version)" -- flutter test
       Local CI: supply RUNNER_TEMP as a writable temporary directory, then run CI_SCAN_BASE=origin/main node .github/ci/run.mjs fast.
       An unset forbidden-word rules variable means that scan is skipped, not passed.
   - name: build
     contents: |
-      cd flutter && mise exec flutter@3.44.6 -- flutter build web --release
+      cd flutter && mise exec "flutter@$(cat .flutter-version)" -- flutter build web --release
       Flutter SDK must already be installed; use the explicit version to avoid an unrelated global SDK.
       Production distribution must use release artifacts, never a debug APK.
   - name: secrets-and-setup

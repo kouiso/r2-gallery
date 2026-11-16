@@ -16,18 +16,22 @@ class ListingScope {
   final String prefix;
   final bool recursive;
   final String sort;
+  // 種別の絞り込み（写真/動画）も控えの単位に含める。混ぜると「全部」の控えが
+  // 「動画のみ」の一覧に出てしまう（#26）
+  final String type;
   const ListingScope({
     required this.endpoint,
     required this.lib,
     required this.prefix,
     required this.recursive,
     required this.sort,
+    this.type = 'all',
   });
 
   /// ファイル名・保存キーに使う。中身（ライブラリ名やフォルダ名）をそのまま名前に出さない
   String get id => sha256
       .convert(utf8.encode(jsonEncode(
-          [endpoint, lib, prefix, recursive ? 1 : 0, sort])))
+          [endpoint, lib, prefix, recursive ? 1 : 0, sort, type])))
       .toString();
 }
 

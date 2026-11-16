@@ -7,7 +7,7 @@
  * - GET /v1/libraries                         -> configured libraries
  * - GET /v1/:lib/albums                       -> album list (user albums from META/.system/albums.json + pipeline albums from index-<lib>.json)
  * - GET /v1/:lib/albums/:id?cursor=&limit=    -> items in an album, with signed media URLs
- * - GET /v1/:lib/folders?prefix=&cursor=&sort=&recursive=&fresh=
+ * - GET /v1/:lib/folders?prefix=&cursor=&sort=&type=&recursive=&fresh=
  *                                             -> folder browsing; sorted listings are served from the
  *                                                catalog in META/.system/catalog/ (fresh=1 rebuilds it first)
  * - GET /v1/:lib/duplicates?cursor=&limit=    -> groups of byte-identical media (from recorded SHA-256)

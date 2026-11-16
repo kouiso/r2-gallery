@@ -10,6 +10,7 @@ import {
   rowOf,
   type Catalog,
   type FolderSort,
+  type FolderType,
   type FolderView,
   type SortPoint,
 } from "../lib/catalog";
@@ -227,6 +228,10 @@ export async function handleAlbum(
 const FOLDER_SORTS: readonly string[] = ["new", "old", "name", "size"];
 const isFolderSort = (v: string): v is FolderSort => FOLDER_SORTS.includes(v);
 
+// 一覧の種別絞り込み(#26)。photo=画像の拡張子、video=動画の拡張子。省略時は全件
+const FOLDER_TYPES: readonly string[] = ["photo", "video"];
+const isFolderType = (v: string): v is FolderType => FOLDER_TYPES.includes(v);
+
 const formatFolderCursor = (p: SortPoint): string =>
   `${encodeURIComponent(String(p.primary))}|${encodeURIComponent(p.key)}`;
 
@@ -266,6 +271,9 @@ export async function handleFolders(
   if (sortParam !== null && !isFolderSort(sortParam)) return json({ error: "invalid_sort" }, 400);
   const sort: FolderSort | null =
     (sortParam as FolderSort | null) ?? (url.searchParams.get("order") === "recent" ? "new" : null);
+  const typeParam = url.searchParams.get("type");
+  if (typeParam !== null && !isFolderType(typeParam)) return json({ error: "invalid_type" }, 400);
+  const type = (typeParam as FolderType | null) ?? undefined;
   if (sort) {
     // 直下だけの一覧は、1000 件に収まるなら R2 に直接聞く。アプリは上げた直後に
     // 「その key が今あるか」をこの口で確かめるので、索引への追記が遅れても正しく答える。
@@ -291,10 +299,11 @@ export async function handleFolders(
         prefix,
         false,
         sort,
+        type,
       );
       view.folders = direct.delimitedPrefixes.filter((p) => !isReserved(p));
     } else {
-      view = catalog!.view(prefix, recursive, sort);
+      view = catalog!.view(prefix, recursive, sort, type);
     }
     // 位置カーソル(<並べ替えの値>|<key>)で続きを探す。件数オフセットだと、先頭に
     // 新しい物が入った時に既に出した分をもう一度出してしまう。

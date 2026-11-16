@@ -91,7 +91,7 @@ class _Api extends ApiClient {
 
   @override
   Future<FolderPage> folder(String libId,
-          {String prefix = '', String? cursor, bool recursive = false, String? sort, bool fresh = false}) async =>
+          {String prefix = '', String? cursor, bool recursive = false, String? sort, String? type, bool fresh = false}) async =>
       FolderPage(items: folderItems);
 }
 

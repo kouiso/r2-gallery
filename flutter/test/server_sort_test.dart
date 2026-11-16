@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:r2_gallery/src/api/client.dart';
 import 'package:r2_gallery/src/api/models.dart';
+import 'package:r2_gallery/src/grid/media_kind.dart';
 import 'package:r2_gallery/src/grid/sort_mode.dart';
 import 'package:r2_gallery/src/state/app_state.dart';
 
@@ -37,18 +38,27 @@ class _Adapter implements HttpClientAdapter {
 
 /// 新しい Worker のつもりで、並び順ごとに2ページへ分けて返す。
 class _SortingApi extends ApiClient {
-  final List<({String? sort, String? cursor})> calls = [];
+  final List<({String? sort, String? type, String? cursor})> calls = [];
   // 古い Worker は sort を無視して新着順で返し、sort も返さない
   bool oldWorker = false;
   bool failNext = false;
   // 続きのページだけ別の並びで返す(Worker の入れ替わり)
   String? moreSort;
+  // 種別絞り込みのテスト用に、画像と動画が混ざった一覧へ切り替える
+  bool mixed = false;
 
   static final _newest = [
     _it('m.jpg', at: 5, size: 1),
     _it('B.jpg', at: 4, size: 9),
     _it('a.jpg', at: 3, size: 5),
     _it('z.jpg', at: 2, size: 7),
+  ];
+
+  static final _mixed = [
+    _it('p1.jpg', at: 5),
+    MediaItem(key: 'v1.mp4', type: 'video', url: 'https://w.example/m/v1.mp4', createdAt: 4),
+    _it('p2.png', at: 3),
+    MediaItem(key: 'v2.mov', type: 'video', url: 'https://w.example/m/v2.mov', createdAt: 2),
   ];
 
   List<MediaItem> _order(String? sort) {
@@ -71,13 +81,20 @@ class _SortingApi extends ApiClient {
       String? cursor,
       bool recursive = false,
       String? sort,
+      String? type,
       bool fresh = false}) async {
-    calls.add((sort: sort, cursor: cursor));
+    calls.add((sort: sort, type: type, cursor: cursor));
     if (failNext) {
       failNext = false;
       throw const ApiError(0, 'offline');
     }
-    final all = _order(sort);
+    var all = mixed ? [..._mixed] : _order(sort);
+    // 古い Worker は type も無視する。新しい Worker はここで絞り込む
+    if (!oldWorker && type == 'video') {
+      all = all.where((i) => i.type == 'video').toList();
+    } else if (!oldWorker && type == 'photo') {
+      all = all.where((i) => i.type == 'image').toList();
+    }
     final from = cursor == null ? 0 : int.parse(cursor);
     final page = all.sublist(from, from + 2);
     return FolderPage(
@@ -121,15 +138,56 @@ void main() {
     final g = GalleryState(api);
     await g.refresh('a');
     await g.changeSort(SortMode.size, 'a');
-    expect(api.calls.last, (sort: 'size', cursor: null));
+    expect(api.calls.last, (sort: 'size', type: null, cursor: null));
     expect(_keys(g.ordered()), ['B.jpg', 'z.jpg']);
     await g.loadMore('a');
-    expect(api.calls.last, (sort: 'size', cursor: '2'));
+    expect(api.calls.last, (sort: 'size', type: null, cursor: '2'));
     expect(_keys(g.ordered()), ['B.jpg', 'z.jpg', 'a.jpg', 'm.jpg']);
     // 同じ順なら取り直さない
     final n = api.calls.length;
     await g.changeSort(SortMode.size, 'a');
     expect(api.calls.length, n);
+  });
+
+  test('ApiClient.folder は type を query に載せる', () async {
+    final adapter = _Adapter({'items': <Object>[]});
+    final api = ApiClient(dio: Dio()..httpClientAdapter = adapter)
+      ..setConnection(const Connection('https://w.example', 'tk'));
+    await api.folder('a', type: 'photo');
+    expect(adapter.queries.single['type'], 'photo');
+    await api.folder('a');
+    expect(adapter.queries.last.containsKey('type'), isFalse);
+  });
+
+  test('種別を変えると Worker に type を渡して先頭から取り直す(#26)', () async {
+    final api = _SortingApi()..mixed = true;
+    final g = GalleryState(api, kind: MediaKind.video);
+    await g.refresh('a');
+    expect(api.calls.single.type, 'video');
+    expect(_keys(g.items), ['v1.mp4', 'v2.mov']);
+    // 「すべて」へ戻すと type を外して全件取り直す（先頭ページは2件）
+    await g.changeKind(MediaKind.all, 'a');
+    expect(api.calls.last.type, isNull);
+    expect(api.calls.last.cursor, isNull);
+    expect(g.items, hasLength(2));
+    await g.loadMore('a');
+    expect(g.items, hasLength(4));
+    // 同じ種別なら取り直さない
+    final n = api.calls.length;
+    await g.changeKind(MediaKind.all, 'a');
+    expect(api.calls.length, n);
+  });
+
+  test('type を無視する古い Worker では、混ざった行を端末側で除く(#26)', () async {
+    final api = _SortingApi()
+      ..mixed = true
+      ..oldWorker = true;
+    final g = GalleryState(api, kind: MediaKind.photo);
+    await g.refresh('a');
+    // 古い Worker は絞り込まずに返すので、混ざった動画を端末側で除く
+    expect(_keys(g.items), ['p1.jpg']);
+    await g.loadMore('a');
+    expect(_keys(g.items), ['p1.jpg', 'p2.png']);
   });
 
   test('sort を返さない古い Worker では、端末側で並べ直す', () async {
@@ -149,7 +207,7 @@ void main() {
     expect(g.cursor, isNull);
     await g.loadMore('a');
     // 続きではなく先頭から取り直す
-    expect(api.calls.last, (sort: 'old', cursor: null));
+    expect(api.calls.last, (sort: 'old', type: null, cursor: null));
     expect(_keys(g.ordered()), ['z.jpg', 'a.jpg']);
   });
 

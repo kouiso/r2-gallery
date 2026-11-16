@@ -6,6 +6,7 @@ import '../api/client.dart';
 import '../api/models.dart';
 import '../config/baked.dart' as baked;
 import '../grid/photos_chrome.dart';
+import '../grid/media_kind.dart';
 import '../grid/sort_mode.dart';
 import '../offline/offline_store.dart';
 import '../store/device_auth.dart';
@@ -753,10 +754,14 @@ class GalleryState extends ChangeNotifier {
       {this.prefix = '',
       this.recursive = true,
       this.sort = SortMode.dateNew,
+      this.kind = MediaKind.all,
       this.loadMoreBackoff = const Duration(seconds: 3),
       this.cache});
 
   SortMode sort;
+
+  /// 写真/動画の絞り込み（#26）。Worker の type パラメータで全件に効かせる
+  MediaKind kind;
 
   /// 先頭ページの控えの置き場。null なら控えない（テストの既定）。
   final ListingCache? cache;
@@ -801,6 +806,16 @@ class GalleryState extends ChangeNotifier {
     if (m == sort) return Future.value();
     sort = m;
     // 取り直しが失敗しても、古い並びの cursor を新しい並びで使わせない
+    cursor = null;
+    _serverSorted = false;
+    _needsFirstPage = true;
+    return refresh(lib);
+  }
+
+  /// 種別の絞り込みを変える。cursor は絞り込み前の一覧の物なので使い回せない
+  Future<void> changeKind(MediaKind k, String lib) {
+    if (k == kind) return Future.value();
+    kind = k;
     cursor = null;
     _serverSorted = false;
     _needsFirstPage = true;
@@ -862,6 +877,7 @@ class GalleryState extends ChangeNotifier {
           cursor: null,
           recursive: recursive,
           sort: sort.apiValue,
+          type: kind.apiValue,
           fresh: fresh);
       if (e != epoch) return;
       _adoptFirstPage(page);
@@ -879,7 +895,8 @@ class GalleryState extends ChangeNotifier {
     _serverSorted = page.sort == sort.apiValue;
     _needsFirstPage = false;
     showingCached = false;
-    items = _withoutTrashing(page.items);
+    // 古い Worker は type を無視するので、混ざった行は端末側で除く
+    items = _withoutTrashing(page.items).where(kind.matches).toList();
     folders = page.folders;
     cursor = page.cursor;
     total = page.total;
@@ -893,7 +910,8 @@ class GalleryState extends ChangeNotifier {
         lib: lib,
         prefix: prefix,
         recursive: recursive,
-        sort: sort.apiValue);
+        sort: sort.apiValue,
+        type: kind.apiValue ?? 'all');
   }
 
   Future<void> _showCached(String lib, int e) async {
@@ -944,7 +962,8 @@ class GalleryState extends ChangeNotifier {
           prefix: prefix,
           cursor: null,
           recursive: recursive,
-          sort: sort.apiValue);
+          sort: sort.apiValue,
+          type: kind.apiValue);
       if (e != epoch || seq != _softSeq) return;
       _mergeFirstPage(page);
       error = null;
@@ -975,7 +994,7 @@ class GalleryState extends ChangeNotifier {
     }
     final coveredAll = last >= items.length - 1;
     items = [
-      ..._withoutTrashing(page.items),
+      ..._withoutTrashing(page.items).where(kind.matches),
       ...items.skip(last + 1).where((it) => !fetched.contains(_rowId(it))),
     ];
     // 読み込み済みが全部先頭ページの範囲に収まっていたなら、続きは先頭ページの cursor から
@@ -1025,7 +1044,8 @@ class GalleryState extends ChangeNotifier {
           prefix: prefix,
           cursor: cursor,
           recursive: recursive,
-          sort: sort.apiValue);
+          sort: sort.apiValue,
+          type: kind.apiValue);
       if (e != epoch) return;
       // 先頭ページは Worker の並びだったのに、続きが別の並びで返ったら cursor は使えない
       // (Worker の入れ替わり)。続きを継ぎ足さず先頭から取り直す
@@ -1038,6 +1058,7 @@ class GalleryState extends ChangeNotifier {
       items = [
         ...items,
         ..._withoutTrashing(page.items)
+            .where(kind.matches)
             .where((it) => seen.add('${it.lib}:${it.key}')),
       ];
       if (!recursive) folders = page.folders;
@@ -1316,9 +1337,12 @@ class GalleryState extends ChangeNotifier {
             prefix: prefix,
             cursor: cur,
             recursive: recursive,
-            sort: sort.apiValue);
+            sort: sort.apiValue,
+            type: kind.apiValue);
         if (e != epoch) return;
-        final fresh = {for (final it in page.items) _idOf(it, lib): it};
+        final fresh = {
+          for (final it in page.items.where(kind.matches)) _idOf(it, lib): it
+        };
         items = [
           for (final it in items)
             if (fresh.containsKey(_idOf(it, lib)) &&

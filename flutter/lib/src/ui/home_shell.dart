@@ -288,9 +288,12 @@ class _HomeShellState extends State<HomeShell> {
             : null,
         title: Text(inTrash ? 'ゴミ箱' : 'R2 Gallery'),
         actions: [
-          if (_tab == 0)
+          if (_tab == 0) ...[
+            KindMenuButton(
+                current: chrome.kind, onPick: (k) => chrome.kind = k),
             SortMenuButton(
                 current: chrome.sort, onPick: (m) => chrome.sort = m),
+          ],
           IconButton(
             tooltip: '今すぐロック',
             icon: const Icon(Icons.lock_outline, size: 20),

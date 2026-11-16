@@ -159,7 +159,26 @@ class DetectedSheetContent extends StatelessWidget {
                   style:
                       const TextStyle(color: AppColors.danger, fontSize: 13)),
             ),
-          if (f != null)
+          if (f != null) ...[
+            // 種別の絞り込みチップ（#26）。件数が多い時に写真だけ・動画だけへ絞る
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Wrap(
+                spacing: 8,
+                children: [
+                  for (final (v, label) in const [
+                    (DetectedView.all, 'すべて'),
+                    (DetectedView.photo, '写真'),
+                    (DetectedView.video, '動画'),
+                  ])
+                    ChoiceChip(
+                      label: Text(label),
+                      selected: f.view == v,
+                      onSelected: (_) => f.viewKind = v,
+                    ),
+                ],
+              ),
+            ),
             Padding(
               padding: const EdgeInsets.only(left: 16, right: 16, bottom: 4),
               child: Wrap(
@@ -182,11 +201,17 @@ class DetectedSheetContent extends StatelessWidget {
                 ],
               ),
             ),
+          ],
           if (visible.isEmpty && items.isNotEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              child: Text('検出はすべて除外されています',
-                  style: TextStyle(color: AppColors.textDim)),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 24, vertical: 12),
+              // 除外で消えたのか絞り込みで消えたのかを分けて出す（混同すると戻せない）
+              child: Text(
+                  f != null && f.view != DetectedView.all
+                      ? 'この種類のメディアは検出されていません'
+                      : '検出はすべて除外されています',
+                  style: const TextStyle(color: AppColors.textDim)),
             ),
           Flexible(
             child: ListView.builder(

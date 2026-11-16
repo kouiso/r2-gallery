@@ -155,6 +155,7 @@ class ApiClient {
       String? cursor,
       bool recursive = false,
       String? sort,
+      String? type,
       bool fresh = false}) {
     return _get('${_lib(libId)}/folders', (r) {
       final items = ((r.data['items'] as List?) ?? const [])
@@ -175,6 +176,9 @@ class ApiClient {
       'order': 'recent',
       // 並び順は Worker に渡して全体に対して並べさせる。古い Worker は無視して新着順で返す
       'sort': ?sort,
+      // 種別の絞り込み（写真/動画）も Worker 側で全件に効かせる。古い Worker は無視するので、
+      // その時は端末側で混ざった行を除く（app_state の MediaKind.matches）
+      'type': ?type,
       'cursor': ?cursor,
       // 利用者が引っ張って取り直した時だけ、Worker の索引ではなくバケットを数え直させる
       if (fresh) 'fresh': '1',

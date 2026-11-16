@@ -1,4 +1,4 @@
-import { MEDIA_EXT, SYSTEM_PREFIX, TRASH_PREFIX } from "./const";
+import { IMAGE_EXT, MEDIA_EXT, SYSTEM_PREFIX, TRASH_PREFIX, VIDEO_EXT } from "./const";
 import type { Env } from "./env";
 import { libraries } from "./env";
 
@@ -34,6 +34,8 @@ export interface JournalEntry {
 }
 
 export type FolderSort = "new" | "old" | "name" | "size";
+// 一覧の種別絞り込み。#26: 写真だけ・動画だけを出す口。all はパラメータ省略時の全件
+export type FolderType = "photo" | "video";
 
 // 同じ値の物が並ぶと位置が一つに決まらないので、key を決め手に足して全順序にする
 export interface SortPoint {
@@ -63,7 +65,7 @@ export interface Catalog {
   startedAt: number;
   rows: ReadonlyMap<string, CatalogRow>;
   hasThumb(key: string): boolean;
-  view(prefix: string, recursive: boolean, sort: FolderSort): FolderView;
+  view(prefix: string, recursive: boolean, sort: FolderSort, type?: FolderType): FolderView;
   /** 一覧に出る物（メディアの拡張子を持つ物）をサイズごとに束ねたもの */
   bySize(): ReadonlyMap<number, CatalogRow[]>;
 }
@@ -407,7 +409,10 @@ export function buildView(
   prefix: string,
   recursive: boolean,
   sort: FolderSort,
+  type?: FolderType,
 ): FolderView {
+  // 絞り込みは拡張子で決める。一覧が拾う拡張子の元は const.ts の media-ext.json
+  const ext = type === "photo" ? IMAGE_EXT : type === "video" ? VIDEO_EXT : MEDIA_EXT;
   const folders = new Set<string>();
   const picked: { row: CatalogRow; point: SortPoint }[] = [];
   for (const row of rows) {
@@ -420,7 +425,7 @@ export function buildView(
         continue;
       }
     }
-    if (MEDIA_EXT.test(key)) picked.push({ row, point: sortPoint(sort, row) });
+    if (ext.test(key)) picked.push({ row, point: sortPoint(sort, row) });
   }
   picked.sort((a, b) => compareFolderSort(sort, a.point, b.point));
   return {
@@ -435,11 +440,11 @@ function toCatalog(state: CatalogState): Catalog {
     startedAt: state.startedAt,
     rows: state.rows,
     hasThumb: (key) => state.thumbs.has(key),
-    view(prefix, recursive, sort) {
-      const id = `${recursive ? 1 : 0}\n${sort}\n${prefix}`;
+    view(prefix, recursive, sort, type) {
+      const id = `${recursive ? 1 : 0}\n${sort}\n${type ?? "all"}\n${prefix}`;
       const hit = state.views.get(id);
       if (hit) return hit;
-      const made = buildView(state.rows.values(), prefix, recursive, sort);
+      const made = buildView(state.rows.values(), prefix, recursive, sort, type);
       if (state.views.size >= VIEW_CACHE) {
         const oldest = state.views.keys().next().value;
         if (oldest !== undefined) state.views.delete(oldest);

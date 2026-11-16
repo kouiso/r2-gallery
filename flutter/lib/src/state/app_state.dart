@@ -374,8 +374,10 @@ class AppState extends ChangeNotifier {
   Future<void> disconnect() async {
     await Kv.remove(Keys.endpoint);
     await Kv.remove(Keys.token);
-    // 接続を外した後も前の接続先の一覧が端末に残り続けないよう、控えも捨てる
-    await listingCache.clear();
+    // 接続を外した後も前の接続先の一覧が端末に残り続けないよう、控えも捨てる。
+    // 後片付けを待たずに画面だけは即座に未接続へ戻す。控えは端末ごとに別の置き場なので、
+    // 消し残しがあっても次の接続では ListingScope の違いで参照されない
+    unawaited(listingCache.clear());
     api.setConnection(null);
     connected = false;
     browseOnly = false;

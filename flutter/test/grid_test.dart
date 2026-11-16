@@ -666,7 +666,7 @@ void main() {
   });
 
   group('H15 フォルダ', () {
-    testWidgets('末尾のフォルダカードから下の階層へ辿れる', (tester) async {
+    testWidgets('先頭のフォルダ段のカードから下の階層へ辿れる', (tester) async {
       final api = _Api({
         'trip/': FolderPage(
           items: [_img('trip/a.jpg', at: _daysAgo(0))],
@@ -691,6 +691,83 @@ void main() {
       await tester.pumpAndSettle();
       expect(api.folderCalls.last.prefix, 'trip/day1/');
       expect(_tile('trip/day1/b.jpg'), findsOneWidget);
+    });
+
+    testWidgets('下位フォルダは写真より上に出る（#74）', (tester) async {
+      final api = _Api({
+        'trip/': FolderPage(
+          items: [
+            for (var i = 0; i < 40; i++) _img('trip/p$i.jpg', at: _daysAgo(0)),
+          ],
+          folders: ['trip/day1/', 'trip/day2/'],
+        ),
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          home: FolderBrowseScreen(app: _app(api), lib: 'a', prefix: 'trip/'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final folderY = tester.getTopLeft(find.text('day1')).dy;
+      final photoY = tester.getTopLeft(_tile('trip/p0.jpg')).dy;
+      expect(folderY, lessThan(photoY));
+      expect(find.byKey(const ValueKey('folderStrip')), findsOneWidget);
+      expect(find.text('フォルダ 2', findRichText: true), findsOneWidget);
+    });
+
+    testWidgets('フォルダが多い時は段を横に送って末尾のカードから辿れ、写真は動かない（#74）', (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final api = _Api({
+        'trip/': FolderPage(
+          items: [
+            for (var i = 0; i < 250; i++) _img('trip/p$i.jpg', at: _daysAgo(0)),
+          ],
+          folders: [for (var i = 0; i < 12; i++) 'trip/f$i/'],
+        ),
+        'trip/f11/': FolderPage(
+          items: [_img('trip/f11/z.jpg', at: _daysAgo(0))],
+        ),
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          home: FolderBrowseScreen(app: _app(api), lib: 'a', prefix: 'trip/'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final strip = find.byKey(const ValueKey('folderStrip'));
+      expect(strip, findsOneWidget);
+      final photoYBefore = tester.getTopLeft(_tile('trip/p0.jpg')).dy;
+      // 12 枚×(112+8) は 390 幅に収まらないので、末尾のカードは最初は描かれていない
+      expect(find.text('f11'), findsNothing);
+
+      // dragUntilVisible は最後に縦の ensureVisible も走らせ写真の y を動かすので、横だけ送る
+      final row = find.descendant(of: strip, matching: find.byType(Scrollable));
+      await tester.drag(row, const Offset(-2000, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('f11'), findsOneWidget);
+      expect(tester.getTopLeft(_tile('trip/p0.jpg')).dy, photoYBefore);
+
+      await tester.tap(find.text('f11'));
+      await tester.pumpAndSettle();
+      expect(api.folderCalls.last.prefix, 'trip/f11/');
+      expect(_tile('trip/f11/z.jpg'), findsOneWidget);
+    });
+
+    testWidgets('下位フォルダが無い時はフォルダの段ごと出ない（#74）', (tester) async {
+      final api = _Api({
+        'trip/': FolderPage(items: [_img('trip/a.jpg', at: _daysAgo(0))]),
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          home: FolderBrowseScreen(app: _app(api), lib: 'a', prefix: 'trip/'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      // 有る時に findsOneWidget を確かめる上のテストと対にして、key が無いだけで通る事を防ぐ
+      expect(_tile('trip/a.jpg'), findsOneWidget);
+      expect(find.byKey(const ValueKey('folderStrip')), findsNothing);
     });
 
     testWidgets('空のフォルダは空と出す', (tester) async {

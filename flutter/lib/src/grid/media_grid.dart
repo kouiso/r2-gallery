@@ -37,7 +37,7 @@ List<({String label, List<MediaItem> items})> groupByDay(
   return out;
 }
 
-/// 写真・フォルダで共通のグリッド本体。日付見出し・日ごと選択・末尾のフォルダカード・続きの自動取得を持つ。
+/// 写真・フォルダで共通のグリッド本体。日付見出し・日ごと選択・先頭のフォルダ段・続きの自動取得を持つ。
 class MediaGrid extends StatefulWidget {
   final List<MediaItem> items;
   final bool dateHeaders;
@@ -84,6 +84,15 @@ class _MediaGridState extends State<MediaGrid> {
   // 同じ件数のまま何度も続きを頼まんよう、頼んだ時の件数を覚えておく。
   // 取得に失敗しても毎フレーム投げ直すループにならない
   int _askedAt = -1;
+
+  // フォルダ段の横送り用。Web/マウスでは既定のドラッグが効かんので、バーを出して掴めるようにする
+  final ScrollController _folderStripCtl = ScrollController();
+
+  @override
+  void dispose() {
+    _folderStripCtl.dispose();
+    super.dispose();
+  }
 
   void _maybeNearEnd(int index) {
     final n = widget.items.length;
@@ -177,31 +186,88 @@ class _MediaGridState extends State<MediaGrid> {
     );
   }
 
+  /// 見出し（フォルダ N）と、横に送れるカードの1段。数が多くても縦の高さは変わらず、写真が押し出されない。
+  Widget _folderStrip() {
+    return Column(
+      key: const ValueKey('folderStrip'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // デザイン（ReviewFolder.dc.html）の見出し行は上下 8 の余白に 48 高の行で、数だけ淡色・細字にして名前と区別する
+        Container(
+          height: 64,
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text.rich(
+              TextSpan(
+                text: 'フォルダ ',
+                children: [
+                  TextSpan(
+                    text: '${widget.folders.length}',
+                    style: const TextStyle(
+                      color: AppColors.textDim,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+              style: const TextStyle(
+                fontSize: 14,
+                height: 20 / 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 88,
+          child: Scrollbar(
+            controller: _folderStripCtl,
+            thumbVisibility: true,
+            child: ListView.separated(
+              controller: _folderStripCtl,
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: widget.folders.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (_, i) => _folderCard(widget.folders[i]),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+
   Widget _folderCard(String prefix) {
     final name = prefix.endsWith('/')
         ? prefix.substring(0, prefix.length - 1).split('/').last
         : prefix.split('/').last;
-    return Material(
-      color: AppColors.surfaceHigh,
-      borderRadius: BorderRadius.circular(8),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => widget.onOpenFolder?.call(prefix),
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.folder, color: AppColors.accent),
-              const SizedBox(height: 6),
-              Text(
-                name,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 12),
-              ),
-            ],
+    return SizedBox(
+      width: 112,
+      height: 88,
+      child: Material(
+        color: AppColors.surfaceHigh,
+        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => widget.onOpenFolder?.call(prefix),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // デザインは線のフォルダアイコン
+                const Icon(Icons.folder_outlined, color: AppColors.accent),
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13, height: 18 / 13),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -217,6 +283,10 @@ class _MediaGridState extends State<MediaGrid> {
       builder: (context, c) {
         final columns = gridColumnsFor(c.maxWidth);
         final slivers = <Widget>[];
+        // 下位フォルダは写真の上に1段で出す。写真を最後まで送らないと辿れない問題（#73）の対策。無い時は段ごと出さない
+        if (widget.folders.isNotEmpty) {
+          slivers.add(SliverToBoxAdapter(child: _folderStrip()));
+        }
         if (widget.dateHeaders) {
           final rows =
               <
@@ -283,18 +353,6 @@ class _MediaGridState extends State<MediaGrid> {
         } else {
           slivers.add(
             _gridOf(columns, items.length, (i) => _tile(items[i], i)),
-          );
-        }
-        if (widget.folders.isNotEmpty) {
-          slivers.add(
-            const SliverToBoxAdapter(child: SizedBox(height: gridGap)),
-          );
-          slivers.add(
-            _gridOf(
-              columns,
-              widget.folders.length,
-              (i) => _folderCard(widget.folders[i]),
-            ),
           );
         }
         if (widget.loadingMore) {

@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 import '../api/models.dart';
@@ -235,12 +237,21 @@ class _ViewerScreenState extends State<ViewerScreen>
     // A→B→A と戻っても、前の A の応答で新しい取得結果を上書きしない
     final request = ++_metaRequest;
     _review.value = const ReviewLoad.loading();
-    widget.app.api.meta(_libOf(it), it.key).then((m) {
-      if (mounted && _metaRequest == request) _review.value = ReviewLoad.done(m);
-    }, onError: (Object e) {
-      debugPrint('meta failed: $e');
-      if (mounted && _metaRequest == request) _review.value = const ReviewLoad.failed();
-    });
+    widget.app.api
+        .meta(_libOf(it), it.key)
+        .then(
+          (m) {
+            if (mounted && _metaRequest == request) {
+              _review.value = ReviewLoad.done(m);
+            }
+          },
+          onError: (Object e) {
+            debugPrint('meta failed: $e');
+            if (mounted && _metaRequest == request) {
+              _review.value = const ReviewLoad.failed();
+            }
+          },
+        );
   }
 
   // 操作バーに被せると2秒間ボタンが押せなくなるので、バーの上に浮かせる
@@ -248,24 +259,33 @@ class _ViewerScreenState extends State<ViewerScreen>
     final bottom = MediaQuery.of(context).padding.bottom;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        content: Text(msg),
-        duration: const Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-        margin: EdgeInsets.fromLTRB(16, 0, 16, viewerActionBarHeight + bottom + 28),
-      ));
+      ..showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.fromLTRB(
+            16,
+            0,
+            16,
+            viewerActionBarHeight + bottom + 28,
+          ),
+        ),
+      );
   }
 
   Future<void> _alert(String msg) => showDialog<void>(
-        context: context,
-        builder: (c) => AlertDialog(
-          title: Text(msg),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.of(c).pop(), child: const Text('OK')),
-          ],
+    context: context,
+    builder: (c) => AlertDialog(
+      title: Text(msg),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(c).pop(),
+          child: const Text('OK'),
         ),
-      );
+      ],
+    ),
+  );
 
   Future<void> _trash() async {
     if (_busy) return;
@@ -294,8 +314,12 @@ class _ViewerScreenState extends State<ViewerScreen>
   Future<void> _addToAlbum() async {
     final it = _item;
     final l = _libOf(it);
-    final res = await pickAlbumAndAdd(context, widget.app,
-        lib: l, targets: [(l, it.key)]);
+    final res = await pickAlbumAndAdd(
+      context,
+      widget.app,
+      lib: l,
+      targets: [(l, it.key)],
+    );
     if (res == null || !mounted) return;
     // 送り終わるのを待たずに知らせ、失敗した時だけ後から理由を出す
     _flash('アルバムに追加しました');
@@ -356,8 +380,9 @@ class _ViewerScreenState extends State<ViewerScreen>
           name: it.name,
           isVideo: it.isVideo,
           sizeText: it.size == null ? null : formatBytes(it.size!),
-          addedAt:
-              it.createdAt == null ? null : formatDateTime(it.createdAt!, _now),
+          addedAt: it.createdAt == null
+              ? null
+              : formatDateTime(it.createdAt!, _now),
           location: folder.isEmpty ? libTitle : '$libTitle / $folder',
           note: (it.note ?? '').trim().isEmpty ? null : it.note,
           review: r.meta,
@@ -369,6 +394,31 @@ class _ViewerScreenState extends State<ViewerScreen>
     );
   }
 
+  /// Web・デスクトップでは左右キーと端のボタンで送る（#61）。
+  /// キー入力を受けるにはこの配下にフォーカスが要るので autofocus を付ける。
+  void _pageBy(int delta) {
+    final target = (_index + delta).clamp(0, _items.length - 1);
+    if (target == _index || !_pager.hasClients) return;
+    unawaited(
+      _pager.animateToPage(
+        target,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      ),
+    );
+  }
+
+  /// 端の「前へ」「次へ」ボタンはポインタが要る環境（Web・デスクトップ）だけに出す。
+  /// タッチ機ではスワイプがあるので重ねない。
+  bool get _showNavButtons =>
+      kIsWeb ||
+      switch (defaultTargetPlatform) {
+        TargetPlatform.linux ||
+        TargetPlatform.macOS ||
+        TargetPlatform.windows => true,
+        _ => false,
+      };
+
   @override
   Widget build(BuildContext context) {
     final items = _items;
@@ -377,127 +427,197 @@ class _ViewerScreenState extends State<ViewerScreen>
     return PopScope(
       // ゴミ箱への移動中に閉じると、移動済みでも「元に戻す」が出せなくなる
       canPop: !_busy,
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        body: Stack(
-          fit: StackFit.expand,
-          children: [
-            wrapEdgePaging(PageView.builder(
-              controller: _pager,
-              physics: edgePagingPhysics,
-              itemCount: items.length,
-              onPageChanged: _onPage,
-              itemBuilder: (context, i) {
-                final x = items[i];
-                final key = ValueKey('${x.lib}:${x.key}');
-                if (x.isVideo) {
-                  // 動画は表示中のページだけがコントローラを持つ。隣は先読みしない（#141）
-                  if (i != _index) return _VideoPoster(key: key, item: x);
-                  return VideoView(
-                    key: ValueKey('video-${x.lib}:${x.key}'),
-                    url: x.url,
-                    active: true,
-                    bottomInset:
-                        _chrome ? viewerActionBarHeight + bottomSafe : 0,
-                    controllerFactory: widget.videoFactory,
-                    onControlsVisibleChange: (v) {
-                      if (mounted && _chrome != v) setState(() => _chrome = v);
+      child: CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
+              _pageBy(-1),
+          const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
+              _pageBy(1),
+          const SingleActivator(LogicalKeyboardKey.escape): () {
+            if (!_busy) Navigator.of(context).maybePop();
+          },
+        },
+        child: Focus(
+          autofocus: true,
+          child: Scaffold(
+            backgroundColor: Colors.black,
+            body: Stack(
+              fit: StackFit.expand,
+              children: [
+                wrapEdgePaging(
+                  PageView.builder(
+                    controller: _pager,
+                    physics: edgePagingPhysics,
+                    itemCount: items.length,
+                    onPageChanged: _onPage,
+                    itemBuilder: (context, i) {
+                      final x = items[i];
+                      final key = ValueKey('${x.lib}:${x.key}');
+                      if (x.isVideo) {
+                        // 動画は表示中のページだけがコントローラを持つ。隣は先読みしない（#141）
+                        if (i != _index) return _VideoPoster(key: key, item: x);
+                        return VideoView(
+                          key: ValueKey('video-${x.lib}:${x.key}'),
+                          url: x.url,
+                          active: true,
+                          bottomInset: _chrome
+                              ? viewerActionBarHeight + bottomSafe
+                              : 0,
+                          controllerFactory: widget.videoFactory,
+                          onControlsVisibleChange: (v) {
+                            if (mounted && _chrome != v) {
+                              setState(() => _chrome = v);
+                            }
+                          },
+                        );
+                      }
+                      if (!x.isImage) {
+                        return GestureDetector(
+                          onTap: () => setState(() => _chrome = !_chrome),
+                          child: const Center(
+                            child: Icon(
+                              Icons.insert_drive_file,
+                              size: 64,
+                              color: AppColors.textDim,
+                            ),
+                          ),
+                        );
+                      }
+                      return ViewerImagePage(
+                        key: key,
+                        item: x,
+                        onToggleControls: () =>
+                            setState(() => _chrome = !_chrome),
+                        onViewport: (z, l, r) => onViewport(i, z, l, r),
+                        cacheManager: widget.imageCacheManager,
+                      );
                     },
-                  );
-                }
-                if (!x.isImage) {
-                  return GestureDetector(
-                    onTap: () => setState(() => _chrome = !_chrome),
-                    child: const Center(
-                        child: Icon(Icons.insert_drive_file,
-                            size: 64, color: AppColors.textDim)),
-                  );
-                }
-                return ViewerImagePage(
-                  key: key,
-                  item: x,
-                  onToggleControls: () => setState(() => _chrome = !_chrome),
-                  onViewport: (z, l, r) => onViewport(i, z, l, r),
-                  cacheManager: widget.imageCacheManager,
-                );
-              },
-            )),
-            if (_chrome) ...[
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: _topBar(it),
-              ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  // 動画ではメモを出さない（再生バーと重なるため。全文は情報シート）
-                  if (!it.isVideo && (it.note ?? '').trim().isNotEmpty)
-                    _memo(it.note!),
-                  _actionBar(bottomSafe),
-                ]),
-              ),
-            ],
-          ],
+                  ),
+                ),
+                if (_chrome) ...[
+                  Positioned(top: 0, left: 0, right: 0, child: _topBar(it)),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // 動画ではメモを出さない（再生バーと重なるため。全文は情報シート）
+                        if (!it.isVideo && (it.note ?? '').trim().isNotEmpty)
+                          _memo(it.note!),
+                        _actionBar(bottomSafe),
+                      ],
+                    ),
+                  ),
+                  if (_showNavButtons && items.length > 1) ...[
+                    Positioned(
+                      left: 8,
+                      top: 0,
+                      bottom: 0,
+                      child: Center(
+                        child: IconButton(
+                          tooltip: '前へ',
+                          icon: const Icon(
+                            Icons.chevron_left,
+                            color: Colors.white,
+                            size: 36,
+                          ),
+                          onPressed: _index > 0 ? () => _pageBy(-1) : null,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      right: 8,
+                      top: 0,
+                      bottom: 0,
+                      child: Center(
+                        child: IconButton(
+                          tooltip: '次へ',
+                          icon: const Icon(
+                            Icons.chevron_right,
+                            color: Colors.white,
+                            size: 36,
+                          ),
+                          onPressed: _index < items.length - 1
+                              ? () => _pageBy(1)
+                              : null,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 
   Widget _topBar(MediaItem it) {
-    final title =
-        it.createdAt == null ? it.name : formatDateTime(it.createdAt!, _now);
+    final title = it.createdAt == null
+        ? it.name
+        : formatDateTime(it.createdAt!, _now);
     return Container(
       color: const Color(0x8C000000),
       child: SafeArea(
         bottom: false,
-        child: Row(children: [
-          IconButton(
-            tooltip: '閉じる',
-            icon: const Icon(Icons.arrow_back, color: Colors.white),
-            onPressed: _busy ? null : () => Navigator.of(context).maybePop(),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(title,
+        child: Row(
+          children: [
+            IconButton(
+              tooltip: '閉じる',
+              icon: const Icon(Icons.arrow_back, color: Colors.white),
+              onPressed: _busy ? null : () => Navigator.of(context).maybePop(),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600)),
-                  Text('${_index + 1}件目 · ${it.name}',
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      '${_index + 1}件目 · ${it.name}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                          color: Color(0xCCFFFFFF), fontSize: 12)),
-                ],
+                        color: Color(0xCCFFFFFF),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ]),
+          ],
+        ),
       ),
     );
   }
 
   Widget _memo(String note) => Container(
-        width: double.infinity,
-        color: const Color(0x8C000000),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Text(note,
-            key: const ValueKey('viewer-memo'),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Color(0xEBFFFFFF), fontSize: 14)),
-      );
+    width: double.infinity,
+    color: const Color(0x8C000000),
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    child: Text(
+      note,
+      key: const ValueKey('viewer-memo'),
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(color: Color(0xEBFFFFFF), fontSize: 14),
+    ),
+  );
 
   Widget _actionBar(double bottomSafe) {
     final actions = <Widget>[
@@ -508,25 +628,32 @@ class _ViewerScreenState extends State<ViewerScreen>
                 icon: Icons.download_done,
                 label: '保存済み',
                 accent: true,
-                onTap: _saveOffline)
+                onTap: _saveOffline,
+              )
             : _ViewerAction(
-                icon: Icons.download, label: 'オフライン', onTap: _saveOffline),
+                icon: Icons.download,
+                label: 'オフライン',
+                onTap: _saveOffline,
+              ),
       if (widget.app.deviceExportSupported)
         _ViewerAction(
-            icon: Icons.save_alt,
-            label: _exporting ? '保存中…' : '端末に保存',
-            onTap: _exporting ? null : _export),
+          icon: Icons.save_alt,
+          label: _exporting ? '保存中…' : '端末に保存',
+          onTap: _exporting ? null : _export,
+        ),
       // 読み取り専用のライブラリでは書き換える操作を出さない
       if (!_readOnly) ...[
         _ViewerAction(
-            icon: Icons.add_to_photos_outlined,
-            label: 'アルバムへ',
-            onTap: _addToAlbum),
+          icon: Icons.add_to_photos_outlined,
+          label: 'アルバムへ',
+          onTap: _addToAlbum,
+        ),
         _ViewerAction(
-            icon: Icons.delete_outline,
-            label: 'ゴミ箱へ',
-            danger: true,
-            onTap: _busy ? null : _trash),
+          icon: Icons.delete_outline,
+          label: 'ゴミ箱へ',
+          danger: true,
+          onTap: _busy ? null : _trash,
+        ),
       ],
     ];
     return Container(
@@ -559,10 +686,10 @@ class _ViewerAction extends StatelessWidget {
     final color = onTap == null
         ? Colors.white38
         : danger
-            ? AppColors.danger
-            : accent
-                ? AppColors.accent
-                : Colors.white;
+        ? AppColors.danger
+        : accent
+        ? AppColors.accent
+        : Colors.white;
     return InkWell(
       onTap: onTap,
       child: Semantics(
@@ -572,11 +699,13 @@ class _ViewerAction extends StatelessWidget {
           children: [
             Icon(icon, color: color),
             const SizedBox(height: 4),
-            Text(label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: color, fontSize: 12)),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: color, fontSize: 12),
+            ),
           ],
         ),
       ),
@@ -589,17 +718,9 @@ class ReviewLoad {
   final bool loading;
   final bool failed;
   final ReviewMeta? meta;
-  const ReviewLoad.loading()
-      : loading = true,
-        failed = false,
-        meta = null;
-  const ReviewLoad.done(this.meta)
-      : loading = false,
-        failed = false;
-  const ReviewLoad.failed()
-      : loading = false,
-        failed = true,
-        meta = null;
+  const ReviewLoad.loading() : loading = true, failed = false, meta = null;
+  const ReviewLoad.done(this.meta) : loading = false, failed = false;
+  const ReviewLoad.failed() : loading = false, failed = true, meta = null;
 }
 
 /// 情報シート。モデルにある値だけ出す（無いものは行ごと出さない）。
@@ -655,27 +776,41 @@ class ViewerInfoSheet extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('情報',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            const Text(
+              '情報',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
             const SizedBox(height: 8),
-            _row(isVideo ? Icons.videocam_outlined : Icons.image_outlined, name,
-                sizeText),
+            _row(
+              isVideo ? Icons.videocam_outlined : Icons.image_outlined,
+              name,
+              sizeText,
+            ),
             if (addedAt != null) _row(Icons.schedule, addedAt!, '追加日時'),
             _row(Icons.folder_outlined, location, '保存場所'),
             if (note != null) _row(Icons.notes, note!, 'メモ'),
             if (m != null)
               _row(
-                  Icons.rate_review_outlined,
-                  '${m.label} · ${m.verdict} · ${m.round}回目',
-                  reviewLines.isEmpty ? null : reviewLines.join('\n'))
+                Icons.rate_review_outlined,
+                '${m.label} · ${m.verdict} · ${m.round}回目',
+                reviewLines.isEmpty ? null : reviewLines.join('\n'),
+              )
             else if (reviewFailed)
-              Row(children: [
-                Expanded(
-                    child: _row(Icons.error_outline, '講評を取得できませんでした',
-                        '通信を確かめて、もう一度読み込んでください')),
-                TextButton(
-                    onPressed: onRetryReview, child: const Text('再読み込み')),
-              ])
+              Row(
+                children: [
+                  Expanded(
+                    child: _row(
+                      Icons.error_outline,
+                      '講評を取得できませんでした',
+                      '通信を確かめて、もう一度読み込んでください',
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: onRetryReview,
+                    child: const Text('再読み込み'),
+                  ),
+                ],
+              )
             else if (reviewLoading)
               _row(Icons.rate_review_outlined, '講評を確認中…', null)
             else
@@ -687,27 +822,34 @@ class ViewerInfoSheet extends StatelessWidget {
   }
 
   Widget _row(IconData icon, String primary, String? secondary) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Icon(icon, color: AppColors.textDim),
+    padding: const EdgeInsets.symmetric(vertical: 8),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Icon(icon, color: AppColors.textDim),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(primary, style: const TextStyle(fontSize: 15)),
+              if (secondary != null)
+                Text(
+                  secondary,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textDim,
+                  ),
+                ),
+            ],
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(primary, style: const TextStyle(fontSize: 15)),
-                if (secondary != null)
-                  Text(secondary,
-                      style: const TextStyle(
-                          fontSize: 12, color: AppColors.textDim)),
-              ],
-            ),
-          ),
-        ]),
-      );
+        ),
+      ],
+    ),
+  );
 }
 
 /// 表示していない動画ページ。コントローラを作らず、保存済みのサムネだけ見せる。

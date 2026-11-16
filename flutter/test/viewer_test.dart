@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:r2_gallery/src/api/client.dart';
@@ -222,6 +224,41 @@ void main() {
     await tester.tapAt(const Offset(400, 300));
     await tester.pumpAndSettle();
     expect(find.text('2件目 · b.jpg'), findsNothing);
+  });
+
+  testWidgets('左右キーと端のボタンで前後へ送れ、Esc で閉じられる（#61）', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    final api = _Api();
+    await _open(tester, _app(api), [
+      _img('2026/a.jpg'),
+      _img('2026/b.jpg'),
+    ]);
+    expect(find.text('1件目 · a.jpg'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pumpAndSettle();
+    expect(find.text('2件目 · b.jpg'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.pumpAndSettle();
+    expect(find.text('1件目 · a.jpg'), findsOneWidget);
+
+    // デスクトップ相当の環境では端のボタンが出る（テストは macOS 上で走る）
+    await tester.tap(find.byIcon(Icons.chevron_right));
+    await tester.pumpAndSettle();
+    expect(find.text('2件目 · b.jpg'), findsOneWidget);
+    // 末尾では「次へ」は押せない
+    expect(
+        tester
+            .widget<IconButton>(find.widgetWithIcon(IconButton, Icons.chevron_right))
+            .onPressed,
+        isNull);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byType(ViewerScreen), findsNothing);
+    debugDefaultTargetPlatformOverride = null;
   });
 
   testWidgets('P3/V1: 動画のページでは操作バーが隠れると上下バーも隠れ、隣の動画へ送ると前の動画を止める',

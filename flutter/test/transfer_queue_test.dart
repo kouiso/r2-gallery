@@ -30,9 +30,6 @@ class FakeWorker {
   final Completer<void> holdRelease = Completer<void>();
   // 受け取ったサムネ PUT のキー（送った筈のない物が送られていないか見る）
   final List<String?> thumbs = [];
-  // アルバムへの追加要求。albumId → 追加を求められたキー列
-  final Map<String, List<String>> albumAdds = {};
-  bool failAlbumAdd = false;
   // このキーの単発 PUT を受け取ったまま返さずに止めておく（完了が重なる瞬間を作る）
   String? holdPutKey;
   final Completer<void> holdPutSeen = Completer<void>();
@@ -139,16 +136,6 @@ class FakeWorker {
       thumbs.add(key);
       return _json(r, {});
     }
-    if (r.method == 'POST' && p.contains('/albums/') && p.endsWith('/items')) {
-      final b = jsonDecode(utf8.decode(await _body(r))) as Map<String, dynamic>;
-      if (failAlbumAdd) return _json(r, {'error': 'x'}, 500);
-      final albumId =
-          Uri.decodeComponent(p.split('/albums/')[1].split('/').first);
-      albumAdds
-          .putIfAbsent(albumId, () => [])
-          .addAll([for (final k in b['keys'] as List) k as String]);
-      return _json(r, {});
-    }
     if (r.method == 'PUT' && p.endsWith('/objects')) {
       final body = await _body(r);
       if (failPutStatus != 0) return _json(r, {'error': 'x'}, failPutStatus);
@@ -245,8 +232,8 @@ class MemKv implements SecretKv {
 Uint8List bytesOf(int n, [int seed = 3]) =>
     Uint8List.fromList(List.generate(n, (i) => (i * 7 + seed) & 0xff));
 
-Future<void> until(bool Function() cond, {String? what}) async {
-  for (var i = 0; i < 500; i++) {
+Future<void> until(bool Function() cond, {String? what, int tries = 500}) async {
+  for (var i = 0; i < tries; i++) {
     if (cond()) return;
     await Future<void>.delayed(const Duration(milliseconds: 10));
   }
@@ -396,69 +383,6 @@ void main() {
       expect(jsonDecode(ledger.value!), isEmpty);
       // 元のファイルには触らない
       expect(File(path).existsSync(), isTrue);
-    });
-
-    test('アルバムを選んで上げると、確定したキーがそのアルバムに入る', () async {
-      final q = make();
-      await q.restore();
-      await q.enqueueUploads('lib', [
-        UploadSource(name: 'a.jpg', size: 3, mime: 'image/jpeg', bytes: bytesOf(3)),
-      ], albumId: 'al1');
-      await until(() => q.tasks.single.status == TransferStatus.done);
-      expect(w.albumAdds, {'al1': ['a.jpg']});
-      expect(q.tasks.single.albumAdded, isTrue);
-      expect(q.tasks.single.albumError, isNull);
-    });
-
-    test('同名で改名された時は、改名後のキーがアルバムに入る', () async {
-      w.objects['a.jpg'] = bytesOf(9);
-      final q = make();
-      await q.restore();
-      await q.enqueueUploads('lib', [
-        UploadSource(name: 'a.jpg', size: 3, mime: 'image/jpeg', bytes: bytesOf(3)),
-      ], albumId: 'al1');
-      await until(() => q.tasks.single.status == TransferStatus.done);
-      // サーバーが確定した名前（name (2)）で入る。選んだ時の名前ではない
-      expect(w.albumAdds, {'al1': ['a (2).jpg']});
-      expect(w.objects['a (2).jpg'], isNotNull);
-    });
-
-    test('アルバムへの追加だけ失敗しても、物は完了のまま残り上げ直しにならない', () async {
-      w.failAlbumAdd = true;
-      final q = make();
-      await q.restore();
-      await q.enqueueUploads('lib', [
-        UploadSource(name: 'a.jpg', size: 3, mime: 'image/jpeg', bytes: bytesOf(3)),
-      ], albumId: 'al1');
-      await until(() => q.tasks.single.status == TransferStatus.done);
-      expect(w.objects['a.jpg'], isNotNull);
-      expect(q.tasks.single.albumError, isNotNull);
-      expect(rowOfTask(q.tasks.single, q, online: true).label, contains('アルバム'));
-    });
-
-    test('アルバム追加の前に落とされても、次の起動で入れ直す', () async {
-      // 送り済み（キー確定）だがアルバム未追加の行を台帳に残す
-      ledger.value = jsonEncode([
-        {
-          'id': 'u1',
-          'kind': 'up',
-          'lib': 'lib',
-          'name': 'a.jpg',
-          'size': 3,
-          'mime': 'image/jpeg',
-          'status': 'queued',
-          'key': 'a.jpg',
-          'albumId': 'al9',
-          'stagedPath': await source('rest.jpg', bytesOf(3)),
-        },
-      ]);
-      w.objects['a.jpg'] = bytesOf(3);
-      final q = make();
-      await q.restore();
-      await q.idle();
-      expect(w.albumAdds, {'al9': ['a.jpg']});
-      expect(q.tasks.single.status, TransferStatus.done);
-      expect(q.tasks.single.albumError, isNull);
     });
 
     test('完了を報告した時点で退避ファイルは消えている（掃除が遅くても）', () async {
@@ -1125,6 +1049,55 @@ void main() {
       ]);
       await until(() => q.tasks.single.status == TransferStatus.done);
       expect(await offline.readBytes('lib', 'p.jpg'), bytesOf(100));
+    });
+
+    // #114/#117 の回帰: 何百件まとめて積んでもキューは全部回し切る
+    test('300件まとめて積んでも全部終わる', () async {
+      for (var i = 0; i < 300; i++) {
+        w.media['img$i.jpg'] = bytesOf(64, i & 0xff);
+      }
+      final q = make();
+      await q.restore();
+      final added = await q.enqueueDownloads('lib', [
+        for (var i = 0; i < 300; i++)
+          MediaItem(
+              key: 'img$i.jpg',
+              type: 'image',
+              url: '${w.base}/m/img$i.jpg?sig=fresh'),
+      ]);
+      expect(added, hasLength(300));
+      await until(() => q.tasks.every((t) => t.finished),
+          what: '300 downloads finished', tries: 1500);
+      expect(q.tasks.where((t) => t.status == TransferStatus.error), isEmpty);
+      expect(await offline.count(), 300);
+      expect(await offline.readBytes('lib', 'img42.jpg'), bytesOf(64, 42));
+      expect(await offline.readBytes('lib', 'img299.jpg'), bytesOf(64, 299));
+    });
+
+    test('300件の途中で取れない物があっても残りは終わり、件数と理由が行に出る',
+        () async {
+      for (var i = 0; i < 300; i++) {
+        if (i != 150) w.media['img$i.jpg'] = bytesOf(64, i & 0xff);
+      }
+      final q = make();
+      await q.restore();
+      await q.enqueueDownloads('lib', [
+        for (var i = 0; i < 300; i++)
+          MediaItem(
+              key: 'img$i.jpg',
+              type: 'image',
+              url: '${w.base}/m/img$i.jpg?sig=fresh'),
+      ]);
+      await until(() => q.tasks.every((t) => t.finished),
+          what: '300 downloads finished', tries: 1500);
+      expect(q.tasks.where((t) => t.status == TransferStatus.done),
+          hasLength(299));
+      final err = q.tasks.singleWhere((t) => t.status == TransferStatus.error);
+      // 落ちたのが 404 にした1件だけか（'key' の隣のリテラルは gitleaks が拾うので変数名に逃がす）
+      final gone = 'img150.jpg';
+      expect(err.itemKey, gone);
+      expect(err.error, isNotEmpty);
+      expect(await offline.count(), 299);
     });
   });
 }

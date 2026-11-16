@@ -96,12 +96,10 @@ AppBar selectionAppBar(SelectionSurface s) => AppBar(
     icon: const Icon(Icons.close),
     onPressed: s.clearSelection,
   ),
-  title: Text(s.selectingAll
-      ? 'すべてを読み込み中… ${s.selectedCount}件'
-      : '${s.selectedCount}件を選択'),
+  title: Text('${s.selectedCount}件を選択'),
   actions: [
     TextButton(
-      onPressed: s.selectingAll ? null : s.toggleAll,
+      onPressed: s.toggleAll,
       child: Text(s.allSelected ? 'すべて解除' : 'すべて選択'),
     ),
   ],

@@ -54,10 +54,6 @@ abstract class TransferApi {
 
   /// 署名URLは期限が切れるので、一覧から取り直す。見つからなければ null。
   Future<String?> itemUrl(String lib, String key);
-
-  /// アップロード確定後に、そのキーをアルバムへ入れる（#102）。
-  /// 失敗しても上げ直しにはしないので、呼び出し側が結果だけ記録する。
-  Future<void> albumAdd(String lib, String albumId, List<String> keys);
 }
 
 /// 本物の ApiClient の接続情報を使う実装。パート単位の呼び出しは ApiClient に無いのでここで持つ。
@@ -181,10 +177,6 @@ class ApiClientTransferApi implements TransferApi {
   @override
   Future<void> putThumb(String lib, String key, Uint8List bytes) =>
       api.putThumb(lib, key, bytes);
-
-  @override
-  Future<void> albumAdd(String lib, String albumId, List<String> keys) =>
-      api.albumAdd(lib, albumId, keys);
 
   @override
   Future<Uint8List> fetchBytes(String url,

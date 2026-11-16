@@ -130,7 +130,7 @@ class _StuckApi implements TransferApi {
   @override
   Future<bool> storedMatches(
           String lib, String key, int size, Stream<List<int>> Function() local,
-          {CancelToken? cancelToken}) =>
+          {CancelToken? cancelToken, void Function(int matched)? onProgress}) =>
       throw UnimplementedError();
   @override
   Future<String> multipartCreate(String lib, String key, String contentType) =>

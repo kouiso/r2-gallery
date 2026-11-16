@@ -805,7 +805,12 @@ class TransferQueue extends ChangeNotifier {
       }
     }
 
-    return api.storedMatches(t.lib, key, size, local, cancelToken: token);
+    // 照合の進捗は読んだバイト数で行に出す（#144）
+    return api.storedMatches(t.lib, key, size, local,
+        cancelToken: token, onProgress: (n) {
+      t.loaded = n;
+      _progress();
+    });
   }
 
   Future<void> _multipart(TransferTask t, CancelToken token, int size) async {

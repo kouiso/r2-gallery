@@ -1,6 +1,6 @@
+import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 
 import '../api/client.dart';
@@ -47,10 +47,12 @@ abstract class TransferApi {
       {CancelToken? cancelToken, void Function(int got, int total)? onProgress});
 
   /// そのキーに今ある物が、手元の中身（local）と同じか。無ければ false。
-  /// 同名・同サイズだけでは同じと決められないので、中身をストリームで照合する。
+  /// 同名・同サイズだけでは同じと決められないので、中身をストリームで逐次照合する。
+  /// 違うバイトで打ち切るので、別物なら最後まで読まない。[onProgress] には
+  /// 照合の済んだバイト数が来る（#144）。
   Future<bool> storedMatches(
       String lib, String key, int size, Stream<List<int>> Function() local,
-      {CancelToken? cancelToken});
+      {CancelToken? cancelToken, void Function(int matched)? onProgress});
 
   /// 署名URLは期限が切れるので、一覧から取り直す。見つからなければ null。
   Future<String?> itemUrl(String lib, String key);
@@ -199,7 +201,8 @@ class ApiClientTransferApi implements TransferApi {
   @override
   Future<bool> storedMatches(
       String lib, String key, int size, Stream<List<int>> Function() local,
-      {CancelToken? cancelToken}) async {
+      {CancelToken? cancelToken,
+      void Function(int matched)? onProgress}) async {
     final there = await api.objectAt(lib, key);
     if (there == null || (there.size != null && there.size != size)) return false;
     try {
@@ -208,13 +211,38 @@ class ApiClientTransferApi implements TransferApi {
           cancelToken: cancelToken);
       final body = res.data;
       if (body == null) throw const ApiError(502, '保存済みファイルを確認できません');
-      var received = 0;
-      final actual = await sha256.bind(body.stream.map((c) {
-        received += c.length;
-        return c;
-      })).first;
-      if (received != size) return false;
-      return actual == await sha256.bind(local()).first;
+      // 両側をストリームで逐次比べる。違うバイトが出た時点で切り、
+      // 「同じ」と決める時だけ全体を読む（#144）
+      final it = StreamIterator(local());
+      var rest = const <int>[];
+      var matched = 0;
+      var localHasMore = false;
+      try {
+        await for (final rc in body.stream) {
+          var off = 0;
+          while (off < rc.length) {
+            while (rest.length < rc.length - off) {
+              if (!await it.moveNext()) return false; // 手元が短い＝別物
+              rest = [...rest, ...it.current];
+            }
+            final need = rc.length - off;
+            for (var i = 0; i < need; i++) {
+              if (rest[i] != rc[off + i]) return false;
+            }
+            rest = rest.sublist(need);
+            off += need;
+          }
+          matched += rc.length;
+          onProgress?.call(matched);
+        }
+        // 受け側が尽きた後に手元に余りがあれば別物
+        localHasMore = rest.isNotEmpty || await it.moveNext();
+      } finally {
+        await it.cancel();
+      }
+      // 受け取った量が公称サイズと違う、または手元に残りがあれば別物
+      if (matched != size || localHasMore) return false;
+      return true;
     } catch (e) {
       throw _err(e);
     }

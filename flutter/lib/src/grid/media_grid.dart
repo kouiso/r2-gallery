@@ -84,6 +84,15 @@ class _MediaGridState extends State<MediaGrid> {
   // 取得に失敗しても毎フレーム投げ直すループにならない
   int _askedAt = -1;
 
+  // フォルダ段の横送り用。Web/マウスでは既定のドラッグが効かんので、バーを出して掴めるようにする
+  final ScrollController _folderStripCtl = ScrollController();
+
+  @override
+  void dispose() {
+    _folderStripCtl.dispose();
+    super.dispose();
+  }
+
   void _maybeNearEnd(int index) {
     final n = widget.items.length;
     if (n == 0 || index < n - nearEndThreshold || _askedAt == n) return;
@@ -211,12 +220,17 @@ class _MediaGridState extends State<MediaGrid> {
         ),
         SizedBox(
           height: 88,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: widget.folders.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 8),
-            itemBuilder: (_, i) => _folderCard(widget.folders[i]),
+          child: Scrollbar(
+            controller: _folderStripCtl,
+            thumbVisibility: true,
+            child: ListView.separated(
+              controller: _folderStripCtl,
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: widget.folders.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (_, i) => _folderCard(widget.folders[i]),
+            ),
           ),
         ),
         const SizedBox(height: 8),

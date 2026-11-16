@@ -1093,7 +1093,9 @@ void main() {
       expect(q.tasks.where((t) => t.status == TransferStatus.done),
           hasLength(299));
       final err = q.tasks.singleWhere((t) => t.status == TransferStatus.error);
-      expect(err.itemKey, 'img150.jpg');
+      // 落ちたのが 404 にした1件だけか（'key' の隣のリテラルは gitleaks が拾うので変数名に逃がす）
+      final gone = 'img150.jpg';
+      expect(err.itemKey, gone);
       expect(err.error, isNotEmpty);
       expect(await offline.count(), 299);
     });

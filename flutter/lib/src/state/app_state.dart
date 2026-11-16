@@ -10,6 +10,7 @@ import '../grid/sort_mode.dart';
 import '../offline/offline_store.dart';
 import '../store/device_auth.dart';
 import '../store/kv.dart';
+import '../store/listing_cache.dart';
 import '../store/lock_platform.dart';
 import '../store/lock_policy.dart';
 import '../store/pin.dart';
@@ -40,8 +41,10 @@ class AppState extends ChangeNotifier {
     bool? isWeb,
     TransferPlatform? transferPlatform,
     OfflineStore? offline,
+    ListingCache? listingCache,
   })  : api = api ?? ApiClient(),
         offline = offline ?? OfflineStore(),
+        listingCache = listingCache ?? ListingCache.platform(),
         transferPlatform = transferPlatform ?? PlatformTransferBridge(),
         deviceAuth = deviceAuth ?? LocalDeviceAuth(),
         _clock = clock ?? PlatformLockClock(),
@@ -130,6 +133,9 @@ class AppState extends ChangeNotifier {
 
   /// 端末に暗号化して置くオフライン保存。
   final OfflineStore offline;
+
+  /// 一覧の先頭ページの控え。起動直後に回線を待たず最初の写真を出すため。
+  final ListingCache listingCache;
 
   /// アップロードとオフライン保存のキュー。画面ではなくここが持ち、ロック中も裏で続ける。
   late final TransferQueue transfers = TransferQueue(
@@ -368,6 +374,8 @@ class AppState extends ChangeNotifier {
   Future<void> disconnect() async {
     await Kv.remove(Keys.endpoint);
     await Kv.remove(Keys.token);
+    // 接続を外した後も前の接続先の一覧が端末に残り続けないよう、控えも捨てる
+    await listingCache.clear();
     api.setConnection(null);
     connected = false;
     browseOnly = false;
@@ -590,9 +598,38 @@ class GalleryState extends ChangeNotifier {
       {this.prefix = '',
       this.recursive = true,
       this.sort = SortMode.dateNew,
-      this.loadMoreBackoff = const Duration(seconds: 3)});
+      this.loadMoreBackoff = const Duration(seconds: 3),
+      this.cache});
 
   SortMode sort;
+
+  /// 先頭ページの控えの置き場。null なら控えない（テストの既定）。
+  final ListingCache? cache;
+
+  /// 端末に残しておいた先頭ページを出していて、まだ回線の答えで置き換わっていない間は true。
+  /// この間の行は署名URLの期限が切れていることがある。
+  bool showingCached = false;
+
+  /// 一覧全体のメディア件数。Worker が返した時だけ入る。
+  int? total;
+
+  /// 控えに残す件数。Worker の1ページ分あれば最初の画面は埋まる
+  static const snapshotSize = 200;
+
+  Future<void>? _revalidation;
+  Future<void> _saving = Future.value();
+  int _softSeq = 0;
+
+  /// 先に一覧から外し、ゴミ箱へ送っている最中の行。送り終わるまでは Worker の一覧に
+  /// まだ載っているので、その間に届いたページから蘇らせない。
+  final Set<String> _trashing = {};
+
+  List<MediaItem> _withoutTrashing(List<MediaItem> page) => _trashing.isEmpty
+      ? page
+      : [
+          for (final it in page)
+            if (!_trashing.contains(_rowId(it))) it,
+        ];
 
   /// 並び順を変えたのに先頭ページをまだ取れていない間は true。この間に古い順の
   /// cursor を新しい順へ送ると、既出の分を返す・途中で終わる、になるため。
@@ -641,13 +678,23 @@ class GalleryState extends ChangeNotifier {
   /// 握りつぶすと worker 側の拒否（415 など）が続いても誰にも見えなくなる
   int thumbBackfillFailures = 0;
 
-  Future<void> refresh(String lib) async {
+  /// 先頭から取り直して一覧を置き換える。[fresh] は利用者が引っ張って取り直した時だけ立て、
+  /// Worker に索引ではなくバケットを数え直させる（重いので自動の取り直しには使わない）。
+  Future<void> refresh(String lib, {bool fresh = false}) {
+    final run = _refresh(lib, fresh);
+    _revalidation = run;
+    return run;
+  }
+
+  Future<void> _refresh(String lib, bool fresh) async {
     final e = ++epoch;
     loading = true;
     // 取り直しの間に戻ってきた古い続きページを積まんよう、ページ送りも打ち切る
     loadingMore = false;
     _sinceLoadMoreFailure = null;
     error = null;
+    // 手元に何も無い時だけ控えを出す。回線を待たずにディスクのサムネで最初の画面を埋めるため
+    if (items.isEmpty) unawaited(_showCached(lib, e));
     notifyListeners();
     try {
       // KMP 版のホームと同じく、サブフォルダの中まで含めた全メディアを出す
@@ -655,19 +702,146 @@ class GalleryState extends ChangeNotifier {
           prefix: prefix,
           cursor: null,
           recursive: recursive,
-          sort: sort.apiValue);
+          sort: sort.apiValue,
+          fresh: fresh);
       if (e != epoch) return;
-      _serverSorted = page.sort == sort.apiValue;
-      _needsFirstPage = false;
-      items = page.items;
-      folders = page.folders;
-      cursor = page.cursor;
+      _adoptFirstPage(page);
+      _saveSnapshot(lib);
     } catch (err) {
       if (e != epoch) return;
+      // 控えを出していれば消さずに残し、失敗は上の帯で知らせる
       error = err.toString();
     }
     loading = false;
     notifyListeners();
+  }
+
+  void _adoptFirstPage(FolderPage page) {
+    _serverSorted = page.sort == sort.apiValue;
+    _needsFirstPage = false;
+    showingCached = false;
+    items = _withoutTrashing(page.items);
+    folders = page.folders;
+    cursor = page.cursor;
+    total = page.total;
+  }
+
+  ListingScope? _scopeFor(String lib) {
+    final endpoint = api.conn?.endpoint;
+    if (endpoint == null) return null;
+    return ListingScope(
+        endpoint: endpoint,
+        lib: lib,
+        prefix: prefix,
+        recursive: recursive,
+        sort: sort.apiValue);
+  }
+
+  Future<void> _showCached(String lib, int e) async {
+    final c = cache, scope = _scopeFor(lib);
+    if (c == null || scope == null) return;
+    final hit = await c.read(scope);
+    // 回線の答えが先に来た・別の取り直しが始まった・その間に行が載った時は使わない
+    if (hit == null || _disposed || e != epoch || !loading || items.isNotEmpty) {
+      return;
+    }
+    items = hit.items;
+    folders = hit.folders;
+    total = hit.total;
+    _serverSorted = hit.serverSort == sort.apiValue;
+    // 控えの cursor は古くて当てにならない。続きは回線の先頭ページが取れてから頼む
+    cursor = null;
+    _needsFirstPage = true;
+    showingCached = true;
+    notifyListeners();
+  }
+
+  /// 今の先頭を控えに書く。ゴミ箱へ送った行が次の起動で控えから蘇らんよう、行を変えた後にも呼ぶ。
+  /// 書き込みは順に流し、古い中身が後から上書きせんようにする
+  void _saveSnapshot(String lib) {
+    final c = cache, scope = _scopeFor(lib);
+    if (c == null || scope == null) return;
+    final snap = CachedListing(
+      items: items.take(snapshotSize).toList(),
+      folders: folders,
+      serverSort: _serverSorted ? sort.apiValue : null,
+      total: total,
+      savedAt: DateTime.now().millisecondsSinceEpoch,
+    );
+    _saving = _saving.then((_) => c.write(scope, snap));
+  }
+
+  /// 一覧を開いたまま中身が変わった時（アップロード・取り込みの完了、別のタブでの復元など）の取り直し。
+  /// 先頭ページだけ取り、読み込み済みの続きのページと cursor は残して差分だけ反映する。
+  /// [refresh] だと先頭ページに巻き戻り、読み進めた位置と続きのページを失うため。
+  Future<void> softRefresh(String lib) async {
+    if (loading || items.isEmpty || _needsFirstPage || showingCached) {
+      return refresh(lib);
+    }
+    final e = epoch;
+    final seq = ++_softSeq;
+    try {
+      final page = await api.folder(lib,
+          prefix: prefix,
+          cursor: null,
+          recursive: recursive,
+          sort: sort.apiValue);
+      if (e != epoch || seq != _softSeq) return;
+      _mergeFirstPage(page);
+      error = null;
+      _saveSnapshot(lib);
+    } catch (err) {
+      if (e != epoch || seq != _softSeq) return;
+      error = err.toString();
+    }
+    notifyListeners();
+  }
+
+  String _rowId(MediaItem it) => '${it.lib}:${it.key}';
+
+  /// 取り直した先頭ページを読み込み済みの一覧へ重ねる。先頭ページの範囲（読み込み済みの中で
+  /// 先頭ページと重なる最後の行まで）は先頭ページの中身に置き換え、その後ろは残す。
+  void _mergeFirstPage(FolderPage page) {
+    final fetched = {for (final it in page.items) _rowId(it)};
+    var last = -1;
+    for (var i = 0; i < items.length; i++) {
+      if (fetched.contains(_rowId(items[i]))) last = i;
+    }
+    // 重なりが無い・並びの扱いが変わった・先頭ページで全件の時は、続きを残す意味が無い
+    if (last < 0 ||
+        page.cursor == null ||
+        (page.sort == sort.apiValue) != _serverSorted) {
+      _adoptFirstPage(page);
+      return;
+    }
+    final coveredAll = last >= items.length - 1;
+    items = [
+      ..._withoutTrashing(page.items),
+      ...items.skip(last + 1).where((it) => !fetched.contains(_rowId(it))),
+    ];
+    // 読み込み済みが全部先頭ページの範囲に収まっていたなら、続きは先頭ページの cursor から
+    if (coveredAll) cursor = page.cursor;
+    folders = page.folders;
+    total = page.total;
+  }
+
+  /// 一覧のタップで開く行を決める。控えを出している間は署名URLが切れていることがあり、
+  /// そのまま開くと原本を読めない。取り直しを待ち、同じキーの新しい行で開く。消えていたら null。
+  Future<({List<MediaItem> items, int index})?> openTarget(
+      List<MediaItem> shown, int index) async {
+    final it = shown[index];
+    if (!showingCached || !signedUrlExpired(it.url)) {
+      return (items: shown, index: index);
+    }
+    while (showingCached && loading) {
+      final r = _revalidation;
+      if (r == null) break;
+      await r;
+    }
+    if (_disposed) return null;
+    final now = ordered();
+    final at = now.indexWhere((x) => x.key == it.key && x.lib == it.lib);
+    return at < 0 ? null : (items: now, index: at);
   }
 
   Future<void> loadMore(String lib) async {
@@ -699,7 +873,8 @@ class GalleryState extends ChangeNotifier {
       final seen = {for (final it in items) '${it.lib}:${it.key}'};
       items = [
         ...items,
-        ...page.items.where((it) => seen.add('${it.lib}:${it.key}')),
+        ..._withoutTrashing(page.items)
+            .where((it) => seen.add('${it.lib}:${it.key}')),
       ];
       if (!recursive) folders = page.folders;
       cursor = page.cursor;
@@ -769,6 +944,13 @@ class GalleryState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 操作が失敗した時に、先に解いた選択を戻す。
+  void reselect(Iterable<SelKey> keys) {
+    selection.addAll(keys);
+    selectionMode = selection.isNotEmpty;
+    notifyListeners();
+  }
+
   void selectAll(List<MediaItem> visible, String fallbackLib) {
     for (final it in visible) {
       selection.add(selKeyOf(it, fallbackLib));
@@ -777,25 +959,99 @@ class GalleryState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 選択分をゴミ箱へ。成功数/失敗数と、元に戻すための控えを返す。失敗時にエラーを保持する。
-  Future<TrashOutcome> bulkTrash(
-    String lib,
-    Future<void> Function() refresh,
-  ) async {
-    if (bulkBusy) return const TrashOutcome([], 0, 0);
-    bulkBusy = true;
+  /// [test] に当たる行を一覧から外す。元の位置へ戻せるよう、位置と直前の行を控えて返す。
+  List<RemovedRow> removeRows(bool Function(MediaItem it) test) {
+    final out = <RemovedRow>[];
+    final kept = <MediaItem>[];
+    for (var i = 0; i < items.length; i++) {
+      final it = items[i];
+      if (test(it)) {
+        out.add(RemovedRow(it, i, i == 0 ? null : _rowId(items[i - 1])));
+      } else {
+        kept.add(it);
+      }
+    }
+    if (out.isNotEmpty) {
+      items = kept;
+      notifyListeners();
+    }
+    return out;
+  }
+
+  /// [removeRows] で外した行を元の位置へ戻す。外した後に一覧が変わっていても、直前の行の後ろへ置く。
+  /// 取り直しで既に戻っている行は重ねない。
+  void reinsertRows(List<RemovedRow> rows) {
+    if (rows.isEmpty) return;
+    final list = [...items];
+    final present = {for (final it in list) _rowId(it)};
+    for (final r in [...rows]..sort((a, b) => a.index.compareTo(b.index))) {
+      if (!present.add(_rowId(r.item))) continue;
+      final prev = r.prevId;
+      var at = 0;
+      if (prev != null) {
+        final p = list.indexWhere((it) => _rowId(it) == prev);
+        at = p >= 0 ? p + 1 : r.index.clamp(0, list.length);
+      }
+      list.insert(at, r.item);
+    }
+    items = list;
+    notifyListeners();
+  }
+
+  /// [targets] をすぐ一覧から外し、ゴミ箱へは裏で送る（待たせると操作がもたつくため）。
+  /// 送れなかった行は元の位置へ戻す。一覧の取り直しはしない。
+  PendingTrash trashOptimistic(String lib, List<SelKey> targets) {
+    final set = targets.toSet();
+    selection.removeAll(set);
+    if (selection.isEmpty) selectionMode = false;
     bulkError = null;
+    final rows = removeRows((it) => set.contains(selKeyOf(it, lib)));
+    final sending = {for (final r in rows) _rowId(r.item)};
+    _trashing.addAll(sending);
     notifyListeners();
-    final targets = selection.toList();
-    selection.clear();
-    selectionMode = false;
-    final res =
-        await trashAll(api, [for (final t in targets) (lib: t.lib, key: t.key)]);
-    bulkBusy = false;
-    if (res.failed > 0) bulkError = '${res.failed}件をゴミ箱に移せませんでした';
-    notifyListeners();
-    await refresh();
-    return res;
+    _saveSnapshot(lib);
+    final done = trashAll(api, [for (final t in targets) (lib: t.lib, key: t.key)])
+        .then((res) {
+      _trashing.removeAll(sending);
+      if (res.failed > 0) {
+        final failed = {for (final f in res.failedTargets) SelKey(f.lib, f.key)};
+        bulkError = '${res.failed}件をゴミ箱に移せませんでした';
+        reinsertRows([
+          for (final r in rows)
+            if (failed.contains(selKeyOf(r.item, lib))) r,
+        ]);
+        _saveSnapshot(lib);
+      }
+      return res;
+    });
+    return PendingTrash(targets.length, rows, done);
+  }
+
+  /// 「元に戻す」。外した行はすぐ元の位置へ戻し、ゴミ箱へ送り終わるのを待ってから戻す。
+  /// 戻せなかった行は外し直す（404 は別の所で先に戻されたので残す）。
+  Future<RestoreOutcome> undoTrash(String lib, PendingTrash p) async {
+    reinsertRows(p.rows);
+    final res = await p.done;
+    final out = await restoreAll(api, res.receipts);
+    final gone = <SelKey>{
+      for (final r in res.receipts)
+        if (out.failures[r.trashKey] case final st? when st != 404)
+          SelKey(r.lib, r.key),
+      // trashKey を返さん古い Worker の分は戻す手段が無い
+      for (final u in res.unrestorable) SelKey(u.lib, u.key),
+    };
+    if (gone.isNotEmpty) removeRows((it) => gone.contains(selKeyOf(it, lib)));
+    _saveSnapshot(lib);
+    if (res.unrestorable.isEmpty) return out;
+    return RestoreOutcome(
+      total: out.total + res.unrestorable.length,
+      restored: out.restored,
+      conflict: out.conflict,
+      readOnly: out.readOnly,
+      notFound: out.notFound,
+      other: out.other + res.unrestorable.length,
+      failures: out.failures,
+    );
   }
 
   /// サムネ未生成の画像を1枚ずつ原本取得→縮小→PUTでバックフィル。
@@ -902,4 +1158,23 @@ class GalleryState extends ChangeNotifier {
     _disposed = true;
     super.dispose();
   }
+}
+
+/// 一覧から先に外した1行。[prevId] は外す直前に1つ前にあった行で、戻す時の目印にする。
+class RemovedRow {
+  final MediaItem item;
+  final int index;
+  final String? prevId;
+  const RemovedRow(this.item, this.index, this.prevId);
+}
+
+/// 先に一覧から外し、裏でゴミ箱へ送っている途中の操作。
+class PendingTrash {
+  /// 送った件数（読み込み前の行も含む）。「N件をゴミ箱に移しました」に使う
+  final int count;
+  final List<RemovedRow> rows;
+
+  /// ゴミ箱へ送り終わった結果。戻すための trashKey はここで揃う
+  final Future<TrashOutcome> done;
+  const PendingTrash(this.count, this.rows, this.done);
 }

@@ -49,6 +49,7 @@ class _Api extends ApiClient {
     String? cursor,
     bool recursive = false,
     String? sort,
+    bool fresh = false,
   }) async => const FolderPage(items: []);
 
   @override

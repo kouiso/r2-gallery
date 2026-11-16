@@ -18,6 +18,17 @@ export interface Env {
   IMPORT_MAX_BYTES?: string;
   /** Test hook: allow imports from private/loopback hosts ("1"). */
   IMPORT_ALLOW_PRIVATE?: string;
+  /**
+   * 一覧の索引をこの秒数より古いと見なしたら裏で作り直す（既定 300）。
+   * "0" は毎回作り直してから返す（索引が合わない時の逃げ道。5 万件あると遅い）。
+   */
+  CATALOG_MAX_AGE_SECONDS?: string;
+  /** 重複の確認で 1 回の呼び出しが読む量の目安（既定 96 MiB）。 */
+  DUP_SCAN_BYTES?: string;
+  /** 重複の確認で 1 回の呼び出しが読む件数の上限（既定 200、最大 400）。 */
+  DUP_SCAN_OBJECTS?: string;
+  /** これより大きい物は重複の確認で中身を計算しない（既定 1 GiB）。 */
+  DUP_MAX_OBJECT_BYTES?: string;
   /** Optional read-only D1 binding holding per-object review rows. */
   REVIEW_DB?: D1Database;
   /** Comma-separated library ids allowed to join objects to REVIEW_DB rows. */

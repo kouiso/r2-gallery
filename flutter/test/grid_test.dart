@@ -54,6 +54,7 @@ class _Api extends ApiClient {
     String? cursor,
     bool recursive = false,
     String? sort,
+    bool fresh = false,
   }) async {
     folderCalls.add((
       lib: libId,
@@ -544,7 +545,7 @@ void main() {
       expect(gridColumnsFor(80), 1);
     });
 
-    testWidgets('見出しの無い並びでも、末尾9件手前まで見えたら続きを取る', (tester) async {
+    testWidgets('見出しの無い並びでも、末尾が近づいたら続きを取る', (tester) async {
       final api = _Api({
         '': FolderPage(
           items: [
@@ -558,6 +559,21 @@ void main() {
       await _pumpShell(tester, app);
       expect(api.folderCalls.map((c) => c.cursor), contains('c1'));
       expect(_tile('next.jpg'), findsOneWidget);
+    });
+
+    testWidgets('末尾に着くのを待たず、最初の画面のうちに次のページを頼む', (tester) async {
+      // 最初の画面に見えるのは先頭の数十件。末尾まで100件以上あっても先に頼んでおく
+      final api = _Api({
+        '': FolderPage(
+          items: [
+            for (var i = 0; i < 130; i++) _img('p$i.jpg', at: _daysAgo(0)),
+          ],
+          cursor: 'c1',
+        ),
+      });
+      await _pumpShell(tester, _app(api));
+      expect(api.folderCalls.map((c) => c.cursor), contains('c1'));
+      expect(nearEndThreshold, greaterThan(100));
     });
 
     testWidgets('続きを読み込んだ後に並び替えても、新しい並びの続きを頼み直す', (tester) async {

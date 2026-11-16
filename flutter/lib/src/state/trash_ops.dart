@@ -6,7 +6,10 @@ import '../api/models.dart';
 class TrashReceipt {
   final String lib;
   final String trashKey;
-  const TrashReceipt(this.lib, this.trashKey);
+
+  /// 送った元のキー。一覧から外した行を、戻せなかった時に外し直すため
+  final String key;
+  const TrashReceipt(this.lib, this.trashKey, {this.key = ''});
 }
 
 /// [trashAll] の結果。[receipts] は戻せる分、[failed] はゴミ箱へ送れなかった件数。
@@ -14,7 +17,14 @@ class TrashOutcome {
   final List<TrashReceipt> receipts;
   final int trashed;
   final int failed;
-  const TrashOutcome(this.receipts, this.trashed, this.failed);
+
+  /// 送れなかった (lib, key)。先に一覧から外した行を元の位置へ戻すため
+  final List<({String lib, String key})> failedTargets;
+
+  /// 移せたが trashKey が返らなかった (lib, key)。古い Worker では戻す手段が無い
+  final List<({String lib, String key})> unrestorable;
+  const TrashOutcome(this.receipts, this.trashed, this.failed,
+      {this.failedTargets = const [], this.unrestorable = const []});
 }
 
 /// (ライブラリ, キー) をまとめてゴミ箱へ送る。
@@ -24,29 +34,42 @@ Future<TrashOutcome> trashAll(
   List<({String lib, String key})> targets,
 ) async {
   final receipts = <TrashReceipt>[];
+  final failedTargets = <({String lib, String key})>[];
+  final unrestorable = <({String lib, String key})>[];
   var trashed = 0;
   var failed = 0;
   for (var i = 0; i < targets.length; i += 8) {
     final batch = targets.sublist(i, i + 8 > targets.length ? targets.length : i + 8);
     final results = await Future.wait(batch.map((t) async {
       try {
-        return (ok: true, lib: t.lib, trashKey: await api.trash(t.lib, t.key));
+        return (
+          ok: true,
+          lib: t.lib,
+          key: t.key,
+          trashKey: await api.trash(t.lib, t.key)
+        );
       } on Exception {
         // 理由はまとめて「N件を移せませんでした」と出すので、ここでは数えるだけ
-        return (ok: false, lib: t.lib, trashKey: '');
+        return (ok: false, lib: t.lib, key: t.key, trashKey: '');
       }
     }));
     for (final r in results) {
       if (!r.ok) {
         failed++;
+        failedTargets.add((lib: r.lib, key: r.key));
         continue;
       }
       trashed++;
       // trashKey が返らない古い Worker では移せても戻せない。失敗扱いにはせず、戻す対象から外すだけにする
-      if (r.trashKey.isNotEmpty) receipts.add(TrashReceipt(r.lib, r.trashKey));
+      if (r.trashKey.isNotEmpty) {
+        receipts.add(TrashReceipt(r.lib, r.trashKey, key: r.key));
+      } else {
+        unrestorable.add((lib: r.lib, key: r.key));
+      }
     }
   }
-  return TrashOutcome(receipts, trashed, failed);
+  return TrashOutcome(receipts, trashed, failed,
+      failedTargets: failedTargets, unrestorable: unrestorable);
 }
 
 /// まとめて戻した結果。理由ごとに数えるのは、利用者に出す文言が理由で変わるから。
@@ -57,6 +80,9 @@ class RestoreOutcome {
   final int readOnly;
   final int notFound;
   final int other;
+
+  /// 戻せなかった trashKey と HTTP ステータス（通信失敗は 0）。先に戻した行を外し直すため
+  final Map<String, int> failures;
   const RestoreOutcome({
     required this.total,
     required this.restored,
@@ -64,6 +90,7 @@ class RestoreOutcome {
     this.readOnly = 0,
     this.notFound = 0,
     this.other = 0,
+    this.failures = const {},
   });
 
   int get failed => total - restored;
@@ -74,11 +101,13 @@ Future<RestoreOutcome> restoreAll(
   List<TrashReceipt> receipts,
 ) async {
   var restored = 0, conflict = 0, readOnly = 0, notFound = 0, other = 0;
+  final failures = <String, int>{};
   for (final r in receipts) {
     try {
       await api.restore(r.lib, r.trashKey);
       restored++;
     } on ApiError catch (e) {
+      failures[r.trashKey] = e.status;
       switch (e.status) {
         case 409:
           conflict++;
@@ -90,6 +119,7 @@ Future<RestoreOutcome> restoreAll(
           other++;
       }
     } on Exception {
+      failures[r.trashKey] = 0;
       other++;
     }
   }
@@ -100,6 +130,7 @@ Future<RestoreOutcome> restoreAll(
     readOnly: readOnly,
     notFound: notFound,
     other: other,
+    failures: failures,
   );
 }
 

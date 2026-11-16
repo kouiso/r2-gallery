@@ -31,8 +31,11 @@ abstract class TransferApi {
   Future<void> multipartComplete(
       String lib, String key, String uploadId, List<UploadPart> parts);
   Future<void> multipartAbort(String lib, String key, String uploadId);
+  /// [sha256] は重複確認で計算済みの時だけ渡す（Worker へ x-content-sha256 で添える）。
   Future<void> putObject(String lib, String key, Uint8List bytes, String mime,
-      {CancelToken? cancelToken, void Function(int sent)? onProgress});
+      {CancelToken? cancelToken,
+      void Function(int sent)? onProgress,
+      String? sha256});
   Future<void> putThumb(String lib, String key, Uint8List bytes);
   Future<Uint8List> fetchBytes(String url,
       {CancelToken? cancelToken, void Function(int got, int total)? onProgress});
@@ -141,10 +144,13 @@ class ApiClientTransferApi implements TransferApi {
 
   @override
   Future<void> putObject(String lib, String key, Uint8List bytes, String mime,
-          {CancelToken? cancelToken, void Function(int sent)? onProgress}) =>
+          {CancelToken? cancelToken,
+          void Function(int sent)? onProgress,
+          String? sha256}) =>
       api.putObject(lib, key, bytes, mime,
           cancelToken: cancelToken,
-          onProgress: onProgress == null ? null : (s, _) => onProgress(s));
+          onProgress: onProgress == null ? null : (s, _) => onProgress(s),
+          sha256: sha256);
 
   @override
   Future<void> putThumb(String lib, String key, Uint8List bytes) =>

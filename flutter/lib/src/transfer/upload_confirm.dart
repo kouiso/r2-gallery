@@ -4,10 +4,12 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../api/models.dart';
 import '../duplicates/content_hash.dart';
 import '../duplicates/upload_check.dart';
 import '../duplicates/upload_check_panel.dart';
 import '../state/app_state.dart';
+import '../ui/album_picker.dart';
 import '../ui/theme.dart';
 import '../webdl/media_name.dart';
 import 'transfer_queue.dart';
@@ -60,6 +62,10 @@ class UploadConfirmContent extends StatelessWidget {
 
   /// 重複確認の欄（#101）。書き込めない保存先では照合しないので null。
   final Widget? duplicateCheck;
+
+  /// アルバムの入れ先の欄（#102）。書き込めない保存先では選べないので null。
+  final ValueListenable<String>? albumLabel;
+  final VoidCallback? onPickAlbum;
   const UploadConfirmContent({
     super.key,
     required this.summary,
@@ -69,6 +75,8 @@ class UploadConfirmContent extends StatelessWidget {
     required this.onConfirm,
     required this.onCancel,
     this.duplicateCheck,
+    this.albumLabel,
+    this.onPickAlbum,
   });
 
   @override
@@ -95,6 +103,19 @@ class UploadConfirmContent extends StatelessWidget {
                         color: AppColors.textDim, fontSize: 12)),
               ),
             ?duplicateCheck,
+            if (albumLabel != null && onPickAlbum != null)
+              ValueListenableBuilder<String>(
+                valueListenable: albumLabel!,
+                builder: (_, label, _) => InkWell(
+                  onTap: blocked ? null : onPickAlbum,
+                  child: _Fact(
+                    label: 'アルバム',
+                    value: label,
+                    trailing: const Icon(Icons.chevron_right,
+                        color: AppColors.textDim, size: 20),
+                  ),
+                ),
+              ),
             if (blocked)
               Padding(
                 padding: const EdgeInsets.only(top: 12),
@@ -129,7 +150,8 @@ class UploadConfirmContent extends StatelessWidget {
 class _Fact extends StatelessWidget {
   final String label;
   final String value;
-  const _Fact({required this.label, required this.value});
+  final Widget? trailing;
+  const _Fact({required this.label, required this.value, this.trailing});
 
   @override
   Widget build(BuildContext context) => ConstrainedBox(
@@ -144,6 +166,7 @@ class _Fact extends StatelessWidget {
                       const TextStyle(color: AppColors.textDim, fontSize: 12)),
             ),
             Expanded(child: Text(value, style: const TextStyle(fontSize: 16))),
+            ?trailing,
           ],
         ),
       );
@@ -205,8 +228,16 @@ class _PreviewRow extends StatelessWidget {
       );
 }
 
+/// シートで選んだアルバムの入れ先。既存の albumId か、作る名前のどちらか。
+class _AlbumPick {
+  String? albumId;
+  String? newTitle;
+  final label = ValueNotifier<String>('なし');
+}
+
 /// 確認シートを出し、「アップロード」を押された時だけ積む。積んだ件数を返す。
 /// シートを開いた時点で重複の照合を裏で始め、同じ物はスキップを既定にする（#101）。
+/// 「アルバム」の欄で入れ先を選べる（#102）。新規は確定時に1回だけ作る。
 /// [hasher] はテストでどれを計算したか数えるための差し替え口。
 Future<int> confirmAndUpload(
     BuildContext context, AppState app, String lib, List<UploadSource> sources,
@@ -227,6 +258,9 @@ Future<int> confirmAndUpload(
           ),
         )..start())
       : null;
+  final pick = _AlbumPick();
+  // 選択肢の一覧は1回だけ取り、欄の表示名の解決とダイアログで共用する
+  final albums = writable ? writableAlbums(app.api, lib) : null;
   // シートを閉じた後に知らせるので、開く前の画面のものを掴んでおく
   final messenger = ScaffoldMessenger.maybeOf(context);
   final ok = await showModalBottomSheet<bool>(
@@ -241,25 +275,60 @@ Future<int> confirmAndUpload(
       onConfirm: () => Navigator.pop(ctx, true),
       onCancel: () => Navigator.pop(ctx, false),
       duplicateCheck: check == null ? null : UploadCheckPanel(controller: check),
+      albumLabel: albums == null ? null : pick.label,
+      onPickAlbum: albums == null
+          ? null
+          : () async {
+              await showAlbumPicker(
+                ctx,
+                api: app.api,
+                lib: lib,
+                onPick: (albumId, newTitle) async {
+                  pick.albumId = albumId;
+                  pick.newTitle = newTitle;
+                  pick.label.value = newTitle ??
+                      (await albums)
+                          .firstWhere((a) => a.id == albumId,
+                              orElse: () =>
+                                  const Album(id: '', title: '？', count: 0))
+                          .title;
+                },
+              );
+            },
     ),
   );
   try {
-    if (ok != true || check == null) {
-      return ok == true ? app.upload(lib, sources) : 0;
+    if (ok == true) {
+      // 新しいアルバムは「アップロード」を押した時に1回だけ作る
+      var albumId = pick.albumId;
+      if (albumId == null && pick.newTitle != null) {
+        try {
+          albumId = await app.api.albumCreate(lib, pick.newTitle!);
+        } on Exception catch (e) {
+          debugPrint('album create failed: $e');
+          messenger?.showSnackBar(
+              const SnackBar(content: Text('アルバムを作れませんでした。入れ先なしでアップロードします')));
+        }
+      }
+      if (check == null) {
+        return app.upload(lib, sources, albumId: albumId);
+      }
+      final picked = check.toUpload();
+      final skipped = sources.length - picked.length;
+      // 照合の途中で押された時は止めずに上げる。確かめていないことだけは伝える
+      final msg = check.checking
+          ? '重複の確認ができませんでした'
+          : skipped > 0
+              ? '同じ物 $skipped件をスキップしました'
+              : null;
+      if (msg != null) messenger?.showSnackBar(SnackBar(content: Text(msg)));
+      if (picked.isEmpty) return 0;
+      return app.upload(lib, picked, albumId: albumId);
     }
-    final picked = check.toUpload();
-    final skipped = sources.length - picked.length;
-    // 照合の途中で押された時は止めずに上げる。確かめていないことだけは伝える
-    final msg = check.checking
-        ? '重複の確認ができませんでした'
-        : skipped > 0
-            ? '同じ物 $skipped件をスキップしました'
-            : null;
-    if (msg != null) messenger?.showSnackBar(SnackBar(content: Text(msg)));
-    if (picked.isEmpty) return 0;
-    return app.upload(lib, picked);
+    return 0;
   } finally {
     check?.dispose();
+    pick.label.dispose();
   }
 }
 

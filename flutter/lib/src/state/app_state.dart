@@ -217,10 +217,13 @@ class AppState extends ChangeNotifier {
   bool canUploadTo(String? lib) => writeBlock(lib, WriteAction.upload) == null;
 
   /// 選んだファイルをアップロードに積む。書き込めない保存先なら積まずに 0 を返す。
-  Future<int> upload(String lib, List<UploadSource> sources) async {
+  /// [albumId] はアップロード時に選んだ入れ先（#102）。
+  Future<int> upload(String lib, List<UploadSource> sources,
+      {String? albumId}) async {
     if (!canUploadTo(lib)) return 0;
     _wireTransfers();
-    return (await transfers.enqueueUploads(lib, sources)).length;
+    return (await transfers.enqueueUploads(lib, sources, albumId: albumId))
+        .length;
   }
 
   /// 起動時の復元。ペアリングリンクの処理など、保存した接続が戻ってからでないと

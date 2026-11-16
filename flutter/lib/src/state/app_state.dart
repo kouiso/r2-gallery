@@ -455,19 +455,35 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// r2g://setup ペアリングリンクからの接続。tools/pairing-url.mjs と KMP 版が作る
-  /// `?e=<endpoint>#<token>` を読む。以前の Flutter 版の `?endpoint=..&token=..` も受ける。
-  /// 読めないリンクは無視する（落とさない）。
-  Future<bool> connectFromUri(Uri uri) async {
+  /// r2g://setup のリンクが運ぶ接続先とトークンを読む。tools/pairing-url.mjs と KMP 版が作る
+  /// `?e=<endpoint>#<token>` 形式と、以前の Flutter 版の `?endpoint=..&token=..` の両方を受ける。
+  /// 読めないリンクは null（呼ぶ側は無視してよい）。
+  ({String endpoint, String token})? pairingParams(Uri uri) {
     final p = parsePairingString(uri.toString());
-    String? ep = p?.endpoint;
-    String? tk = p?.token;
-    if (p == null) {
-      ep = uri.queryParameters['endpoint'];
-      tk = uri.queryParameters['token'];
-    }
-    if (ep == null || tk == null) return false;
-    final err = await connect(ep, tk);
+    if (p != null) return (endpoint: p.endpoint, token: p.token);
+    final ep = uri.queryParameters['endpoint'];
+    final tk = uri.queryParameters['token'];
+    if (ep == null || tk == null) return null;
+    return (endpoint: ep, token: tk);
+  }
+
+  /// リンクが、今の接続とは別の送り先を指すか。切り替える前に確認を取るかどうかの判定で、
+  /// 未接続（初回ペアリング）・同じ送り先・読めないリンクは false（確認なしでよい）。
+  /// トークンの差し替えだけなら同じ送り先なので、パスまで見て比べる
+  bool pairingNeedsConfirm(Uri uri) {
+    final p = pairingParams(uri);
+    final cur = api.conn;
+    if (p == null || cur == null) return false;
+    return !isSameEndpoint(cur.endpoint, p.endpoint);
+  }
+
+  /// r2g://setup ペアリングリンクからの接続。
+  /// 読めないリンクは無視する（落とさない）。別の送り先への切り替えに見えるリンクを
+  /// ここへ直接渡すと確認なしで切り替わるので、UI 側は先に [pairingNeedsConfirm] で確かめる
+  Future<bool> connectFromUri(Uri uri) async {
+    final p = pairingParams(uri);
+    if (p == null) return false;
+    final err = await connect(p.endpoint, p.token);
     return err == null;
   }
 

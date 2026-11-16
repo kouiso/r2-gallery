@@ -192,6 +192,13 @@ void main() {
         expect(dataUrlBytes('data:image/png;base64,$exact', 99), hasLength(99));
         expect(dataUrlBytes('data:image/png;base64,$exact', 98), isEmpty);
       });
+
+      test('base64 本文の %HH は復号後の1文字で数えて上限を見る', () {
+        // %2F→/・%3D→= で論理4文字の base64（=1バイト）。生の文字数で下限を出すと
+        // 上限内なのに弾かれる
+        expect(dataUrlBytes('data:image/png;base64,%2Fw%3D%3D', 1), [0xff]);
+        expect(dataUrlBytes('data:image/png;base64,%2Fw%3D%3D', 0), isEmpty);
+      });
     });
 
     test('動画は再生部品に URL を渡す。閲覧サイトの Cookie は渡さない', () async {

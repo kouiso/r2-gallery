@@ -355,8 +355,11 @@ Uint8List dataUrlBytes(String url, int maxBytes) {
   final head = url.substring(0, i);
   final base64 = head.toLowerCase().endsWith(';base64');
   // 復号後の大きさの下限（base64 は 4 文字で 3 バイト・末尾の詰めは最大 2 バイト、%XX は 3 文字で 1 バイト）。
-  // 下限で見るので、上限ちょうどの正しい物は弾かない
-  final lowerBound = base64 ? (bodyLength ~/ 4) * 3 - 2 : bodyLength ~/ 3;
+  // 下限で見るので、上限ちょうどの正しい物は弾かない。
+  // base64 本文の %HH は復号すると 1 文字なので、論理の文字数で下限を出す。
+  // 生の文字数だと下限が実際より大きく出て、上限内の表紙を弾いてしまう
+  final logical = base64 ? _logicalDataUrlLength(url, i + 1) : bodyLength;
+  final lowerBound = base64 ? (logical ~/ 4) * 3 - 2 : bodyLength ~/ 3;
   if (lowerBound > maxBytes) return Uint8List(0);
   final normalized = base64
       ? '${head.substring(0, head.length - 7)};base64${url.substring(i)}'
@@ -364,3 +367,23 @@ Uint8List dataUrlBytes(String url, int maxBytes) {
   final bytes = UriData.parse(normalized).contentAsBytes();
   return bytes.length > maxBytes ? Uint8List(0) : bytes;
 }
+
+/// data URL 本文中の、パーセント符号化をほどいた後の文字数。`%HH` は 1 文字として数える
+int _logicalDataUrlLength(String url, int start) {
+  var n = 0;
+  for (var p = start; p < url.length; p++) {
+    if (url.codeUnitAt(p) == 0x25 &&
+        p + 2 < url.length &&
+        _isHexDigit(url.codeUnitAt(p + 1)) &&
+        _isHexDigit(url.codeUnitAt(p + 2))) {
+      p += 2;
+    }
+    n++;
+  }
+  return n;
+}
+
+bool _isHexDigit(int c) =>
+    (c >= 0x30 && c <= 0x39) ||
+    (c >= 0x41 && c <= 0x46) ||
+    (c >= 0x61 && c <= 0x66);

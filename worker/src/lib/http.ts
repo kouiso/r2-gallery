@@ -27,7 +27,8 @@ export const ALLOWED_METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]
 export function corsHeaders(): Record<string, string> {
   return {
     "access-control-allow-origin": "*",
-    "access-control-allow-headers": "authorization, content-type",
+    // アプリが送る独自ヘッダはここに足す。漏れると Web 版だけ事前確認で止まる
+    "access-control-allow-headers": "authorization, content-type, x-content-sha256",
     // OPTIONS は事前確認そのものなので一覧には含めず、ここで足す
     "access-control-allow-methods": [...ALLOWED_METHODS, "OPTIONS"].join(", "),
     "access-control-max-age": "86400",

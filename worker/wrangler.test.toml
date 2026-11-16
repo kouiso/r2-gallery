@@ -36,5 +36,8 @@ TRASH_RETENTION_DAYS = "30"
 MULTIPART_COPY_MIN_BYTES = "64"
 MULTIPART_COPY_PART_BYTES = "5242880"
 IMPORT_MAX_BYTES = "1048576"
+# 既存のテストは R2 に直接置いた物をすぐ一覧で確かめるので、毎回索引を作り直す設定にする。
+# 索引を使い回す経路は、テスト側で値を差し替えて確かめる。
+CATALOG_MAX_AGE_SECONDS = "0"
 # Only library "a" may join objects to REVIEW_DB rows.
 REVIEW_LIBS = "a"

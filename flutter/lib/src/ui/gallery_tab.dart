@@ -43,11 +43,12 @@ class GalleryTab extends StatefulWidget {
 }
 
 /// サムネが保存できたら、未保存の間に積んだ原本のキャッシュ('#orig')は用済みなので消す。
-/// 残すと原本がサムネ用キャッシュにそのまま居座り、件数上限まで容量を食う。
+/// 残すと原本の置き場が件数上限まで容量を食う。
 Future<void> _dropOrigCache(MediaItem item) async {
   final url = item.thumbUrl;
   if (url == null) return;
-  await thumbCache.removeFile(thumbCacheKey(url, stored: false));
+  await thumbCacheFor(stored: false)
+      .removeFile(thumbCacheKey(url, stored: false));
 }
 
 class _GalleryTabState extends State<GalleryTab> {
@@ -61,7 +62,8 @@ class _GalleryTabState extends State<GalleryTab> {
 
   GalleryState _stateFor(String lib) => _states.putIfAbsent(lib, () {
         final s = GalleryState(widget.app.api,
-            sort: widget.app.photosChrome.sort);
+            sort: widget.app.photosChrome.sort,
+            cache: widget.app.listingCache);
         s.refresh(lib);
         return s;
       });
@@ -74,9 +76,10 @@ class _GalleryTabState extends State<GalleryTab> {
     _c.bind(_stateFor(widget.lib), widget.lib);
     widget.app.photosChrome.attach(_c);
     widget.app.photosChrome.addListener(_onSortChanged);
-    // 裏で上がり終わったら、そのライブラリの一覧を取り直して新しいファイルを出す
+    // 裏で上がり終わったら、そのライブラリの一覧を取り直して新しいファイルを出す。
+    // 読み進めた位置と続きのページは残す
     _doneSub = widget.app.transfers.doneEvents.listen((t) {
-      if (t.isUpload) _states[t.lib]?.refresh(t.lib);
+      if (t.isUpload) _states[t.lib]?.softRefresh(t.lib);
     });
     _finishedImports.addAll(widget.app.webQueue.tasks
         .where((t) => t.status == WebTaskStatus.done)
@@ -85,7 +88,7 @@ class _GalleryTabState extends State<GalleryTab> {
     // ゴミ箱タブで戻した写真を、写真タブに戻った時に出す
     // 読み込み中でも取り直す（refresh は世代番号で古い応答を捨てる）
     _changeSub = widget.app.contentChanged
-        .listen((lib) => _states[lib]?.refresh(lib));
+        .listen((lib) => _states[lib]?.softRefresh(lib));
   }
 
   // 並び順は Worker に渡して取り直す。端末側の並べ替えだと読み込み済みの分にしか効かない
@@ -108,7 +111,7 @@ class _GalleryTabState extends State<GalleryTab> {
         if (_finishedImports.add(t.id)) t.lib,
     };
     for (final lib in changedLibs) {
-      _states[lib]?.refresh(lib);
+      _states[lib]?.softRefresh(lib);
     }
   }
 
@@ -125,7 +128,7 @@ class _GalleryTabState extends State<GalleryTab> {
       // 離れている間に並び順が変わっていた
       cached.changeSort(widget.app.photosChrome.sort, widget.lib);
     } else if (!cached.loading) {
-      cached.refresh(widget.lib);
+      cached.softRefresh(widget.lib);
     }
     _c.bind(_stateFor(widget.lib), widget.lib);
   }
@@ -151,27 +154,26 @@ class _GalleryTabState extends State<GalleryTab> {
     return makeImageThumb(bytes);
   }
 
-  // 操作を始めたライブラリの一覧を取り直す。終わる前に切り替えても別のライブラリを取り直さんように
-  Future<void> Function() _refresherFor(String lib) {
-    final s = _stateFor(lib);
-    return () => s.refresh(lib);
-  }
+  Future<void> _refresh() => _stateFor(widget.lib).refresh(widget.lib);
 
-  Future<void> _refresh() => _refresherFor(widget.lib)();
-
-  void _openPlayer(List<MediaItem> sorted, int index) {
+  Future<void> _openPlayer(List<MediaItem> sorted, int index) async {
     final lib = widget.lib;
     final g = _stateFor(lib);
-    openViewer(context,
+    // 控えの一覧から開く時は、期限の切れた署名URLを新しいものに替えてから開く
+    final target = await g.openTarget(sorted, index);
+    if (target == null || !mounted || widget.lib != lib) return;
+    await openViewer(context,
         app: widget.app,
         lib: lib,
-        items: sorted,
-        index: index,
+        items: target.items,
+        index: target.index,
         // 開いた後に一覧が読み込む続きのページも、スワイプで辿れるようにする
         source: g,
         readItems: g.ordered,
         onNearEnd: () => g.loadMore(lib),
-        onChanged: _refresherFor(lib));
+        // 操作を始めたライブラリの一覧を直す。終わる前に切り替えても別のライブラリを触らない
+        onChanged: () => g.softRefresh(lib),
+        onTrash: (it) => _c.trashOne(context, it));
   }
 
   // 選んだ後に確認シート（保存先・合計サイズ・先頭の数件）を挟み、押した時だけ転送キューに積む（#149）。

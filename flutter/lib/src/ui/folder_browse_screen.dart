@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../api/models.dart';
 import '../grid/media_controller.dart';
 import '../grid/media_list_body.dart';
 import '../grid/selection_widgets.dart';
@@ -58,6 +59,7 @@ class _FolderBrowseScreenState extends State<FolderBrowseScreen> {
     prefix: widget.prefix,
     recursive: false,
     sort: widget.app.photosChrome.sort,
+    cache: widget.app.listingCache,
   )..refresh(widget.lib);
   late final MediaController _c = MediaController(widget.app)
     ..bind(_g, widget.lib);
@@ -74,7 +76,8 @@ class _FolderBrowseScreenState extends State<FolderBrowseScreen> {
   @override
   void didUpdateWidget(FolderBrowseScreen old) {
     super.didUpdateWidget(old);
-    if (widget.active && !old.active) _g.refresh(widget.lib);
+    // 読み進めた位置と続きのページは残し、差分だけ映す
+    if (widget.active && !old.active) _g.softRefresh(widget.lib);
   }
 
   void _reportSelecting() {
@@ -90,6 +93,19 @@ class _FolderBrowseScreenState extends State<FolderBrowseScreen> {
     _c.dispose();
     _g.dispose();
     super.dispose();
+  }
+
+  Future<void> _open(List<MediaItem> sorted, int index) async {
+    // 控えの一覧から開く時は、期限の切れた署名URLを新しいものに替えてから開く
+    final target = await _g.openTarget(sorted, index);
+    if (target == null || !mounted) return;
+    await openViewer(context,
+        app: widget.app,
+        lib: widget.lib,
+        items: target.items,
+        index: target.index,
+        onChanged: () => _g.softRefresh(widget.lib),
+        onTrash: (it) => _c.trashOne(context, it));
   }
 
   String get _title {
@@ -136,12 +152,7 @@ class _FolderBrowseScreenState extends State<FolderBrowseScreen> {
               gridKey: ValueKey('folder-${_g.sort.apiValue}'),
               sort: _sort,
               sorted: sorted,
-              onOpenItem: (i) => openViewer(context,
-                  app: widget.app,
-                  lib: widget.lib,
-                  items: sorted,
-                  index: i,
-                  onChanged: () => _g.refresh(widget.lib)),
+              onOpenItem: (i) => _open(sorted, i),
               onOpenFolder: widget.onOpenFolder ??
                   (p) => openFolder(context, widget.app, widget.lib, p),
               errorActions: [

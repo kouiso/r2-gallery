@@ -15,7 +15,7 @@ import 'package:r2_gallery/src/ui/media_tile.dart';
 class _Api extends ApiClient {
   @override
   Future<FolderPage> folder(String libId,
-          {String prefix = '', String? cursor, bool recursive = false, String? sort}) async =>
+          {String prefix = '', String? cursor, bool recursive = false, String? sort, bool fresh = false}) async =>
       const FolderPage(items: []);
   @override
   Future<List<Album>> albums(String libId) async => const [];
@@ -57,7 +57,7 @@ class _ChildApi extends ApiClient {
 
   @override
   Future<FolderPage> folder(String libId,
-          {String prefix = '', String? cursor, bool recursive = false, String? sort}) async {
+          {String prefix = '', String? cursor, bool recursive = false, String? sort, bool fresh = false}) async {
     if (prefix == 'seed/') folderPageLoads++;
     return switch (prefix) {
         '' => const FolderPage(items: [], folders: ['seed/']),

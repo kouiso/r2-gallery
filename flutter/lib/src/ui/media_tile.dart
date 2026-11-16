@@ -15,15 +15,29 @@ String thumbCacheKey(String url, {bool stored = true}) {
   return stored ? path : '$path#orig';
 }
 
-/// 一覧のサムネ用ディスクキャッシュ。既定の200件では1ライブラリ分も持てず、
-/// 切り替えて戻るたびに取り直しになるので、KMP 版の Coil 並みに広く取る。
+/// 一覧の保存済みサムネ用ディスクキャッシュ。1枚が小さいので数万件持っても軽い。
+/// 5万枚級のライブラリでは5000件だとスクロールのたびに追い出し合い、毎回取り直しになっていた。
 final thumbCache = CacheManager(
   Config(
     'r2g.thumbs',
-    stalePeriod: const Duration(days: 30),
-    maxNrOfCacheObjects: 5000,
+    stalePeriod: const Duration(days: 90),
+    maxNrOfCacheObjects: 20000,
   ),
 );
+
+/// サムネ未保存の間に /t/ が返す原本（'#orig'）の置き場。原寸で重いので、件数を絞って別に持つ。
+/// 同じ置き場にすると原本が件数上限を食い、本物のサムネを追い出してしまう。
+final origThumbCache = CacheManager(
+  Config(
+    'r2g.thumbs.orig',
+    stalePeriod: const Duration(days: 7),
+    maxNrOfCacheObjects: 300,
+  ),
+);
+
+/// [thumbCacheKey] の stored と対にして使う置き場。
+CacheManager thumbCacheFor({bool stored = true}) =>
+    stored ? thumbCache : origThumbCache;
 
 /// 一覧・アルバムで共通のサムネ表示。セルの寸法で decode し、ディスクキャッシュから引く。
 class ThumbImage extends StatelessWidget {
@@ -47,7 +61,7 @@ class ThumbImage extends StatelessWidget {
           key: ValueKey(url),
           imageUrl: url,
           cacheKey: thumbCacheKey(url, stored: stored),
-          cacheManager: thumbCache,
+          cacheManager: thumbCacheFor(stored: stored),
           memCacheWidth: px > 0 ? px : null,
           fit: BoxFit.cover,
           fadeInDuration: Duration.zero,

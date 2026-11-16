@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../duplicates/duplicates_screen.dart';
 import '../offline/offline_screen.dart';
 import '../state/app_state.dart';
 import '../state/pairing.dart';
@@ -226,6 +227,20 @@ class _SettingsTabState extends State<SettingsTab> {
         if (app.offlineSupported) ...[
           const SettingsHeading('オフライン保存'),
           OfflineSettingsCard(app: app),
+        ],
+        // 重複の確認は今開いているライブラリの中だけで探す（#106）
+        if (app.connected && app.activeLib != null) ...[
+          const SettingsHeading('重複'),
+          SettingsGroup(children: [
+            ListTile(
+              leading: const Icon(Icons.content_copy_outlined,
+                  color: AppColors.accent),
+              title: const Text('重複した写真・動画を探す'),
+              subtitle: const Text('中身がまったく同じ物を、今のライブラリから探します',
+                  style: TextStyle(color: AppColors.textDim, fontSize: 12)),
+              onTap: () => openDuplicates(context, app, app.activeLib!),
+            ),
+          ]),
         ],
         const SettingsHeading('このアプリについて'),
         const AppVersionLabel(),

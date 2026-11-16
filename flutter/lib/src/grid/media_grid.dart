@@ -11,8 +11,9 @@ import 'selection_widgets.dart';
 const gridMinCell = 88.0;
 const gridGap = 2.0;
 
-/// 最後のセルから何件手前で続きを取りに行くか（KMP 版と同じ9件）。
-const nearEndThreshold = 9;
+/// 最後のセルから何件手前で続きを取りに行くか。9件手前（KMP 版）だと末尾に着いてから
+/// 読み込みを待つことになるので、1ページ（200件）の半分強、画面2〜3枚分先から頼む。
+const nearEndThreshold = 120;
 
 /// 幅から列数を出す。Compose の GridCells.Adaptive と同じ割り方。
 int gridColumnsFor(double width) {

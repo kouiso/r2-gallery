@@ -120,6 +120,41 @@ Optional thumbnails are read from `META/.system/thumbs/<library id>/<key>.webp`;
 original object is served. Index files and thumbnails are produced by your own tooling and are
 never committed to this repository.
 
+### Listing catalog
+
+Sorted listings (`GET /v1/:lib/folders?sort=…`, i.e. what the app's photo grid asks for) are served
+from a catalog instead of enumerating the bucket on every request — R2 can only list in key order,
+so sorting by date/size/name needs every object, and at tens of thousands of objects that is dozens
+of `list` calls per page.
+
+- `META/.system/catalog/<library id>.json` — snapshot of every key in the library
+  (`{ version: 1, startedAt, items: [[key, size, uploadedMs, etag, hasThumb]] }`).
+- `META/.system/catalog/<library id>/j/<ms>-<uuid>.json` — one small journal entry per write made
+  through the Worker (`{ put?, del?, thumb?, unthumb? }`), applied on top of the snapshot.
+
+Writes through the Worker are therefore visible on the next request. Objects written **directly to
+R2** (pipelines, `tools/index-upload.mjs`) appear after the next rebuild: the snapshot is rebuilt in
+the background once it is older than `CATALOG_MAX_AGE_SECONDS` (default 300), by the daily cron, and
+immediately when the app pulls to refresh (`fresh=1`). `CATALOG_MAX_AGE_SECONDS = "0"` rebuilds on
+every request (the pre-catalog behaviour; slow on large libraries, useful as an escape hatch).
+Both files are derived data: deleting them only costs one rebuild.
+
+### Content hashes (duplicate detection)
+
+`META/.system/hashes-<library id>.json` records SHA-256 digests used to find byte-identical media:
+
+```json
+{ "version": 1, "items": { "path/to/item.jpg": { "size": 12345, "etag": "…", "sha256": "…" } } }
+```
+
+Only the Worker writes it — digests it computed itself, or that R2 verified on upload
+(`x-content-sha256` on `PUT /v1/:lib/objects`). A record counts only while the object still has the
+same `etag`. Digests are computed lazily, only for objects that share a byte size with another one
+(`POST /v1/:lib/duplicates/scan`, bounded by `DUP_SCAN_BYTES` and `DUP_SCAN_OBJECTS` per call; objects above
+`DUP_MAX_OBJECT_BYTES` are skipped). `GET /v1/:lib/duplicates` returns the groups,
+`POST /v1/:lib/objects/check` answers "is this already stored?" before an upload, and
+`POST /v1/:lib/ops/trash` with `duplicateOf` moves album memberships to the copy that is kept.
+
 ### Index uploader
 
 `tools/index-upload.mjs` validates an index JSON, renders WebP thumbnails from a local media

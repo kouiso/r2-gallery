@@ -42,7 +42,7 @@ Future<void> bulkAddToAlbum({
 
 /// 「アルバムに追加」の入口は写真タブ・アルバム・フォルダ・ビューワーのどこからでもこれ1つ。
 /// 書けないライブラリなら理由を出して開かない。[targets] は (lib, key)。
-/// 戻り値: 閉じただけなら null。追加を試みたら結果（失敗なら error に画面へ出す文言）。
+/// 戻り値: 閉じただけなら null。追加を始めたら、後から結果が届く [AlbumPickOutcome]。
 Future<AlbumPickOutcome?> pickAlbumAndAdd(
   BuildContext context,
   AppState app, {
@@ -80,8 +80,8 @@ Future<List<Album>> writableAlbums(ApiClient api, String lib) async {
 }
 
 /// 「アルバムに追加」ダイアログ。既存アルバムを選ぶか、新しい名前を入れて作成して追加する。
-/// 追加の本体は [onPick]（albumId か newTitle のどちらか）。処理中はダイアログを閉じずに待つ。
-/// 戻り値: 追加できたら true、キャンセルなら null。失敗時は [failureMessage] を返す。
+/// 追加の本体は [onPick]（albumId か newTitle のどちらか）。選んだらすぐ閉じ、送るのは裏で続ける。
+/// 戻り値: キャンセルなら null。選んだら結果（失敗時は [failureMessage]）が後から届く [AlbumPickOutcome]。
 Future<AlbumPickOutcome?> showAlbumPicker(
   BuildContext context, {
   required ApiClient api,
@@ -99,11 +99,11 @@ Future<AlbumPickOutcome?> showAlbumPicker(
   );
 }
 
-/// ダイアログの結果。[error] が null なら追加できた。
+/// ダイアログの結果。ダイアログは追加を送り終わるのを待たずに閉じる（待たせると操作がもたつくため）。
+/// 送った結果は [done] で後から届き、失敗なら画面へ出す文言、成功なら null になる。
 class AlbumPickOutcome {
-  final String? error;
-  const AlbumPickOutcome({this.error});
-  bool get ok => error == null;
+  final Future<String?> done;
+  const AlbumPickOutcome(this.done);
 }
 
 class AlbumPickerDialog extends StatefulWidget {
@@ -141,19 +141,18 @@ class _AlbumPickerDialogState extends State<AlbumPickerDialog> {
     super.dispose();
   }
 
-  Future<void> _pick(String? albumId, String? newTitle) async {
-    // 二度押しで同じアルバムへ二重に作成・追加しないよう、処理中は受け付けない
+  void _pick(String? albumId, String? newTitle) {
+    // 二度押しで同じアルバムへ二重に作成・追加しないよう、閉じるまでは受け付けない
     if (_busy) return;
     setState(() => _busy = true);
-    String? error;
-    try {
-      await widget.onPick(albumId, newTitle);
-    } on Exception catch (e) {
+    final failure = widget.failureMessage;
+    final done = widget.onPick(albumId, newTitle).then<String?>((_) => null,
+        onError: (Object e) {
+      if (e is! Exception) throw e;
       debugPrint('album add failed: $e');
-      error = widget.failureMessage;
-    }
-    if (!mounted) return;
-    Navigator.of(context).pop(AlbumPickOutcome(error: error));
+      return failure;
+    });
+    Navigator.of(context).pop(AlbumPickOutcome(done));
   }
 
   @override

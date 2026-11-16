@@ -70,7 +70,8 @@ class _SortingApi extends ApiClient {
       {String prefix = '',
       String? cursor,
       bool recursive = false,
-      String? sort}) async {
+      String? sort,
+      bool fresh = false}) async {
     calls.add((sort: sort, cursor: cursor));
     if (failNext) {
       failNext = false;

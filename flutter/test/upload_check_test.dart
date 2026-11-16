@@ -158,7 +158,7 @@ class _RecordingTransferApi implements TransferApi {
   @override
   Future<bool> storedMatches(
           String lib, String key, int size, Stream<List<int>> Function() local,
-          {CancelToken? cancelToken}) async =>
+          {CancelToken? cancelToken, void Function(int matched)? onProgress}) async =>
       false;
   @override
   Future<String?> itemUrl(String lib, String key) async => null;

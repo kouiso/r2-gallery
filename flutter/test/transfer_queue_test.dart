@@ -30,6 +30,10 @@ class FakeWorker {
   final Completer<void> holdRelease = Completer<void>();
   // 受け取ったサムネ PUT のキー（送った筈のない物が送られていないか見る）
   final List<String?> thumbs = [];
+  // /o/ の中身をこの大きさの塊で間隔を置いて送る（照合が早退するか見る）。0 なら一括
+  int openChunkSize = 0;
+  Duration openChunkDelay = Duration.zero;
+  int openBytesSent = 0;
   // アルバムへの追加要求。albumId → 追加を求められたキー列
   final Map<String, List<String>> albumAdds = {};
   bool failAlbumAdd = false;
@@ -99,6 +103,28 @@ class FakeWorker {
       if (data == null) {
         r.response.statusCode = 404;
         await r.response.close();
+        return;
+      }
+      if (openChunkSize > 0) {
+        // 塊ごとに flush するので、先に読むのをやめた側が切ると途中で失敗して止まる
+        r.response.bufferOutput = false;
+        for (var i = 0; i < data.length; i += openChunkSize) {
+          final end =
+              i + openChunkSize > data.length ? data.length : i + openChunkSize;
+          try {
+            r.response.add(data.sublist(i, end));
+            await r.response.flush();
+            openBytesSent += end - i;
+          } catch (_) {
+            break;
+          }
+          if (openChunkDelay > Duration.zero) {
+            await Future<void>.delayed(openChunkDelay);
+          }
+        }
+        try {
+          await r.response.close();
+        } catch (_) {}
         return;
       }
       r.response.contentLength = data.length;
@@ -1077,6 +1103,47 @@ void main() {
       q.retryAllFailed();
       await until(() => q.tasks.single.status == TransferStatus.done, what: 'retry done');
       expect(w.objects.keys.toList(), ['v.mp4']);
+    });
+
+    // #144: 照合は逐次比較。違うバイトで打ち切るので残りを読まない
+    test('照合は違うバイトで打ち切り、残りを読まない', () async {
+      final remote = bytesOf(20000, 1);
+      w.objects['big.bin'] = remote;
+      w.openChunkSize = 1000;
+      w.openChunkDelay = const Duration(milliseconds: 20);
+      final ta = ApiClientTransferApi(api);
+      final local = Uint8List.fromList(remote)..[7] ^= 0xff;
+      final same = await ta.storedMatches('lib', 'big.bin', remote.length,
+          () => Stream<List<int>>.value(local));
+      expect(same, isFalse);
+      expect(w.openBytesSent, lessThan(remote.length));
+    });
+
+    test('照合中は読んだバイト数の進捗が出る', () async {
+      w.objects['a.bin'] = bytesOf(5000, 2);
+      w.openChunkSize = 1000;
+      final ta = ApiClientTransferApi(api);
+      final got = <int>[];
+      final same = await ta.storedMatches('lib', 'a.bin', 5000,
+          () => Stream<List<int>>.value(bytesOf(5000, 2).toList()),
+          onProgress: got.add);
+      expect(same, isTrue);
+      expect(got, isNotEmpty);
+      expect(got.last, 5000);
+    });
+
+    test('照合は送り側と受け側で塊の切れ目が違っても正しく比べる', () async {
+      final b = bytesOf(5000, 2);
+      w.objects['a.bin'] = b;
+      w.openChunkSize = 1000;
+      final ta = ApiClientTransferApi(api);
+      final same = await ta.storedMatches('lib', 'a.bin', 5000, () async* {
+        // ローカル側は333バイトずつ — 切れ目が合わなくても同じ中身と分かる
+        for (var i = 0; i < b.length; i += 333) {
+          yield b.sublist(i, i + 333 > b.length ? b.length : i + 333);
+        }
+      });
+      expect(same, isTrue);
     });
 
     test('失敗した行は復帰時の再試行でまとめて積み直す', () async {

@@ -804,6 +804,8 @@ class TransferQueue extends ChangeNotifier {
     // サムネが無くても保存自体は成功。一覧のバックフィルが後で補う
     try {
       final thumb = await maker(File(path), t.mime);
+      // 生成中に止められた・接続先が替わったなら、新しい送り先へは上げない
+      if (t._token?.isCancelled == true) return;
       if (thumb != null && thumb.isNotEmpty) await api.putThumb(t.lib, key, thumb);
     } on Exception catch (e) {
       debugPrint('upload thumb skipped: $e');
@@ -908,6 +910,27 @@ class TransferQueue extends ChangeNotifier {
   void retryAllFailed() {
     for (final t in _tasks.toList()) {
       if (t.status == TransferStatus.error) retry(t.id);
+    }
+  }
+
+  /// 接続先の切り替えなどで、まだ送る可能性のある行を全部止める。
+  /// 失敗の行も接続のたびに自動で積み直されるので一緒に止める。
+  /// 行と退避したファイルは残すので、同じ送り先へ戻れば再開で続きから送れる
+  void pauseUnsent() {
+    var touched = false;
+    for (final t in _tasks.toList()) {
+      if (t.active) {
+        pause(t.id);
+        touched = true;
+      } else if (t.status == TransferStatus.error) {
+        t.status = TransferStatus.paused;
+        _waits.remove(t.id)?.cancel();
+        touched = true;
+      }
+    }
+    if (touched) {
+      _persist();
+      _changed();
     }
   }
 

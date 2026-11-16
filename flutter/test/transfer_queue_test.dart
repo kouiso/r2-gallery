@@ -28,6 +28,8 @@ class FakeWorker {
   // このパート番号の PUT を返さずに止めておく（落とされる前の通信中を作る）
   int? holdPart;
   final Completer<void> holdRelease = Completer<void>();
+  // 受け取ったサムネ PUT のキー（送った筈のない物が送られていないか見る）
+  final List<String?> thumbs = [];
   // このキーの単発 PUT を受け取ったまま返さずに止めておく（完了が重なる瞬間を作る）
   String? holdPutKey;
   final Completer<void> holdPutSeen = Completer<void>();
@@ -131,6 +133,7 @@ class FakeWorker {
     }
     if (r.method == 'PUT' && p.endsWith('/thumb')) {
       await _body(r);
+      thumbs.add(key);
       return _json(r, {});
     }
     if (r.method == 'PUT' && p.endsWith('/objects')) {
@@ -643,6 +646,31 @@ void main() {
       await until(() => q.tasks.single.status == TransferStatus.done);
       expect(w.objects['v.mp4'], data);
       expect(w.creates, 1);
+    });
+
+    test('サムネ生成中に止められたら、送り先へサムネは上げない', () async {
+      final called = Completer<void>();
+      final gate = Completer<void>();
+      final q = make(makeThumb: (file, mime) async {
+        if (!called.isCompleted) called.complete();
+        await gate.future;
+        return bytesOf(8);
+      });
+      await q.restore();
+      await q.enqueueUploads('lib', [
+        UploadSource(
+            name: 'a.jpg',
+            size: 4,
+            mime: 'image/jpeg',
+            path: await source('a.jpg', bytesOf(4))),
+      ]);
+      await called.future;
+      q.pause(q.tasks.single.id);
+      gate.complete();
+      await until(() => q.tasks.single.finished);
+      // 本体は上がり切っているので完了になるが、サムネだけは送られていない
+      expect(q.tasks.single.status, TransferStatus.done);
+      expect(w.thumbs, isEmpty);
     });
 
     test('取り消すと multipart を片付け、退避ファイルと行を消す', () async {

@@ -128,14 +128,60 @@ String buildPairingString(String endpoint, String token) {
   if (ep.isNotEmpty && !ep.contains('://')) ep = 'https://$ep';
   if (!ep.startsWith('https://') ||
       ep.length == 'https://'.length ||
-      tk.isEmpty) {
+      tk.isEmpty ||
+      _origin(ep) == null) {
     return null;
   }
   return (endpoint: ep, token: tk);
 }
 
+// 比べるための送り先（スキーム・ホスト・実際のポート）。userinfo 付きや読めない URL は null。
+// 「最後の @ の後」を取る読み方だと、パスに @ を入れた別ホストを同じホストと読んでしまう。
+// 送り先の判定は URL の決まりどおりに読んだ値で行う。スキームが無ければ接続時と同じく https とみなす
+({String scheme, String host, int port})? _origin(String endpoint) {
+  var ep = endpoint.trim();
+  if (ep.isNotEmpty && !ep.contains('://')) ep = 'https://$ep';
+  final u = Uri.tryParse(ep);
+  if (u == null || u.host.isEmpty || u.userInfo.isNotEmpty) return null;
+  // 生の authority に @ があるものも userinfo として扱う（Uri が落とす書き方があっても通さない）
+  final rest = ep.replaceFirst(RegExp(r'^[A-Za-z][A-Za-z0-9+.-]*://'), '');
+  final end = rest.indexOf(RegExp(r'[/?#]'));
+  if ((end < 0 ? rest : rest.substring(0, end)).contains('@')) return null;
+  return (scheme: u.scheme.toLowerCase(), host: u.host.toLowerCase(), port: u.port);
+}
+
+/// 2つのエンドポイントが同じ送り先（スキーム・ホスト・ポート）か。ホストの大文字小文字は区別せず、
+/// https の 443 とポート無しは同じとみなす。どちらかが userinfo 付きや読めない URL なら別物とする。
+bool isSameHost(String a, String b) {
+  final x = _origin(a), y = _origin(b);
+  return x != null && x == y;
+}
+
+/// パスを送り先の区別に使うための読み方。末尾の / は同じ送り先として揃える。
+String _pathKey(String endpoint) {
+  var ep = endpoint.trim();
+  if (ep.isNotEmpty && !ep.contains('://')) ep = 'https://$ep';
+  var p = Uri.tryParse(ep)?.path ?? '';
+  while (p.endsWith('/')) {
+    p = p.substring(0, p.length - 1);
+  }
+  return p;
+}
+
+/// 2つのエンドポイントが完全に同じ送り先か。[isSameHost] に加えてパスも比べる。
+/// 同じホストでもパスが違えば別の保存先であり得るので、転送の待ちをそのまま流せるか・
+/// 一覧を使い回せるかのように「トークンの差し替えだけ」に限りたい判定に使う。
+bool isSameEndpoint(String a, String b) =>
+    isSameHost(a, b) && _pathKey(a) == _pathKey(b);
+
 /// 表示用のホスト名。スキームとパスを落とし、トークンや userinfo は決して出さない。
 String hostOf(String endpoint) {
+  if (_origin(endpoint) != null) {
+    final ep = endpoint.trim();
+    final u = Uri.parse(ep.contains('://') ? ep : 'https://$ep');
+    return u.hasPort ? '${u.host}:${u.port}' : u.host;
+  }
+  // userinfo 付きや壊れた URL だけ従来の読み方にする。表示用なので、秘密を出さないことを優先する
   final noScheme = endpoint.trim().replaceFirst(
     RegExp(r'^[A-Za-z][A-Za-z0-9+.-]*://'),
     '',

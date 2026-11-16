@@ -241,6 +241,7 @@ class AppState extends ChangeNotifier {
     await _loadLockSettings();
     if (ep != null && tk != null) {
       api.setConnection(Connection(ep, tk));
+      _lastEndpoint = ep;
       connected = true;
       locked = _gateAtStart;
       // 一覧のメタ情報を取るだけで、画面はロックが塞ぐ。PIN 入力中に取り終えておけば解除後すぐ出せる
@@ -283,28 +284,125 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<String?> connect(String endpoint, String token) async {
+  /// 接続先を差し替えた回数。同じライブラリ id の別の接続先でも画面の一覧・選択を作り直す合図に使う
+  int connectionGen = 0;
+
+  /// 最後に実際に繋がっていた送り先。切断で接続が null になった後も残し、
+  /// 別の接続先へ繋ぎ直した時に残った転送を新しい送り先へ誤送せんよう比べる
+  String? _lastEndpoint;
+
+  /// 送り先が変わる時に呼ぶ。前の送り先へ向けて積んだ転送・取り込みを止め、旧接続先の一覧を捨てる。
+  /// 比べる相手は今の接続、無ければ最後に繋がっていた送り先（切断→別の接続先でも漏れないため）。
+  /// 行は取り消さず一時停止に留める。退避したファイルも残り、同じ送り先へ戻れば続きから送れる
+  void _pauseUnsentIfSwitching(String endpoint) {
+    final staleTo = api.conn?.endpoint ?? _lastEndpoint;
+    if (staleTo == null || isSameEndpoint(staleTo, endpoint)) return;
+    transfers.pauseUnsent();
+    webQueue.pauseUnsent();
+    // 旧接続先の一覧・選択を新しい接続先のものとして見せない。取得に失敗しても残らない
+    libraries = [];
+    activeLib = null;
+  }
+
+  // connect / tryConnect / saveConnection で入力の確かめ方と文言を揃える
+  ({String endpoint, String token})? _validInput(
+      String endpoint, String token, void Function(String) onError) {
     final input = normalizeConnectInput(endpoint, token);
-    if (input == null) {
-      final ep = endpoint.trim();
-      return ep.contains('://') && !ep.startsWith('https://')
-          ? 'エンドポイントは https:// で始めてください'
-          : connectFailedMessage;
+    if (input != null) return input;
+    final ep = endpoint.trim();
+    onError(ep.contains('://') && !ep.startsWith('https://')
+        ? 'エンドポイントは https:// で始めてください'
+        : connectFailedMessage);
+    return null;
+  }
+
+  Future<void> _applyConnection(String endpoint, String token) async {
+    _pauseUnsentIfSwitching(endpoint);
+    api.setConnection(Connection(endpoint, token));
+    _lastEndpoint = endpoint;
+    await Kv.set(Keys.endpoint, endpoint);
+    await Kv.set(Keys.token, token);
+    connected = true;
+    browseOnly = false;
+    bakedProbeFailed = false;
+    startupError = null;
+    // 同じライブラリ id でも中身は別の接続先のもの。先に上げて、通知で画面が古い一覧を使い続けないようにする
+    connectionGen++;
+    notifyListeners();
+    await _loadLibraries();
+  }
+
+  Future<String?> connect(String endpoint, String token) async {
+    String? err;
+    final input = _validInput(endpoint, token, (e) => err = e);
+    if (input == null) return err;
+    // 転送は送るたびに今の接続を読むので、送り先が変わると待機中の物が新しい送り先へ漏れる。
+    // saveConnection と同じく未送信が残る切り替えは断る（ペアリングリンクもここを通る）
+    final cur = api.conn;
+    if (cur != null &&
+        !isSameEndpoint(cur.endpoint, input.endpoint) &&
+        hasUnsentTransfers) {
+      return unsentTransfersMessage;
     }
     final ok = await api
         .probe(input.endpoint, input.token)
         .timeout(_bakedProbeBudget, onTimeout: () => false);
     if (!ok) return connectFailedMessage;
-    api.setConnection(Connection(input.endpoint, input.token));
-    await Kv.set(Keys.endpoint, input.endpoint);
-    await Kv.set(Keys.token, input.token);
-    connected = true;
-    browseOnly = false;
-    bakedProbeFailed = false;
-    startupError = null;
-    notifyListeners();
-    await _loadLibraries();
+    await _applyConnection(input.endpoint, input.token);
     return null;
+  }
+
+  /// 接続先の変更画面の保存。connect と違い、届かない／トークンが違うを区別した理由を返す。
+  /// 確かめて成功した時だけ接続を差し替え、失敗では今の接続にも保存値にも触れない。
+  Future<String?> saveConnection(String endpoint, String token) async {
+    String? err;
+    final input = _validInput(endpoint, token, (e) => err = e);
+    if (input == null) return err;
+    // 転送は送るたびに今の接続を読むので、切り替えると A に向けて積んだものが B へ送られる。
+    // 同じ送り先（トークンの差し替えだけ）なら変わらないので止めない。パスが違えば同じホストでも別物
+    final cur = api.conn;
+    if (cur != null &&
+        !isSameEndpoint(cur.endpoint, input.endpoint) &&
+        hasUnsentTransfers) {
+      return unsentTransfersMessage;
+    }
+    final r = await api
+        .probeOutcome(input.endpoint, input.token)
+        .timeout(_bakedProbeBudget, onTimeout: () => ProbeOutcome.unreachable);
+    if (!r.success) return _probeReason(r);
+    await _applyConnection(input.endpoint, input.token);
+    return null;
+  }
+
+  static const unsentTransfersMessage =
+      '送り終えていない転送があります。終わるのを待つか、転送の一覧から消してから切り替えてください。';
+
+  /// まだ送る可能性のある転送の行があるか。失敗の行も接続のたびに自動で再試行されるので数える。
+  /// ネット取り込みも同じ接続へ上げるので含める。
+  bool get hasUnsentTransfers =>
+      transfers.tasks.any((t) =>
+          t.status != TransferStatus.done &&
+          t.status != TransferStatus.cancelled) ||
+      webQueue.tasks.any((t) =>
+          t.status != WebTaskStatus.done &&
+          t.status != WebTaskStatus.cancelled);
+
+  String _probeReason(ProbeOutcome r) => r.tokenRejected
+      ? 'トークンが違います。確認してください。'
+      : '接続先に届きません。URLとネットワークを確認してください。';
+
+  /// 接続先を保存せずに試す。今の接続・保存済みの値には一切触れない。
+  /// 返す文字列は失敗の理由、成功なら null（件数は取れた時だけ）。
+  Future<({String? error, int? libraryCount})> tryConnect(
+      String endpoint, String token) async {
+    String? err;
+    final input = _validInput(endpoint, token, (e) => err = e);
+    if (input == null) return (error: err, libraryCount: null);
+    final r = await api
+        .probeOutcome(input.endpoint, input.token)
+        .timeout(_bakedProbeBudget, onTimeout: () => ProbeOutcome.unreachable);
+    if (r.success) return (error: null, libraryCount: r.libraryCount);
+    return (error: _probeReason(r), libraryCount: null);
   }
 
   Future<void> _connectBaked() async {
@@ -318,7 +416,9 @@ class AppState extends ChangeNotifier {
       bakedProbeFailed = true;
       return;
     }
+    _pauseUnsentIfSwitching(bakedEndpoint);
     api.setConnection(Connection(bakedEndpoint, bakedToken));
+    _lastEndpoint = bakedEndpoint;
     await Kv.set(Keys.endpoint, bakedEndpoint);
     await Kv.set(Keys.token, bakedToken);
     connected = true;

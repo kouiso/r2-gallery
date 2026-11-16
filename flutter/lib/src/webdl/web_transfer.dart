@@ -484,6 +484,25 @@ class WebTransferQueue extends ChangeNotifier {
     _pump();
   }
 
+  /// 接続先の切り替えなどで、まだ送る可能性のある行を全部止める。
+  /// 失敗の行も接続のたびに積み直されるので一緒に止める。行と一時ファイルは残す
+  void pauseUnsent() {
+    var touched = false;
+    for (final t in _tasks.toList()) {
+      if (t.active) {
+        pause(t.id);
+        touched = true;
+      } else if (t.status == WebTaskStatus.error) {
+        t.status = WebTaskStatus.paused;
+        touched = true;
+      }
+    }
+    if (touched) {
+      _changed();
+      unawaited(_persist());
+    }
+  }
+
   /// 失敗・取り消しの行をやり直す。途中まで落とせていれば続きから取る。
   void retry(String id) {
     final t = _find(id);
@@ -921,6 +940,10 @@ class WebTransferQueue extends ChangeNotifier {
     // サムネが無くても保存自体は成功。一覧を開いた時のバックフィルが後で補う
     try {
       final thumb = await maker(file, t.mime);
+      // 生成中に止められた・接続先が替わったなら、新しい送り先へは上げない
+      if (!t.active || t.pauseRequested || t.cancel?.isCancelled == true) {
+        return;
+      }
       if (thumb != null && thumb.isNotEmpty) {
         await api.putThumb(t.lib, key, thumb);
       }

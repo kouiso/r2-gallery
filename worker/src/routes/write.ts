@@ -73,7 +73,7 @@ function makeProbe(env: Env) {
         do {
           const listed = await env.META.list({ prefix, cursor });
           for (const o of listed.objects) {
-            const m = /^(\d+)\/(.+)\.json$/.exec(o.key.slice(prefix.length));
+            const m = /^(\d+)\/([\s\S]+)\.json$/.exec(o.key.slice(prefix.length));
             if (!m) continue;
             const id = `${lib}:${m[2]}`;
             out.set(id, [...(out.get(id) ?? []), `${TRASH_PREFIX}${m[1]}/${m[2]}`]);
@@ -341,6 +341,8 @@ export async function handleCopyMove(
     await journalCreated(env, dst.lib.id, put);
   }
   await dropHashBestEffort(env, src.lib.id, srcKey);
+  // 元の key は無くなるので、そのサムネは誰からも参照されない。孤児にしない
+  await dropThumbBestEffort(env, src.lib.id, srcKey);
   return json({ ok: true, to: { lib: dst.lib.id, key: dstKey }, size: put.size });
 }
 
@@ -416,7 +418,7 @@ export async function handleLibOps(
   }
   // restore
   const trashKey = typeof body.trashKey === "string" ? body.trashKey : "";
-  const tm = /^\.trash\/(\d+)\/(.+)$/.exec(trashKey);
+  const tm = /^\.trash\/(\d+)\/([\s\S]+)$/.exec(trashKey);
   if (!tm) throw new HttpError(400, "bad_trash_key");
   const original = assertUserKey(tm[2]);
   // 控えがあれば、まだ存在するアルバムへ元の並びで戻す。控えが無い（この修正より前に

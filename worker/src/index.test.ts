@@ -624,6 +624,24 @@ describe("writes", () => {
     expect(keys).toContain("up/three.png");
   });
 
+  it("drops the source key's thumbnail after a move", async () => {
+    await env.LIB_A.put("mv1/src.png", PNG, { httpMetadata: { contentType: "image/png" } });
+    await env.META.put(".system/thumbs/a/mv1/src.png.webp", WEBP);
+    const move = await api("/v1/ops/move", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        from: { lib: "a", key: "mv1/src.png" },
+        to: { lib: "a", key: "mv1/dst.png" },
+      }),
+    });
+    expect(move.status).toBe(200);
+    // 元の key は無いので、そのサムネは孤児。消えていなければならない
+    expect(await env.META.head(".system/thumbs/a/mv1/src.png.webp")).toBeNull();
+    expect(await env.LIB_A.head("mv1/src.png")).toBeNull();
+    expect(await env.LIB_A.head("mv1/dst.png")).not.toBeNull();
+  });
+
   it("copies large objects via multipart upload", async () => {
     // MULTIPART_COPY_MIN_BYTES=64 / part=5MiB in wrangler.test.toml, so a 6.5 MiB
     // object is copied in two parts through the multipart code path.
@@ -1082,6 +1100,16 @@ describe("trash", () => {
       const again = await Promise.all([trash(keys[0]!), trash(keys[2]!)]);
       for (const tk of [...again].reverse()) await restore(tk);
       expect(await items(id)).toEqual(keys);
+    });
+
+    it("改行を含む key でも、ゴミ箱から元の場所とアルバムへ戻る", async () => {
+      const { id, keys } = await mkAlbum("m6", ["line\nbreak", "ok"]);
+      const tk = await trash(keys[0]!);
+      expect(await items(id)).toEqual([keys[1]]);
+      expect((await restore(tk)).status).toBe(200);
+      expect(await items(id)).toEqual(keys);
+      const f = await folders("a", "m6/");
+      expect(f.items.map((i) => i.key)).toContain(keys[0]);
     });
 
     it("restores into every album the item was in", async () => {

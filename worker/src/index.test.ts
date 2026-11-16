@@ -515,20 +515,34 @@ describe("folders", () => {
 
   describe("type=photo|video で画像・動画を絞り込む (#26)", () => {
     beforeAll(async () => {
-      await env.LIB_A.put("typed/one.jpg", new Uint8Array(3), { httpMetadata: { contentType: "image/jpeg" } });
-      await env.LIB_A.put("typed/two.png", new Uint8Array(4), { httpMetadata: { contentType: "image/png" } });
-      await env.LIB_A.put("typed/mov.mp4", new Uint8Array(5), { httpMetadata: { contentType: "video/mp4" } });
-      await env.LIB_A.put("typed/mov2.mov", new Uint8Array(6), { httpMetadata: { contentType: "video/quicktime" } });
+      await env.LIB_A.put("typed/one.jpg", new Uint8Array(3), {
+        httpMetadata: { contentType: "image/jpeg" },
+      });
+      await env.LIB_A.put("typed/two.png", new Uint8Array(4), {
+        httpMetadata: { contentType: "image/png" },
+      });
+      await env.LIB_A.put("typed/mov.mp4", new Uint8Array(5), {
+        httpMetadata: { contentType: "video/mp4" },
+      });
+      await env.LIB_A.put("typed/mov2.mov", new Uint8Array(6), {
+        httpMetadata: { contentType: "video/quicktime" },
+      });
       // 一覧に出ない拡張子は絞り込み対象外に残る（アップはできるが一覧から外れる既存仕様）
-      await env.LIB_A.put("typed/doc.pdf", new Uint8Array(7), { httpMetadata: { contentType: "application/pdf" } });
+      await env.LIB_A.put("typed/doc.pdf", new Uint8Array(7), {
+        httpMetadata: { contentType: "application/pdf" },
+      });
     });
 
     it("type=photo は画像だけ、type=video は動画だけ、省略は全メディア", async () => {
-      const photo = await (await api("/v1/a/folders?prefix=typed/&sort=new&type=photo")).json() as Folders;
+      const photo = (await (
+        await api("/v1/a/folders?prefix=typed/&sort=new&type=photo")
+      ).json()) as Folders;
       expect(photo.items.map((i) => i.key).sort()).toEqual(["typed/one.jpg", "typed/two.png"]);
-      const video = await (await api("/v1/a/folders?prefix=typed/&sort=new&type=video")).json() as Folders;
+      const video = (await (
+        await api("/v1/a/folders?prefix=typed/&sort=new&type=video")
+      ).json()) as Folders;
       expect(video.items.map((i) => i.key).sort()).toEqual(["typed/mov.mp4", "typed/mov2.mov"]);
-      const all = await (await api("/v1/a/folders?prefix=typed/&sort=new")).json() as Folders;
+      const all = (await (await api("/v1/a/folders?prefix=typed/&sort=new")).json()) as Folders;
       expect(all.total).toBe(4);
       // 絞り込み後の total も絞り込み後の件数
       expect(photo.total).toBe(2);

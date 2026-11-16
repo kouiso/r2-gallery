@@ -1,9 +1,14 @@
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:r2_gallery/src/api/client.dart';
 import 'package:r2_gallery/src/api/models.dart';
 import 'package:r2_gallery/src/state/app_state.dart';
+import 'package:r2_gallery/src/state/pairing.dart';
+import 'package:r2_gallery/src/transfer/transfer_queue.dart';
 import 'package:r2_gallery/src/ui/gallery_tab.dart';
 import 'package:r2_gallery/src/ui/home_shell.dart';
 import 'package:r2_gallery/src/ui/media_tile.dart';
@@ -16,6 +21,9 @@ class _Api extends ApiClient {
   final trashed = <String>[];
   final albumCalls = <String>[];
   final trashCalls = <String>[];
+  final putCalls = <String>[];
+  // 一覧取得を失敗させる接続先（ホストの頭1区切りで指定）
+  final failLibs = <String>{};
   String get _host => Uri.parse(conn!.endpoint).host.split('.').first;
 
   @override
@@ -24,8 +32,24 @@ class _Api extends ApiClient {
   Future<ProbeOutcome> probeOutcome(String endpoint, String token) async =>
       const ProbeOutcome.ok(libraryCount: 1);
   @override
-  Future<List<Library>> libraries() async =>
-      const [Library(id: 'photos', title: 'Photos')];
+  Future<List<Library>> libraries() async {
+    if (failLibs.contains(_host)) throw const ApiError(0, 'down');
+    return const [Library(id: 'photos', title: 'Photos')];
+  }
+
+  @override
+  Future<void> putObject(
+    String libId,
+    String key,
+    Uint8List bytes,
+    String contentType, {
+    void Function(int sent, int total)? onProgress,
+    CancelToken? cancelToken,
+    bool verifyStorage = false,
+  }) async {
+    putCalls.add('$_host/$libId/$key');
+  }
+
   @override
   Future<FolderPage> folder(String libId,
       {String prefix = '', String? cursor, bool recursive = false}) async {
@@ -127,5 +151,75 @@ void main() {
     expect(find.text('a のアルバム'), findsNothing);
     expect(find.text('b のアルバム'), findsOneWidget);
     expect(api.trashed, isEmpty);
+  });
+
+  test('同じ送り先の判定はパスまで見る', () {
+    expect(isSameEndpoint('https://a.example/x', 'https://a.example/x/'), isTrue);
+    expect(isSameEndpoint('https://a.example', 'a.example'), isTrue);
+    expect(isSameEndpoint('https://a.example/x', 'https://a.example/y'), isFalse);
+    expect(isSameEndpoint('https://a.example', 'https://a.example/x'), isFalse);
+    expect(isSameEndpoint('https://a.example:8443', 'https://a.example'), isFalse);
+  });
+
+  test('別の接続先へ切り替えて一覧の取得に失敗しても、旧接続先の一覧と選択は残らない', () async {
+    FlutterSecureStorage.setMockInitialValues({});
+    final api = _Api();
+    final app = AppState(api: api, bakedEndpoint: '', bakedToken: '');
+    expect(await app.connect('https://a.example', 'ta'), isNull);
+    expect(app.libraries.map((l) => l.id), ['photos']);
+    expect(app.activeLib, 'photos');
+
+    api.failLibs.add('b');
+    expect(await app.saveConnection('https://b.example', 'tb'), isNull);
+    // 旧接続先の一覧を新しい接続先のものとして残さず、取得失敗の理由も出す
+    expect(app.libraries, isEmpty);
+    expect(app.activeLib, isNull);
+    expect(app.startupError, isNotNull);
+  });
+
+  test('切断して別の接続先へ繋ぎ直しても、送り切れていない転送は新しい送り先へ送らない', () async {
+    FlutterSecureStorage.setMockInitialValues({});
+    final api = _Api();
+    final app = AppState(api: api, bakedEndpoint: '', bakedToken: '');
+    expect(await app.connect('https://a.example', 'ta'), isNull);
+    // 回線を切って行を「待ち」に留める
+    app.transfers.setOnline(false);
+    final n = await app.upload('photos', [
+      UploadSource(
+          name: 'x.jpg', size: 3, mime: 'image/jpeg', bytes: Uint8List(3)),
+    ]);
+    expect(n, 1);
+    expect(app.transfers.tasks.single.status, TransferStatus.queued);
+    expect(app.hasUnsentTransfers, isTrue);
+
+    await app.disconnect();
+    // 接続が null の間にキューは止まるが、行は残る。別の接続先へ繋ぎ直しても送ってはいけない
+    expect(await app.connect('https://b.example', 'tb'), isNull);
+    expect(app.transfers.tasks.single.status, TransferStatus.paused);
+
+    app.transfers.setOnline(true);
+    // 待ちを解いても一時停止のまま新しい送り先へは出ない
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    expect(app.transfers.tasks.single.status, TransferStatus.paused);
+    expect(api.putCalls, isEmpty);
+  });
+
+  test('同じホストでもパスが違えば別の送り先なので、未送信が残る切り替えは断る', () async {
+    FlutterSecureStorage.setMockInitialValues({});
+    final api = _Api();
+    final app = AppState(api: api, bakedEndpoint: '', bakedToken: '');
+    expect(await app.connect('https://a.example/x', 'ta'), isNull);
+    app.transfers.setOnline(false);
+    await app.upload('photos', [
+      UploadSource(
+          name: 'x.jpg', size: 3, mime: 'image/jpeg', bytes: Uint8List(3)),
+    ]);
+    expect(app.hasUnsentTransfers, isTrue);
+
+    expect(await app.saveConnection('https://a.example/y', 'ta'),
+        AppState.unsentTransfersMessage);
+    // 同じパスへのトークン差し替えは送り先が変わらないので通す。待ちもそのまま残る
+    expect(await app.saveConnection('https://a.example/x/', 'tb'), isNull);
+    expect(app.transfers.tasks.single.status, TransferStatus.queued);
   });
 }

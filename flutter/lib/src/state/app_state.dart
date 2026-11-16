@@ -235,6 +235,7 @@ class AppState extends ChangeNotifier {
     await _loadLockSettings();
     if (ep != null && tk != null) {
       api.setConnection(Connection(ep, tk));
+      _lastEndpoint = ep;
       connected = true;
       locked = _gateAtStart;
       // 一覧のメタ情報を取るだけで、画面はロックが塞ぐ。PIN 入力中に取り終えておけば解除後すぐ出せる
@@ -280,6 +281,23 @@ class AppState extends ChangeNotifier {
   /// 接続先を差し替えた回数。同じライブラリ id の別の接続先でも画面の一覧・選択を作り直す合図に使う
   int connectionGen = 0;
 
+  /// 最後に実際に繋がっていた送り先。切断で接続が null になった後も残し、
+  /// 別の接続先へ繋ぎ直した時に残った転送を新しい送り先へ誤送せんよう比べる
+  String? _lastEndpoint;
+
+  /// 送り先が変わる時に呼ぶ。前の送り先へ向けて積んだ転送・取り込みを止め、旧接続先の一覧を捨てる。
+  /// 比べる相手は今の接続、無ければ最後に繋がっていた送り先（切断→別の接続先でも漏れないため）。
+  /// 行は取り消さず一時停止に留める。退避したファイルも残り、同じ送り先へ戻れば続きから送れる
+  void _pauseUnsentIfSwitching(String endpoint) {
+    final staleTo = api.conn?.endpoint ?? _lastEndpoint;
+    if (staleTo == null || isSameEndpoint(staleTo, endpoint)) return;
+    transfers.pauseUnsent();
+    webQueue.pauseUnsent();
+    // 旧接続先の一覧・選択を新しい接続先のものとして見せない。取得に失敗しても残らない
+    libraries = [];
+    activeLib = null;
+  }
+
   // connect / tryConnect / saveConnection で入力の確かめ方と文言を揃える
   ({String endpoint, String token})? _validInput(
       String endpoint, String token, void Function(String) onError) {
@@ -293,7 +311,9 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _applyConnection(String endpoint, String token) async {
+    _pauseUnsentIfSwitching(endpoint);
     api.setConnection(Connection(endpoint, token));
+    _lastEndpoint = endpoint;
     await Kv.set(Keys.endpoint, endpoint);
     await Kv.set(Keys.token, token);
     connected = true;
@@ -310,6 +330,14 @@ class AppState extends ChangeNotifier {
     String? err;
     final input = _validInput(endpoint, token, (e) => err = e);
     if (input == null) return err;
+    // 転送は送るたびに今の接続を読むので、送り先が変わると待機中の物が新しい送り先へ漏れる。
+    // saveConnection と同じく未送信が残る切り替えは断る（ペアリングリンクもここを通る）
+    final cur = api.conn;
+    if (cur != null &&
+        !isSameEndpoint(cur.endpoint, input.endpoint) &&
+        hasUnsentTransfers) {
+      return unsentTransfersMessage;
+    }
     final ok = await api
         .probe(input.endpoint, input.token)
         .timeout(_bakedProbeBudget, onTimeout: () => false);
@@ -325,10 +353,10 @@ class AppState extends ChangeNotifier {
     final input = _validInput(endpoint, token, (e) => err = e);
     if (input == null) return err;
     // 転送は送るたびに今の接続を読むので、切り替えると A に向けて積んだものが B へ送られる。
-    // 同じホスト（トークンの差し替えだけ）なら送り先は変わらないので止めない
+    // 同じ送り先（トークンの差し替えだけ）なら変わらないので止めない。パスが違えば同じホストでも別物
     final cur = api.conn;
     if (cur != null &&
-        !isSameHost(cur.endpoint, input.endpoint) &&
+        !isSameEndpoint(cur.endpoint, input.endpoint) &&
         hasUnsentTransfers) {
       return unsentTransfersMessage;
     }
@@ -382,7 +410,9 @@ class AppState extends ChangeNotifier {
       bakedProbeFailed = true;
       return;
     }
+    _pauseUnsentIfSwitching(bakedEndpoint);
     api.setConnection(Connection(bakedEndpoint, bakedToken));
+    _lastEndpoint = bakedEndpoint;
     await Kv.set(Keys.endpoint, bakedEndpoint);
     await Kv.set(Keys.token, bakedToken);
     connected = true;

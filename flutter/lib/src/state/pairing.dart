@@ -157,6 +157,23 @@ bool isSameHost(String a, String b) {
   return x != null && x == y;
 }
 
+/// パスを送り先の区別に使うための読み方。末尾の / は同じ送り先として揃える。
+String _pathKey(String endpoint) {
+  var ep = endpoint.trim();
+  if (ep.isNotEmpty && !ep.contains('://')) ep = 'https://$ep';
+  var p = Uri.tryParse(ep)?.path ?? '';
+  while (p.endsWith('/')) {
+    p = p.substring(0, p.length - 1);
+  }
+  return p;
+}
+
+/// 2つのエンドポイントが完全に同じ送り先か。[isSameHost] に加えてパスも比べる。
+/// 同じホストでもパスが違えば別の保存先であり得るので、転送の待ちをそのまま流せるか・
+/// 一覧を使い回せるかのように「トークンの差し替えだけ」に限りたい判定に使う。
+bool isSameEndpoint(String a, String b) =>
+    isSameHost(a, b) && _pathKey(a) == _pathKey(b);
+
 /// 表示用のホスト名。スキームとパスを落とし、トークンや userinfo は決して出さない。
 String hostOf(String endpoint) {
   if (_origin(endpoint) != null) {

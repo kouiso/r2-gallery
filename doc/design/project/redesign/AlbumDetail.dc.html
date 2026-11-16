@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>アルバム詳細</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0}
+.ph svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ibtn{width:48px;height:48px;border:0;background:none;color:#E2E2E9;display:grid;place-items:center;border-radius:24px;padding:0;cursor:pointer;text-decoration:none}
+.act{border:0;background:none;color:#E2E2E9;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-family:inherit;font-size:12px;line-height:16px;font-weight:500;cursor:pointer;padding:0 2px;text-align:center}
+.tile{aspect-ratio:1/1;position:relative;border:0;padding:0;background:#171B20;cursor:pointer}
+.chk{position:absolute;left:10px;top:10px;width:24px;height:24px;border-radius:12px;display:grid;place-items:center;background:#9ECAFF;color:#003258}
+.chk svg{width:16px;height:16px;stroke-width:3}
+</style>
+</helmet>
+<div class="ph" style="width: 390px; height: 844px; background: #0F1114; color: #E2E2E9; font-family: 'Noto Sans JP', sans-serif; display: flex; flex-direction: column; position: relative; overflow: hidden">
+  <header style="height: 64px; display: flex; align-items: center; gap: 4px; padding: 0 8px 0 4px; flex-shrink: 0; background: #1D2127">
+    <a href="Albums.dc.html" class="ibtn" aria-label="選択を終了"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></a>
+    <h1 style="margin: 0; flex: 1; font-size: 20px; line-height: 28px; font-weight: 700">1件を選択</h1>
+    <button style="height: 40px; padding: 0 12px; border: 0; border-radius: 20px; background: none; color: #9ECAFF; font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer">すべて選択</button>
+  </header>
+  <div style="padding: 16px 16px 12px; flex-shrink: 0">
+    <h2 style="margin: 0; font-size: 22px; line-height: 28px; font-weight: 700">練習記録</h2>
+    <p style="margin: 2px 0 0; font-size: 13px; line-height: 20px; color: #C2C7D0">312件</p>
+  </div>
+  <main style="flex: 1; overflow: hidden; min-height: 0">
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px">
+      <sc-for list="{{tiles}}" as="t" hint-placeholder-count="20">
+        <button class="tile" aria-pressed="{{t.pressed}}" aria-label="{{t.label}}">
+          <span style="position: absolute; inset: {{t.inset}}; background: {{t.bg}}; border-radius: {{t.radius}}"></span>
+          <sc-if value="{{t.sel}}" hint-placeholder-val="{{false}}"><span class="chk"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></span></sc-if>
+          <sc-if value="{{t.unsel}}" hint-placeholder-val="{{true}}"><span style="position: absolute; left: 6px; top: 6px; width: 24px; height: 24px; border-radius: 12px; border: 2px solid #FFFFFF; box-sizing: border-box; background: rgba(0,0,0,.25)"></span></sc-if>
+        </button>
+      </sc-for>
+    </div>
+  </main>
+  <div role="toolbar" aria-label="選択した項目の操作" style="height: 80px; flex-shrink: 0; background: #1D2127; border-top: 1px solid #2A2E33; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr))">
+    <button class="act"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>前へ</button>
+    <button class="act"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>後ろへ</button>
+    <button class="act"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="14" height="14" rx="2"/><path d="M7 3h12a2 2 0 0 1 2 2v12M7 14h6"/></svg>外す</button>
+    <button class="act"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>オフライン</button>
+    <button class="act" style="color: #FFB4AB"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>ゴミ箱へ</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var tones = ['#3A4A5C','#5C4B3A','#2F4A43','#4A3A52','#56503A','#3A5258','#4F3A3A','#3E4A33','#2E3A52','#5A4A44','#384447','#4B4458'];
+    var out = [];
+    for (var i = 0; i < 24; i++) {
+      var s = i === 5;
+      out.push({ bg: tones[(i * 7) % tones.length], sel: s, unsel: !s, pressed: s ? 'true' : 'false', label: s ? '写真（選択中）' : '写真', inset: s ? '10px' : '0px', radius: s ? '8px' : '0px' });
+    }
+    return { tiles: out };
+  }
+}
+</script>
+</body>
+</html>

@@ -32,6 +32,13 @@ LIBRARIES = '[{"id":"a","binding":"LIB_A","title":"Library A"},{"id":"b","bindin
 TRASH_RETENTION_DAYS = "30"
 # Signed media URL lifetime in seconds.
 URL_TTL_SECONDS = "3600"
+# Seconds before the listing catalog is rebuilt in the background (default 300).
+# "0" rebuilds on every request — slow on large libraries, only as an escape hatch.
+# CATALOG_MAX_AGE_SECONDS = "300"
+# Duplicate detection: bytes hashed per scan call, and the largest object that is hashed at all.
+# DUP_SCAN_BYTES = "100663296"
+# DUP_SCAN_OBJECTS = "200"
+# DUP_MAX_OBJECT_BYTES = "1073741824"
 # Comma-separated library ids allowed to join objects to REVIEW_DB review rows.
 # REVIEW_LIBS = "a"
 

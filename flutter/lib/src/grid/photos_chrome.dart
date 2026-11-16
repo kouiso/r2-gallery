@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
+import 'media_kind.dart';
 import 'sort_mode.dart';
 
 /// 選択バーの1操作。アイコンの下に必ず文字を付ける（KMP 版 SelAction と同じ）。
@@ -18,6 +19,9 @@ abstract class SelectionSurface implements Listenable {
   int get selectedCount;
   bool get allSelected;
   void toggleAll();
+
+  /// 「すべて選択」が残りページを取り切っている最中。バーに読み込み中を出してボタンを止める
+  bool get selectingAll => false;
   void clearSelection();
 
   /// 選択バーに並べる操作。読み取り専用や未実装の操作はここで外す。
@@ -32,6 +36,15 @@ class PhotosChrome extends ChangeNotifier {
   set sort(SortMode m) {
     if (m == _sort) return;
     _sort = m;
+    notifyListeners();
+  }
+
+  // 種別の絞り込みも並び順と同じく画面の状態として持ち越す（#26）
+  MediaKind _kind = MediaKind.all;
+  MediaKind get kind => _kind;
+  set kind(MediaKind k) {
+    if (k == _kind) return;
+    _kind = k;
     notifyListeners();
   }
 

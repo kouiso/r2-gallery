@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../ui/theme.dart';
 import 'photos_chrome.dart';
+import 'media_kind.dart';
 import 'sort_mode.dart';
 
 // 画面をまたいで同じ操作は同じアイコン・同じ文言にそろえる（KMP 版 SelectionBar.kt）
@@ -95,10 +96,12 @@ AppBar selectionAppBar(SelectionSurface s) => AppBar(
     icon: const Icon(Icons.close),
     onPressed: s.clearSelection,
   ),
-  title: Text('${s.selectedCount}件を選択'),
+  title: Text(s.selectingAll
+      ? 'すべてを読み込み中… ${s.selectedCount}件'
+      : '${s.selectedCount}件を選択'),
   actions: [
     TextButton(
-      onPressed: s.toggleAll,
+      onPressed: s.selectingAll ? null : s.toggleAll,
       child: Text(s.allSelected ? 'すべて解除' : 'すべて選択'),
     ),
   ],
@@ -134,6 +137,47 @@ class SortMenuButton extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(m.label),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// 写真/動画の絞り込みメニュー。今の種別にチェックを付ける。
+class KindMenuButton extends StatelessWidget {
+  final MediaKind current;
+  final ValueChanged<MediaKind> onPick;
+  const KindMenuButton({
+    super.key,
+    required this.current,
+    required this.onPick,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<MediaKind>(
+      tooltip: '種類で絞り込む',
+      // 絞り込み中は一目で分かるよう、線画→塗りのアイコンに変える
+      icon: Icon(current == MediaKind.all
+          ? Icons.photo_library_outlined
+          : Icons.photo_library),
+      onSelected: onPick,
+      itemBuilder: (_) => [
+        for (final k in MediaKind.values)
+          PopupMenuItem(
+            value: k,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 16,
+                  child: k == current
+                      ? const Icon(Icons.check, size: 16)
+                      : null,
+                ),
+                const SizedBox(width: 8),
+                Text(k.label),
               ],
             ),
           ),

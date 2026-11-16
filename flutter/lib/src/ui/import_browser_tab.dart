@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../state/app_state.dart';
 import '../webdl/detected.dart';
 import '../webdl/detected_thumb.dart';
+import '../webdl/detection_filter.dart';
 import '../webdl/url_policy.dart';
 import '../webdl/web_history.dart';
 import 'browser_surface.dart';
@@ -41,6 +42,8 @@ class _ImportBrowserTabState extends State<ImportBrowserTab> {
   String _loadedUrl = '';
   int _nonce = 0;
   final _detected = ValueNotifier<List<DetectedItem>>(const []);
+  // 検出候補の除外・選択。ページを替えたり閉じたらリセットする（#37/#38）
+  final _filter = DetectionFilter();
   late final BrowserBack _back = widget.back ?? BrowserBack();
   late final BrowserRescan _rescan = widget.rescan ?? BrowserRescan();
   // 取得はブラウザと同じ UA / Referer / Cookie の扱いにするため、取り込みと同じ取得役を使う
@@ -54,6 +57,7 @@ class _ImportBrowserTabState extends State<ImportBrowserTab> {
     _url.dispose();
     _urlFocus.dispose();
     _detected.dispose();
+    _filter.dispose();
     super.dispose();
   }
 
@@ -75,6 +79,8 @@ class _ImportBrowserTabState extends State<ImportBrowserTab> {
     }
     FocusScope.of(context).unfocus();
     final opening = _loadedUrl.isEmpty;
+    // 別ページへ行くので、前のページの除外は捨てる（恒久ブラックリストにはしない）
+    _filter.reset();
     setState(() {
       _loadedUrl = u;
       _nonce++;
@@ -87,6 +93,7 @@ class _ImportBrowserTabState extends State<ImportBrowserTab> {
     if (_loadedUrl.isEmpty) return;
     setState(() => _loadedUrl = '');
     _detected.value = const [];
+    _filter.reset();
     widget.onBrowserOpenChanged?.call(false);
   }
 
@@ -139,9 +146,10 @@ class _ImportBrowserTabState extends State<ImportBrowserTab> {
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.surfaceHigh,
-      builder: (ctx) => ValueListenableBuilder<List<DetectedItem>>(
-        valueListenable: _detected,
-        builder: (ctx, items, _) {
+      builder: (ctx) => AnimatedBuilder(
+        animation: Listenable.merge([_detected, _filter]),
+        builder: (ctx, _) {
+          final items = _detected.value;
           if (items.isEmpty) {
             // ページの再読み込みなどで検出が0件に戻ったら、空のシートを残さない
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -156,6 +164,7 @@ class _ImportBrowserTabState extends State<ImportBrowserTab> {
             block: _block(),
             onSave: _save,
             thumbs: _thumbs,
+            filter: _filter,
           );
         },
       ),
@@ -317,17 +326,20 @@ class _ImportBrowserTabState extends State<ImportBrowserTab> {
                   ],
                 ),
               ),
-            ValueListenableBuilder<List<DetectedItem>>(
-              valueListenable: _detected,
-              builder: (context, items, _) => items.isEmpty
-                  ? const SizedBox(height: 8)
-                  : Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: DetectionBar(
-                        count: items.length,
-                        onTap: _openDetected,
-                      ),
-                    ),
+            AnimatedBuilder(
+              animation: Listenable.merge([_detected, _filter]),
+              builder: (context, _) {
+                final items = _detected.value;
+                if (items.isEmpty) return const SizedBox(height: 8);
+                // バーの件数は取り込み対象に残っている候補の数に合わせる
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: DetectionBar(
+                    count: _filter.visibleOf(items).length,
+                    onTap: _openDetected,
+                  ),
+                );
+              },
             ),
           ],
         ),

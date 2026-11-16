@@ -184,11 +184,14 @@ class _AlbumsTabState extends State<AlbumsTab> {
             cards.add(_NewCard(label: 'アルバム作成', onTap: _createAlbum));
           }
           for (final a in h.albums) {
+            // 作成中（id 待ち）のアルバムは開く・書き換えると仮の id で送ってしまうので、何もしない
+            final pending = h.isPending(a.id);
             cards.add(_AlbumCard(
               album: a,
-              onTap: () => _openAlbum(a),
+              onTap: pending ? () {} : () => _openAlbum(a),
               // 取り込み処理が作ったアルバムや読み取り専用ライブラリでは改名・削除を出さない
-              onLongPress: a.readOnly || ro ? null : () => _albumMenu(a),
+              onLongPress:
+                  a.readOnly || ro || pending ? null : () => _albumMenu(a),
             ));
           }
         } else {

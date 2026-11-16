@@ -2,10 +2,12 @@
 /// normalizeUploadName / extForMime / suffixed と files/Mime.kt に対応する。
 library;
 
-// worker/src/lib/const.ts の MEDIA_EXT と揃える。この拡張子で終わらんキーは
-// アップロードできても一覧に一生出てこない
+import 'listed_ext.g.dart';
+
+// 一覧が拾う拡張子の表は worker/src/lib/media-ext.json が元（listed_ext.g.dart は生成物）。
+// この拡張子で終わらんキーはアップロードできても一覧に一生出てこない
 final _listedExt = RegExp(
-  r'\.(jpe?g|png|webp|gif|avif|mp4|webm|mov|m4v|mkv|ts|m2ts|mpg|mpeg|avi|flv|3gp|wmv)$',
+  '\\.(${[...listedImageExt, ...listedVideoExt].join('|')})\$',
   caseSensitive: false,
 );
 

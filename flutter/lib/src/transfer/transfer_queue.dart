@@ -8,12 +8,18 @@ import 'package:flutter/foundation.dart';
 import '../api/client.dart';
 import '../api/models.dart';
 import '../offline/offline_store.dart';
+import '../state/pairing.dart';
 import '../store/kv.dart';
 import '../store/private_storage.dart';
 import '../webdl/media_name.dart';
 import 'transfer_api.dart';
 
 enum TransferStatus { queued, preparing, running, done, error, cancelled, paused }
+
+/// 送っている途中で接続が替わり、その行が動けなくなった印。失敗ではなく待機に戻す
+class _ConnSwitched implements Exception {
+  const _ConnSwitched();
+}
 
 /// アップロードする元。端末ではピッカーが返したファイル、Web ではメモリ上のバイト列。
 class UploadSource {
@@ -25,6 +31,9 @@ class UploadSource {
 
   /// パスで渡せない元（content:// など）を読む口。再起動後には読み直せない。
   final Stream<List<int>> Function()? reader;
+
+  /// 確認シートの重複確認で計算した中身の SHA-256（16進）。計算しなかった物は null。
+  final String? sha256;
   const UploadSource({
     required this.name,
     required this.size,
@@ -32,7 +41,17 @@ class UploadSource {
     this.path,
     this.bytes,
     this.reader,
+    this.sha256,
   });
+
+  UploadSource withSha256(String? hash) => UploadSource(
+      name: name,
+      size: size,
+      mime: mime,
+      path: path,
+      bytes: bytes,
+      reader: reader,
+      sha256: hash);
 }
 
 /// 転送1件。KMP 版 TransferTask の up / down に対応する（ネット取り込みは WebTransferQueue）。
@@ -66,6 +85,23 @@ class TransferTask {
   String? stagedPath;
   String? sourcePath;
   Uint8List? memory;
+
+  /// 重複確認で計算済みの中身のハッシュ。一括PUTの時だけ Worker へ添える。
+  String? sha256;
+
+  /// この行を積んだ時の接続。切り替えた後は別の送り先へ送らない・abort も元の接続へ
+  /// 送るために覚えておく（#149）。台帳は端末の秘密置き場なのでトークンを置いてよい
+  String? connEndpoint;
+  String? connToken;
+
+  /// アップロード時に選んだ入れ先アルバム（#102）。確定したキーで1回だけ入れる
+  String? albumId;
+
+  /// albumId への追加が済んだか。追加前に消された時は次の起動で入れ直す手掛かり
+  bool albumAdded = false;
+
+  /// 上げるのは済んだがアルバムへの追加だけ失敗した理由。失敗の行にせず完了のまま残す
+  String? albumError;
 
   // オフライン保存
   String? itemKey;
@@ -112,8 +148,14 @@ class TransferTask {
         if (parts.isNotEmpty) 'parts': [for (final p in parts) p.toJson()],
         if (stagedPath != null) 'stagedPath': stagedPath,
         if (sourcePath != null) 'sourcePath': sourcePath,
+        'sha256': ?sha256,
         if (itemKey != null) 'itemKey': itemKey,
         if (itemType != null) 'itemType': itemType,
+        if (connEndpoint != null) 'connEndpoint': connEndpoint,
+        if (connToken != null) 'connToken': connToken,
+        if (albumId != null) 'albumId': albumId,
+        if (albumAdded) 'albumAdded': true,
+        if (albumError != null) 'albumError': albumError,
         if (offlineAccountId != null) 'offlineAccountId': offlineAccountId,
       };
 }
@@ -147,22 +189,26 @@ class TransferQueue extends ChangeNotifier {
     this.makeThumb,
     this.parallel = 2,
     this.netRetryDelay = const Duration(seconds: 15),
+    this.stagedDeleteTimeout = const Duration(seconds: 5),
     this.multipartThreshold = ApiClient.multipartThreshold,
     this.partSize = 8 * 1024 * 1024,
     bool? persist,
     bool Function()? configured,
     this.requireDownloadAccount = false,
     this.canUseOfflineAccount,
+    Connection? Function()? connOf,
   })  : _ledger = ledger ?? const KvLedgerStore(),
         _stageDirFn = stageDir ?? _defaultStageDir,
         _persistOn = persist ?? !kIsWeb,
-        _configured = configured ?? (() => true);
+        _configured = configured ?? (() => true),
+        _connOf = connOf ?? (() => null);
 
   final TransferApi api;
   final OfflineStore offline;
   final FileThumbMaker? makeThumb;
   final int parallel;
   final Duration netRetryDelay;
+  final Duration stagedDeleteTimeout;
   final int multipartThreshold;
   final int partSize;
   final LedgerStore _ledger;
@@ -171,6 +217,9 @@ class TransferQueue extends ChangeNotifier {
   final bool Function() _configured;
   final bool requireDownloadAccount;
   final bool Function(String? accountId, String lib)? canUseOfflineAccount;
+
+  /// いまの接続。行がどの接続の物かを見るのと、abort を正しい送り先へ出すのに使う
+  final Connection? Function() _connOf;
 
   /// 同名キーが既にある時に「name (2)」…「name (9)」まで試す回数（KMP 版と同じ）。
   static const maxKeyAttempts = 9;
@@ -222,6 +271,17 @@ class TransferQueue extends ChangeNotifier {
       if (t.id == id) return t;
     }
     return null;
+  }
+
+  /// 完了待ち（サーバーが受け取り済みで、退避ファイルを消している途中）か。画面はこの間ボタンを止める。
+  bool isCompleting(String id) => _completing.any((t) => t.id == id);
+
+  /// 操作（一時停止・再開・やり直し・取り消し・一覧から消す）の対象。完了待ちの行は返さない。
+  /// 退避パスはもう消えているので、ここで再開・やり直しを通すと退避し直し、done の行に退避ファイルが残る。
+  /// 完了待ちに入る前に止めた行（サムネ作成中の一時停止など）も同じなので、入口ごとではなくここで弾く
+  TransferTask? _operable(String id) {
+    final t = _find(id);
+    return t == null || _completing.contains(t) ? null : t;
   }
 
   void _changed() {
@@ -339,6 +399,9 @@ class TransferQueue extends ChangeNotifier {
       mime: mime is String ? mime : 'application/octet-stream',
       status: status,
     )..fromLedger = true;
+    final connE = e['connEndpoint'], connT = e['connToken'];
+    if (connE is String) t.connEndpoint = connE;
+    if (connT is String) t.connToken = connT;
     final err = e['error'];
     if (status == TransferStatus.error && err is String) t.error = err;
     if (kind == 'down') {
@@ -355,6 +418,13 @@ class TransferQueue extends ChangeNotifier {
       return t;
     }
     if (kind != 'up') return null;
+    // 古い台帳の行には無い。無ければ添えずに送るだけ
+    final hash = e['sha256'];
+    if (hash is String) t.sha256 = hash;
+    final albumId = e['albumId'], albumErr = e['albumError'];
+    if (albumId is String) t.albumId = albumId;
+    if (e['albumAdded'] == true) t.albumAdded = true;
+    if (albumErr is String) t.albumError = albumErr;
     final staged = e['stagedPath'], source = e['sourcePath'];
     final key = e['key'], uploadId = e['uploadId'], parts = e['parts'];
     var stagedOk = false;
@@ -388,9 +458,12 @@ class TransferQueue extends ChangeNotifier {
   // ---------- 積む ----------
 
   /// 選んだファイルをアップロードに積む。退避が済んだものから順に送る。
+  /// [albumId] はアップロード時に選んだ入れ先（#102）。確定したキーで1回だけ入れる。
   Future<List<TransferTask>> enqueueUploads(
-      String lib, List<UploadSource> sources) async {
+      String lib, List<UploadSource> sources,
+      {String? albumId}) async {
     await _restored.future;
+    final conn = _connOf();
     final added = <TransferTask>[];
     for (final s in sources) {
       final t = TransferTask(
@@ -404,6 +477,10 @@ class TransferQueue extends ChangeNotifier {
       )
         ..sourcePath = s.path
         ..memory = s.bytes
+        ..sha256 = s.sha256
+        ..connEndpoint = conn?.endpoint
+        ..connToken = conn?.token
+        ..albumId = albumId
         .._reader = s.reader;
       if (t.memory != null) {
         t.size = t.memory!.length;
@@ -434,6 +511,7 @@ class TransferQueue extends ChangeNotifier {
         if (t.kind == 'down' && !t.finished && t.offlineAccountId == store.accountId)
           '${t.lib}\u0000${t.itemKey}',
     };
+    final conn = _connOf();
     final added = <TransferTask>[];
     for (final it in items) {
       final l = it.lib ?? lib;
@@ -449,8 +527,10 @@ class TransferQueue extends ChangeNotifier {
       )
         ..itemKey = it.key
         ..itemType = it.type
-        ..offlineAccountId = store.accountId
-        ..itemUrl = it.url;
+        ..itemUrl = it.url
+        ..connEndpoint = conn?.endpoint
+        ..connToken = conn?.token
+        ..offlineAccountId = store.accountId;
       _tasks.add(t);
       added.add(t);
     }
@@ -515,12 +595,22 @@ class TransferQueue extends ChangeNotifier {
 
   // ---------- 実行 ----------
 
+  /// その行が動いてよい接続か。積んだ時の接続と違う送り先へは送らない（#149）。
+  /// 古い台帳の行は接続を持たないので、今の接続で動かす（切り替え前の従来通り）
+  bool _forThisConn(TransferTask t) {
+    final e = t.connEndpoint;
+    if (e == null) return true;
+    final cur = _connOf();
+    return cur != null && isSameEndpoint(cur.endpoint, e);
+  }
+
   void _pump() {
     if (_disposed || !_restored.isCompleted || !online || !_configured()) return;
     for (final t in _tasks) {
       if (_workers.length >= parallel) break;
       if (t.status != TransferStatus.queued || _workers.containsKey(t.id)) continue;
       if (_waits.containsKey(t.id)) continue;
+      if (!_forThisConn(t)) continue;
       if (!t.isUpload && !_canSaveOffline(t)) continue;
       final gen = ++t._gen;
       t.status = TransferStatus.running;
@@ -551,17 +641,24 @@ class TransferQueue extends ChangeNotifier {
       // サーバーが受け取った後は、止める操作より完了を優先する（KMP 版と同じ）
       if (t.status == TransferStatus.cancelled) return;
       if (t.isUpload) await _thumb(t);
+      if (t.isUpload) await _albumAttach(t);
       // 台帳から外し終えてから完了にする。完了にした途端に転送中の通知（サービス）が外れ、
       // 画面を消された後なら残しておいたエンジンも畳まれる。書き終える前に畳まれると次の起動で送り直してしまう
       _completing.add(t);
+      _changed();
       try {
         await _persist();
+        // 退避ファイルは完了を報告する前に消し終える。先に done にすると、完了を見た側
+        // （画面・テスト）が掃除の途中の退避ファイルを見てしまう。
+        // 消し終えて done になるまで _completing に残す。外すと別の行の書き込みが
+        // 「転送中」で書き戻し、再起動で二重に上がる。
+        // この間の操作は受け付けない（_operable で弾く）。サーバーが受け取った後なので完了を優先する
+        await _dropStaged(t);
+        t.status = TransferStatus.done;
+        t.loaded = t.size;
       } finally {
         _completing.remove(t);
       }
-      t.status = TransferStatus.done;
-      t.loaded = t.size;
-      await _dropStaged(t);
       if (!_done.isClosed) _done.add(t);
     } catch (e) {
       if (token.isCancelled || !_owns(t, gen)) {
@@ -569,7 +666,10 @@ class TransferQueue extends ChangeNotifier {
         await _persist();
         return;
       }
-      if (_isNetwork(e)) {
+      if (e is _ConnSwitched) {
+        // 別の接続の行なので失敗にせず待機に戻す。元の接続へ戻った時に再開される
+        t.status = TransferStatus.queued;
+      } else if (_isNetwork(e)) {
         // 回線の問題は失敗にせず待機に戻し、少し後か接続の回復で自動で再開する
         t.status = TransferStatus.queued;
         _waits[t.id]?.cancel();
@@ -645,92 +745,113 @@ class TransferQueue extends ChangeNotifier {
   Future<void> _upload(TransferTask t, CancelToken token) async {
     final size = await _sourceSize(t);
     t.size = size;
-    if (t.key == null) {
-      await _freshUpload(t, token, size);
-    } else {
-      await _resumeUpload(t, token, size, t.key!);
-    }
-  }
-
-  /// 初回: 409（同名あり）なら「name (2)」…と名前を変えて試す。キーはサーバーが受け付けてから確定する。
-  Future<void> _freshUpload(TransferTask t, CancelToken token, int size) async {
-    for (var attempt = 1;; attempt++) {
+    // 台帳から再開する行だけ、最初に台帳のキーを試す。それ以外は name → name (2) … の順
+    var first = t.key;
+    var n = 0;
+    for (;;) {
       _checkCancelled(token);
-      final key = suffixedName(t.name, attempt);
+      if (first == null && ++n > maxKeyAttempts) {
+        throw const ApiError(409, '同じ名前のファイルが多すぎます');
+      }
+      final key = first ?? suffixedName(t.name, n);
+      final resumed = first != null;
+      first = null;
       try {
-        if (size > multipartThreshold) {
-          final id = await api.multipartCreate(t.lib, key, t.mime);
-          // uploadId の確定は区切り。残さんと再開時に2つ目のセッションを作り、1つ目がサーバーに残る
-          t.key = key;
-          t.uploadId = id;
-          t.parts = [];
-          await _persist();
-        } else {
-          final bytes = await _readAll(t);
-          _checkCancelled(token);
-          await api.putObject(t.lib, key, bytes, t.mime,
-              cancelToken: token, onProgress: (s) {
-            t.loaded = s;
-            _progress();
-          });
+        await _place(t, token, size, key, resumed: resumed);
+        return;
+      } on ApiError catch (e) {
+        if (e.status != 409 || token.isCancelled) rethrow;
+        // 409 は分割の開始でも完了でも起きる。「同名がある」だけでは自分の物か分からんので、
+        // 再開の時は中身を照合する。黙って完了にすると送れていないのに端末の退避まで消える
+        if (resumed && await _storedSame(t, token, key, size)) {
+          await _abortSession(t);
           t.key = key;
           await _persist();
           return;
         }
-      } on ApiError catch (e) {
-        if (e.status == 409 && attempt < maxKeyAttempts && !token.isCancelled) {
-          continue;
-        }
-        rethrow;
+        await _abortSession(t);
+        t.key = null;
+        t.loaded = 0;
+        await _persist();
       }
-      await _multipart(t, token, size);
-      return;
     }
   }
 
-  /// 再開: キーは台帳で確定済み。ここでの 409 は前回の完了が届いていたということ。
-  Future<void> _resumeUpload(
-      TransferTask t, CancelToken token, int size, String key) async {
+  /// 1つのキーへ送る。同名があれば 409 のまま投げ、呼び出し側が照合か名前の付け直しを決める。
+  Future<void> _place(
+      TransferTask t, CancelToken token, int size, String key,
+      {required bool resumed}) async {
     if (size <= multipartThreshold) {
-      try {
-        await api.putObject(t.lib, key, await _readAll(t), t.mime,
-            cancelToken: token, onProgress: (s) {
-          t.loaded = s;
-          _progress();
-        });
-      } on ApiError catch (e) {
-        if (e.status != 409) rethrow;
-      }
+      final bytes = await _readAll(t);
+      _checkCancelled(token);
+      await api.putObject(t.lib, key, bytes, t.mime,
+          cancelToken: token, sha256: t.sha256, onProgress: (s) {
+        t.loaded = s;
+        _progress();
+      });
+      t.key = key;
+      await _persist();
       return;
     }
-    final existing = t.uploadId;
+    final existing = resumed ? t.uploadId : null;
     if (existing != null) {
       try {
         await _multipart(t, token, size);
         return;
       } on ApiError catch (e) {
-        // サーバー側で uploadId が失効している。作り直して最初から送る
-        if (e.status < 400) rethrow;
-        try {
-          await api.multipartAbort(t.lib, key, existing);
-        } on ApiError catch (abortErr) {
-          debugPrint('stale multipart not aborted: $abortErr');
-        }
-        t.uploadId = null;
-        t.parts = [];
+        // 完了時の同名（409）は呼び出し側へ。それ以外はサーバー側で uploadId が失効している
+        // ので、作り直して最初から送る
+        if (e.status == 409 || e.status < 400) rethrow;
+        await _abortSession(t);
         t.loaded = 0;
         await _persist();
       }
     }
     _checkCancelled(token);
-    try {
-      t.uploadId = await api.multipartCreate(t.lib, key, t.mime);
-    } on ApiError catch (e) {
-      if (e.status == 409) return;
-      rethrow;
-    }
+    final id = await api.multipartCreate(t.lib, key, t.mime);
+    // uploadId の確定は区切り。残さんと再開時に2つ目のセッションを作り、1つ目がサーバーに残る
+    t.key = key;
+    t.uploadId = id;
+    t.parts = [];
     await _persist();
     await _multipart(t, token, size);
+  }
+
+  /// 開いたままの multipart を畳む。キーに紐づくので、名前を変える時は新しく作り直す必要がある。
+  /// セッションは積んだ時の接続に開かれているので、切り替え後でも abort はそちらへ送る（#149）
+  Future<void> _abortSession(TransferTask t) async {
+    final id = t.uploadId;
+    final key = t.key;
+    t.uploadId = null;
+    t.parts = [];
+    if (id == null || key == null) return;
+    try {
+      final e = t.connEndpoint, tok = t.connToken;
+      if (e != null && tok != null) {
+        await api.multipartAbortOn(e, tok, t.lib, key, id);
+      } else {
+        await api.multipartAbort(t.lib, key, id);
+      }
+    } on ApiError catch (e) {
+      debugPrint('stale multipart not aborted: $e');
+    }
+  }
+
+  Future<bool> _storedSame(
+      TransferTask t, CancelToken token, String key, int size) {
+    Stream<List<int>> local() async* {
+      for (var off = 0; off < size; off += partSize) {
+        final len = off + partSize > size ? size - off : partSize;
+        yield await _readChunk(t, off, len);
+      }
+    }
+
+    // 照合の進捗は読んだバイト数で行に出す（#144）
+    return api.storedMatches(t.lib, key, size, local,
+        cancelToken: token, onProgress: (n) {
+      t.loaded = n;
+      _progress();
+    });
   }
 
   Future<void> _multipart(TransferTask t, CancelToken token, int size) async {
@@ -775,9 +896,31 @@ class TransferQueue extends ChangeNotifier {
     // サムネが無くても保存自体は成功。一覧のバックフィルが後で補う
     try {
       final thumb = await maker(File(path), t.mime);
+      // 生成中に止められた・接続先が替わったなら、新しい送り先へは上げない
+      if (t._token?.isCancelled == true) return;
+      if (!_forThisConn(t)) return;
       if (thumb != null && thumb.isNotEmpty) await api.putThumb(t.lib, key, thumb);
     } on Exception catch (e) {
       debugPrint('upload thumb skipped: $e');
+    }
+  }
+
+  /// 上げ終えた物を、選ばれたアルバムへ入れる（#102）。入れるキーはサーバーが
+  /// 確定した名前（name (2) など改名後）。失敗しても物は保存済みなので、
+  /// 完了は完了のまま「アルバムへの追加だけ失敗」として残す。追加前にアプリが
+  /// 消された場合は台帳の albumAdded=false を見て次の起動で入れ直す。
+  Future<void> _albumAttach(TransferTask t) async {
+    final albumId = t.albumId, key = t.key;
+    if (albumId == null || key == null || t.albumAdded) return;
+    // 接続が替わっていたら別の送り先のアルバムへは入れない。待機に戻して元の接続でやり直す
+    if (!_forThisConn(t)) throw _ConnSwitched();
+    try {
+      await api.albumAdd(t.lib, albumId, [key]);
+      t.albumAdded = true;
+      t.albumError = null;
+    } on Exception catch (e) {
+      debugPrint('album attach failed: $e');
+      t.albumError = 'アルバムへの追加だけ失敗しました';
     }
   }
 
@@ -809,6 +952,9 @@ class TransferQueue extends ChangeNotifier {
     _checkCancelled(token);
     checkAccount();
     if (bytes.isEmpty) throw const ApiError(0, 'empty download');
+    // 取った先と今の接続が違うなら、新しい接続の袋へは書けない。
+    // 待機へ戻して、元の接続へ戻した時にもう一度取り直す（#149）
+    if (!_forThisConn(t)) throw const _ConnSwitched();
     t.size = bytes.length;
     await store.saveBytes(
       lib: t.lib,
@@ -833,10 +979,17 @@ class TransferQueue extends ChangeNotifier {
     if (p == null) return;
     try {
       final f = File(p);
-      if (await f.exists()) await f.delete();
+      // 削除が返らなくても完了の報告を止めない（止まるとサービスが残り続ける）
+      await (() async {
+        if (await f.exists()) await f.delete();
+      })()
+          .timeout(stagedDeleteTimeout);
     } on FileSystemException catch (e) {
       // 消し損ねても次の起動時の掃除で消える
       debugPrint('staged upload not removed: $e');
+    } on TimeoutException {
+      // 残ったファイルは次の起動時の掃除に任せる
+      debugPrint('staged upload delete timed out: $p');
     }
   }
 
@@ -851,7 +1004,7 @@ class TransferQueue extends ChangeNotifier {
 
   /// 一時停止。退避したファイル・uploadId・確定済みパートは残し、再開で続きから送る。
   void pause(String id) {
-    final t = _find(id);
+    final t = _operable(id);
     if (t == null || !t.active) return;
     t._gen++;
     t.status = TransferStatus.paused;
@@ -863,7 +1016,7 @@ class TransferQueue extends ChangeNotifier {
   }
 
   void resume(String id) {
-    final t = _find(id);
+    final t = _operable(id);
     if (t == null || t.status != TransferStatus.paused) return;
     t._gen++;
     _requeue(t);
@@ -871,7 +1024,7 @@ class TransferQueue extends ChangeNotifier {
 
   /// 失敗・取り消しの行をやり直す。
   void retry(String id) {
-    final t = _find(id);
+    final t = _operable(id);
     if (t == null ||
         (t.status != TransferStatus.error &&
             t.status != TransferStatus.cancelled)) {
@@ -888,6 +1041,27 @@ class TransferQueue extends ChangeNotifier {
   void retryAllFailed() {
     for (final t in _tasks.toList()) {
       if (t.status == TransferStatus.error) retry(t.id);
+    }
+  }
+
+  /// 接続先の切り替えなどで、まだ送る可能性のある行を全部止める。
+  /// 失敗の行も接続のたびに自動で積み直されるので一緒に止める。
+  /// 行と退避したファイルは残すので、同じ送り先へ戻れば再開で続きから送れる
+  void pauseUnsent() {
+    var touched = false;
+    for (final t in _tasks.toList()) {
+      if (t.active) {
+        pause(t.id);
+        touched = true;
+      } else if (t.status == TransferStatus.error) {
+        t.status = TransferStatus.paused;
+        _waits.remove(t.id)?.cancel();
+        touched = true;
+      }
+    }
+    if (touched) {
+      _persist();
+      _changed();
     }
   }
 
@@ -913,7 +1087,7 @@ class TransferQueue extends ChangeNotifier {
 
   /// 取り消し。動いている処理が止まるのを待ってから、退避ファイルと multipart を片付けて行を消す。
   Future<void> cancel(String id) async {
-    final t = _find(id);
+    final t = _operable(id);
     if (t == null || t.status == TransferStatus.done) return;
     final gen = ++t._gen;
     t.status = TransferStatus.cancelled;
@@ -946,7 +1120,7 @@ class TransferQueue extends ChangeNotifier {
 
   /// 完了・取り消しの行を一覧から消す。
   void dismiss(String id) {
-    final t = _find(id);
+    final t = _operable(id);
     if (t == null ||
         (t.status != TransferStatus.done &&
             t.status != TransferStatus.cancelled)) {
@@ -959,8 +1133,9 @@ class TransferQueue extends ChangeNotifier {
 
   /// 終わった行（完了・失敗・取り消し）をまとめて消す。失敗の行の退避ファイルも片付ける。
   Future<void> clearFinished() async {
-    final gone = _tasks.where((t) => t.finished).toList();
-    _tasks.removeWhere((t) => t.finished);
+    bool removable(TransferTask t) => t.finished && !_completing.contains(t);
+    final gone = _tasks.where(removable).toList();
+    _tasks.removeWhere(removable);
     _changed();
     for (final t in gone) {
       await _cleanup(t);

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,6 +18,7 @@ import 'package:r2_gallery/src/ui/home_shell.dart';
 import 'package:r2_gallery/src/ui/import_browser_tab.dart';
 import 'package:r2_gallery/src/ui/settings_tab.dart';
 import 'package:r2_gallery/src/ui/trash_tab.dart';
+import 'package:r2_gallery/src/webdl/detected.dart';
 
 /// 通信の代わり。probe に渡った値と、書き込み系が呼ばれたかを覚える
 class _Api extends ApiClient {
@@ -48,6 +51,9 @@ class _Api extends ApiClient {
     String prefix = '',
     String? cursor,
     bool recursive = false,
+    String? sort,
+    String? type,
+    bool fresh = false,
   }) async => const FolderPage(items: []);
 
   @override
@@ -157,6 +163,118 @@ void main() {
       final ok = await _app(api).connectFromUri(Uri.parse('r2g://setup?x=1'));
       expect(ok, isFalse);
       expect(api.probes, isEmpty);
+    });
+
+    test('未接続なら確認なしで繋いでよい', () {
+      final app = _app(_Api());
+      expect(app.pairingNeedsConfirm(Uri.parse(_toolPairing)), isFalse);
+    });
+
+    test('接続済みで別の送り先を指すリンクだけ確認が要る', () async {
+      final api = _Api();
+      final app = _app(api);
+      expect(await app.connect('https://a.example/x', 'ta'), isNull);
+      // 同じ送り先は確認なし。トークン差し替え・末尾スラッシュ・スキーム省略を含む
+      expect(
+          app.pairingNeedsConfirm(
+              Uri.parse('r2g://setup?e=https%3A%2F%2Fa.example%2Fx%2F#tb')),
+          isFalse);
+      // 旧形式の endpoint= は正規化せず isSameEndpoint に渡るので、スキーム省略でも比較に届く
+      expect(
+          app.pairingNeedsConfirm(
+              Uri.parse('r2g://setup?endpoint=a.example%2Fx&token=tb')),
+          isFalse);
+      // 同じホストでもパスが違えば別の送り先。別ホストはもちろん確認が要る
+      expect(
+          app.pairingNeedsConfirm(
+              Uri.parse('r2g://setup?e=https%3A%2F%2Fa.example%2Fy#tb')),
+          isTrue);
+      expect(
+          app.pairingNeedsConfirm(
+              Uri.parse('r2g://setup?e=https%3A%2F%2Fb.example#tb')),
+          isTrue);
+    });
+  });
+
+  group('S1b 接続中のペアリングリンク', () {
+    Future<dynamic> rootState(WidgetTester tester) async =>
+        tester.state(find.byType(R2GalleryApp)) as dynamic;
+
+    testWidgets('別の送り先のリンクは、確認してから切り替える', (tester) async {
+      final api = _Api();
+      final app = _app(api);
+      expect(await app.connect('https://a.example', 'ta'), isNull);
+      app.loading = false; // 直接注入した app は init が走らないので画面を開ける
+      await tester.pumpWidget(_shell(app));
+      await tester.pumpAndSettle();
+      final state = await rootState(tester);
+      final link = Uri.parse('r2g://setup?e=https%3A%2F%2Fb.example#tb');
+
+      // 確認ダイアログを待つので、こちらは待たずに進める
+      unawaited(state.onPairingLink(link));
+      await tester.pumpAndSettle();
+      expect(find.text('接続先を変更しますか？'), findsOneWidget);
+      expect(find.textContaining('a.example'), findsOneWidget);
+      expect(find.textContaining('b.example'), findsOneWidget);
+
+      // やめる → 接続にも保存値にも触れない
+      await tester.tap(find.text('やめる'));
+      await tester.pumpAndSettle();
+      expect(api.conn!.endpoint, 'https://a.example');
+      expect(await Kv.get(Keys.endpoint), 'https://a.example');
+      expect(api.probes, hasLength(1));
+
+      // 変更する → 確かめてから切り替わる
+      unawaited(state.onPairingLink(link));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('変更する'));
+      await tester.pumpAndSettle();
+      expect(api.conn!.endpoint, 'https://b.example');
+      expect(await Kv.get(Keys.endpoint), 'https://b.example');
+    });
+
+    testWidgets('送っていない転送が残っている時は、確認すらせず理由を知らせて止まる', (tester) async {
+      final api = _Api();
+      final app = _app(api);
+      expect(await app.connect('https://a.example', 'ta'), isNull);
+      // 取りに行けない URL を積むと即 error の行になる。「送り終えていない行がある」
+      // 状態はこれだけで作れて、キューの復元待ちも再試行タイマーも要らない
+      app.webQueue.enqueue(
+          'review', [const DetectedItem('file:///x.jpg', DetectedKind.image)]);
+      app.loading = false; // 直接注入した app は init が走らないので画面を開ける
+      await tester.pumpWidget(_shell(app));
+      await tester.pump();
+      expect(app.hasUnsentTransfers, isTrue);
+      final state = await rootState(tester);
+
+      unawaited(state.onPairingLink(
+          Uri.parse('r2g://setup?e=https%3A%2F%2Fb.example#tb')));
+      // 転送が残ると画面に進行中インジケータが出続けるので、settle せず決め打ちで回す
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.text('接続先を変更しますか？'), findsNothing);
+      expect(find.text(AppState.unsentTransfersMessage), findsOneWidget);
+      expect(api.conn!.endpoint, 'https://a.example');
+      expect(api.probes, hasLength(1));
+    });
+
+    testWidgets('同じ送り先へのリンクは、確認なしで繋ぎ直す', (tester) async {
+      final api = _Api();
+      final app = _app(api);
+      expect(await app.connect('https://a.example', 'ta'), isNull);
+      app.loading = false; // 直接注入した app は init が走らないので画面を開ける
+      await tester.pumpWidget(_shell(app));
+      await tester.pumpAndSettle();
+      final state = await rootState(tester);
+
+      unawaited(state.onPairingLink(
+          Uri.parse('r2g://setup?e=https%3A%2F%2Fa.example#tb')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('接続先を変更しますか？'), findsNothing);
+      expect(api.probes, hasLength(2)); // 確かめ直して繋ぐ
+      expect(api.conn!.endpoint, 'https://a.example');
     });
   });
 

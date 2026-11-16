@@ -166,6 +166,26 @@ seg3.ts
           {mp4, 'https://x/a.mp3', 'https://x/p.jpg'});
     });
 
+    test('再生時間は動画にだけ付き、後から分かった時に足され、先の値は上書きしない', () {
+      final c = SniffCollector();
+      c.capture(mp4, {'Cookie': 'req=1'});
+      expect(c.list().single.duration, isNull);
+      c.addFromPage(mp4, {}, duration: const Duration(seconds: 185));
+      expect(c.list().single.duration, const Duration(seconds: 185));
+      expect(c.list().single.headers['Cookie'], 'req=1');
+      c.addFromPage(mp4, {}, duration: const Duration(seconds: 5));
+      expect(c.list().single.duration, const Duration(seconds: 185));
+    });
+
+    test('長さが 0 以下なら不明のまま。画像・音声・HLS には付けない', () {
+      final c = SniffCollector();
+      c.addFromPage(mp4, {}, duration: Duration.zero);
+      c.addFromPage('https://x/p.jpg', {}, duration: const Duration(seconds: 9));
+      c.addFromPage('https://x/a.mp3', {}, duration: const Duration(seconds: 9));
+      c.addFromPage('https://x/s.m3u8', {}, duration: const Duration(seconds: 9));
+      expect(c.list().map((e) => e.duration), everyElement(isNull));
+    });
+
     test('clear で前のページの検出を空にする', () {
       final c = SniffCollector()..addFromPage(mp4, {});
       c.clear();

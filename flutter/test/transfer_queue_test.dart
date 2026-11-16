@@ -9,6 +9,7 @@ import 'package:r2_gallery/src/api/models.dart';
 import 'package:r2_gallery/src/offline/offline_store.dart';
 import 'package:r2_gallery/src/transfer/transfer_api.dart';
 import 'package:r2_gallery/src/transfer/transfer_queue.dart';
+import 'package:r2_gallery/src/transfer/transfer_rows.dart';
 
 /// worker と署名URLの配信を1つのローカルサーバーで真似る。本物の Dio で往復させる。
 class FakeWorker {
@@ -27,12 +28,24 @@ class FakeWorker {
   // このパート番号の PUT を返さずに止めておく（落とされる前の通信中を作る）
   int? holdPart;
   final Completer<void> holdRelease = Completer<void>();
+  // 受け取ったサムネ PUT のキー（送った筈のない物が送られていないか見る）
+  final List<String?> thumbs = [];
+  // /o/ の中身をこの大きさの塊で間隔を置いて送る（照合が早退するか見る）。0 なら一括
+  int openChunkSize = 0;
+  Duration openChunkDelay = Duration.zero;
+  int openBytesSent = 0;
+  // アルバムへの追加要求。albumId → 追加を求められたキー列
+  final Map<String, List<String>> albumAdds = {};
+  bool failAlbumAdd = false;
   // このキーの単発 PUT を受け取ったまま返さずに止めておく（完了が重なる瞬間を作る）
   String? holdPutKey;
   final Completer<void> holdPutSeen = Completer<void>();
   final Completer<void> holdPutRelease = Completer<void>();
   // multipart の完了要求を受け取ったまま返さずに止めておく
+  // 保存済みの中身を返す口を 500 にする（照合の読み出しが失敗する場面）
+  bool failOpen = false;
   bool holdComplete = false;
+  int completesSeen = 0;
   final Completer<void> holdCompleteSeen = Completer<void>();
   final Completer<void> holdCompleteRelease = Completer<void>();
   int _upload = 0;
@@ -79,6 +92,46 @@ class FakeWorker {
       await r.response.close();
       return;
     }
+    if (p.startsWith('/o/')) {
+      // objects の中身を署名URL越しに返す（保存済みの照合用）
+      final data = objects[Uri.decodeComponent(p.substring(3))];
+      if (failOpen) {
+        r.response.statusCode = 500;
+        await r.response.close();
+        return;
+      }
+      if (data == null) {
+        r.response.statusCode = 404;
+        await r.response.close();
+        return;
+      }
+      if (openChunkSize > 0) {
+        // 塊ごとに flush するので、先に読むのをやめた側が切ると途中で失敗して止まる
+        r.response.bufferOutput = false;
+        for (var i = 0; i < data.length; i += openChunkSize) {
+          final end =
+              i + openChunkSize > data.length ? data.length : i + openChunkSize;
+          try {
+            r.response.add(data.sublist(i, end));
+            await r.response.flush();
+            openBytesSent += end - i;
+          } catch (_) {
+            break;
+          }
+          if (openChunkDelay > Duration.zero) {
+            await Future<void>.delayed(openChunkDelay);
+          }
+        }
+        try {
+          await r.response.close();
+        } catch (_) {}
+        return;
+      }
+      r.response.contentLength = data.length;
+      r.response.add(data);
+      await r.response.close();
+      return;
+    }
     if (r.headers.value('authorization') != 'Bearer tok') {
       r.response.statusCode = 401;
       await r.response.close();
@@ -97,11 +150,29 @@ class FakeWorker {
         'items': [
           for (final n in media.keys)
             {'key': n, 'type': 'image', 'url': '$base/m/$n?sig=fresh'},
+          for (final e in objects.entries)
+            {
+              'key': e.key,
+              'type': 'video',
+              'size': e.value.length,
+              'url': '$base/o/${Uri.encodeComponent(e.key)}',
+            },
         ],
       });
     }
     if (r.method == 'PUT' && p.endsWith('/thumb')) {
       await _body(r);
+      thumbs.add(key);
+      return _json(r, {});
+    }
+    if (r.method == 'POST' && p.contains('/albums/') && p.endsWith('/items')) {
+      final b = jsonDecode(utf8.decode(await _body(r))) as Map<String, dynamic>;
+      if (failAlbumAdd) return _json(r, {'error': 'x'}, 500);
+      final albumId =
+          Uri.decodeComponent(p.split('/albums/')[1].split('/').first);
+      albumAdds
+          .putIfAbsent(albumId, () => [])
+          .addAll([for (final k in b['keys'] as List) k as String]);
       return _json(r, {});
     }
     if (r.method == 'PUT' && p.endsWith('/objects')) {
@@ -139,10 +210,13 @@ class FakeWorker {
     }
     if (p.endsWith('/objects/multipart/complete')) {
       final b = jsonDecode(utf8.decode(await _body(r))) as Map<String, dynamic>;
+      completesSeen++;
       if (holdComplete) {
         if (!holdCompleteSeen.isCompleted) holdCompleteSeen.complete();
         await holdCompleteRelease.future;
       }
+      // 本物の completeCreateOnly と同じく、完了の直前に同名があれば 409
+      if (objects.containsKey(b['key'])) return _json(r, {'error': 'exists'}, 409);
       final parts = _parts[b['uploadId']]!;
       final all = BytesBuilder();
       for (final e in (b['parts'] as List)) {
@@ -197,12 +271,81 @@ class MemKv implements SecretKv {
 Uint8List bytesOf(int n, [int seed = 3]) =>
     Uint8List.fromList(List.generate(n, (i) => (i * 7 + seed) & 0xff));
 
-Future<void> until(bool Function() cond, {String? what}) async {
-  for (var i = 0; i < 500; i++) {
+Future<void> until(bool Function() cond, {String? what, int tries = 500}) async {
+  for (var i = 0; i < tries; i++) {
     if (cond()) return;
     await Future<void>.delayed(const Duration(milliseconds: 10));
   }
   fail('timed out waiting for ${what ?? 'condition'}');
+}
+
+/// 退避ファイルの delete だけを遅らせる File。完了通知が掃除より先に出る順序を決定的に作る。
+/// キューが使う操作だけ転送する（未対応の操作は noSuchMethod で落とし、黙って素通りさせない）。
+class _SlowDeleteFile implements File {
+  _SlowDeleteFile(this._inner, this.delay);
+  final File _inner;
+  final Duration delay;
+
+  @override
+  String get path => _inner.path;
+
+  @override
+  Future<bool> exists() => _inner.exists();
+
+  @override
+  Future<int> length() => _inner.length();
+
+  @override
+  IOSink openWrite({FileMode mode = FileMode.write, Encoding encoding = utf8}) =>
+      _inner.openWrite(mode: mode, encoding: encoding);
+
+  @override
+  Future<Uint8List> readAsBytes() => _inner.readAsBytes();
+
+  @override
+  Future<RandomAccessFile> open({FileMode mode = FileMode.read}) =>
+      _inner.open(mode: mode);
+
+  @override
+  Future<FileSystemEntity> delete({bool recursive = false}) async {
+    await Future<void>.delayed(delay);
+    return _inner.delete(recursive: recursive);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _SlowDeleteOverrides extends IOOverrides {
+  _SlowDeleteOverrides(this.delay);
+  final Duration delay;
+
+  @override
+  File createFile(String path) => path.contains('/stage/')
+      ? _SlowDeleteFile(super.createFile(path), delay)
+      : super.createFile(path);
+}
+
+/// 退避ファイルの delete が永久に返らない File。掃除が止まった時も完了が報告されることを見る。
+class _HangDeleteFile extends _SlowDeleteFile {
+  _HangDeleteFile(File inner, this.never) : super(inner, Duration.zero);
+  final Completer<void> never;
+
+  @override
+  Future<FileSystemEntity> delete({bool recursive = false}) async {
+    await never.future;
+    return this;
+  }
+}
+
+final class _HangDeleteOverrides extends IOOverrides {
+  _HangDeleteOverrides(this.never);
+  final Completer<void> never;
+
+  @override
+  File createFile(String path) => path.contains('/stage/')
+      ? _HangDeleteFile(super.createFile(path), never)
+      : super.createFile(path);
 }
 
 void main() {
@@ -213,7 +356,12 @@ void main() {
   late OfflineStore offline;
   final queues = <TransferQueue>[];
 
-  TransferQueue make({int threshold = 1024, int part = 1024}) {
+  TransferQueue make({
+    int threshold = 1024,
+    int part = 1024,
+    Duration stagedDeleteTimeout = const Duration(seconds: 5),
+    FileThumbMaker? makeThumb,
+  }) {
     final q = TransferQueue(
       api: ApiClientTransferApi(api),
       offline: offline,
@@ -223,6 +371,8 @@ void main() {
       multipartThreshold: threshold,
       partSize: part,
       netRetryDelay: const Duration(milliseconds: 50),
+      stagedDeleteTimeout: stagedDeleteTimeout,
+      makeThumb: makeThumb,
       configured: () => api.conn != null,
     );
     queues.add(q);
@@ -272,6 +422,205 @@ void main() {
       expect(jsonDecode(ledger.value!), isEmpty);
       // 元のファイルには触らない
       expect(File(path).existsSync(), isTrue);
+    });
+
+    test('アルバムを選んで上げると、確定したキーがそのアルバムに入る', () async {
+      final q = make();
+      await q.restore();
+      await q.enqueueUploads('lib', [
+        UploadSource(name: 'a.jpg', size: 3, mime: 'image/jpeg', bytes: bytesOf(3)),
+      ], albumId: 'al1');
+      await until(() => q.tasks.single.status == TransferStatus.done);
+      expect(w.albumAdds, {'al1': ['a.jpg']});
+      expect(q.tasks.single.albumAdded, isTrue);
+      expect(q.tasks.single.albumError, isNull);
+    });
+
+    test('同名で改名された時は、改名後のキーがアルバムに入る', () async {
+      w.objects['a.jpg'] = bytesOf(9);
+      final q = make();
+      await q.restore();
+      await q.enqueueUploads('lib', [
+        UploadSource(name: 'a.jpg', size: 3, mime: 'image/jpeg', bytes: bytesOf(3)),
+      ], albumId: 'al1');
+      await until(() => q.tasks.single.status == TransferStatus.done);
+      // サーバーが確定した名前（name (2)）で入る。選んだ時の名前ではない
+      expect(w.albumAdds, {'al1': ['a (2).jpg']});
+      expect(w.objects['a (2).jpg'], isNotNull);
+    });
+
+    test('アルバムへの追加だけ失敗しても、物は完了のまま残り上げ直しにならない', () async {
+      w.failAlbumAdd = true;
+      final q = make();
+      await q.restore();
+      await q.enqueueUploads('lib', [
+        UploadSource(name: 'a.jpg', size: 3, mime: 'image/jpeg', bytes: bytesOf(3)),
+      ], albumId: 'al1');
+      await until(() => q.tasks.single.status == TransferStatus.done);
+      expect(w.objects['a.jpg'], isNotNull);
+      expect(q.tasks.single.albumError, isNotNull);
+      expect(rowOfTask(q.tasks.single, q, online: true).label, contains('アルバム'));
+    });
+
+    test('アルバム追加の前に落とされても、次の起動で入れ直す', () async {
+      // 送り済み（キー確定）だがアルバム未追加の行を台帳に残す
+      ledger.value = jsonEncode([
+        {
+          'id': 'u1',
+          'kind': 'up',
+          'lib': 'lib',
+          'name': 'a.jpg',
+          'size': 3,
+          'mime': 'image/jpeg',
+          'status': 'queued',
+          'key': 'a.jpg',
+          'albumId': 'al9',
+          'stagedPath': await source('rest.jpg', bytesOf(3)),
+        },
+      ]);
+      w.objects['a.jpg'] = bytesOf(3);
+      final q = make();
+      await q.restore();
+      await q.idle();
+      expect(w.albumAdds, {'al9': ['a.jpg']});
+      expect(q.tasks.single.status, TransferStatus.done);
+      expect(q.tasks.single.albumError, isNull);
+    });
+
+    test('完了を報告した時点で退避ファイルは消えている（掃除が遅くても）', () async {
+      await IOOverrides.runWithIOOverrides(() async {
+        final q = make();
+        await q.restore();
+        final path = await source('slow.jpg', bytesOf(500));
+        await q.enqueueUploads('lib', [
+          UploadSource(name: 'slow.jpg', size: 500, mime: 'image/jpeg', path: path),
+        ]);
+        await until(() => q.tasks.single.status == TransferStatus.done);
+        expect(Directory('${tmp.path}/stage').listSync(), isEmpty);
+      }, _SlowDeleteOverrides(const Duration(milliseconds: 300)));
+    });
+
+    test('退避ファイルの削除中に一時停止・再開しても、退避し直さずに完了する', () async {
+      await IOOverrides.runWithIOOverrides(() async {
+        final q = make();
+        await q.restore();
+        final path = await source('pr.jpg', bytesOf(500));
+        await q.enqueueUploads('lib', [
+          UploadSource(name: 'pr.jpg', size: 500, mime: 'image/jpeg', path: path),
+        ]);
+        final t = q.tasks.single;
+        await until(() => t.status == TransferStatus.running && t.stagedPath == null,
+            what: 'staged delete');
+        q.pause(t.id);
+        q.resume(t.id);
+        await q.idle();
+        expect(t.status, TransferStatus.done);
+        expect(t.stagedPath, isNull);
+        expect(Directory('${tmp.path}/stage').listSync(), isEmpty);
+        expect(jsonDecode(ledger.value!), isEmpty);
+        expect(w.objects.keys.toList(), ['pr.jpg']);
+      }, _SlowDeleteOverrides(const Duration(milliseconds: 300)));
+    });
+
+    test('退避ファイルの削除中に取り消し・やり直しをしても、退避し直さずに完了する', () async {
+      await IOOverrides.runWithIOOverrides(() async {
+        final q = make();
+        await q.restore();
+        final path = await source('cr.jpg', bytesOf(500));
+        await q.enqueueUploads('lib', [
+          UploadSource(name: 'cr.jpg', size: 500, mime: 'image/jpeg', path: path),
+        ]);
+        final t = q.tasks.single;
+        await until(() => t.status == TransferStatus.running && t.stagedPath == null,
+            what: 'staged delete');
+        final cancelling = q.cancel(t.id);
+        q.retry(t.id);
+        await cancelling;
+        await q.idle();
+        expect(q.tasks.single, same(t));
+        expect(t.status, TransferStatus.done);
+        expect(t.stagedPath, isNull);
+        expect(Directory('${tmp.path}/stage').listSync(), isEmpty);
+        expect(jsonDecode(ledger.value!), isEmpty);
+        expect(w.objects.keys.toList(), ['cr.jpg']);
+      }, _SlowDeleteOverrides(const Duration(milliseconds: 300)));
+    });
+
+    test('サムネ作成中に一時停止し、退避ファイルの削除中に再開しても、退避し直さずに完了する', () async {
+      final gate = Completer<void>();
+      var thumbStarted = false;
+      await IOOverrides.runWithIOOverrides(() async {
+        final q = make(makeThumb: (file, mime) async {
+          thumbStarted = true;
+          await gate.future;
+          return null;
+        });
+        await q.restore();
+        final path = await source('tp.jpg', bytesOf(500));
+        await q.enqueueUploads('lib', [
+          UploadSource(name: 'tp.jpg', size: 500, mime: 'image/jpeg', path: path),
+        ]);
+        final t = q.tasks.single;
+        await until(() => thumbStarted, what: 'thumb');
+        q.pause(t.id);
+        expect(t.status, TransferStatus.paused);
+        gate.complete();
+        await until(() => q.isCompleting(t.id) && t.stagedPath == null,
+            what: 'staged delete');
+        final row = rowOfTask(t, q, online: true);
+        expect(row.onResume, isNull);
+        expect(row.onPause, isNull);
+        expect(row.onCancel, isNull);
+        q.resume(t.id);
+        expect(t.status, TransferStatus.paused, reason: '完了待ちの行は退避し直さない');
+        await q.idle();
+        expect(t.status, TransferStatus.done);
+        expect(t.stagedPath, isNull);
+        expect(Directory('${tmp.path}/stage').listSync(), isEmpty);
+        expect(jsonDecode(ledger.value!), isEmpty);
+        expect(w.objects.keys.toList(), ['tp.jpg']);
+      }, _SlowDeleteOverrides(const Duration(milliseconds: 300)));
+    });
+
+    test('完了待ちの間は一時停止・取り消しのボタンを出さない', () async {
+      await IOOverrides.runWithIOOverrides(() async {
+        final q = make();
+        await q.restore();
+        final path = await source('bt.jpg', bytesOf(500));
+        await q.enqueueUploads('lib', [
+          UploadSource(name: 'bt.jpg', size: 500, mime: 'image/jpeg', path: path),
+        ]);
+        final t = q.tasks.single;
+        final before = rowOfTask(t, q, online: true);
+        expect(before.onPause, isNotNull);
+        expect(before.onCancel, isNotNull);
+        await until(() => q.isCompleting(t.id), what: 'completing');
+        final during = rowOfTask(t, q, online: true);
+        expect(during.status, TransferStatus.running);
+        expect(during.onPause, isNull);
+        expect(during.onCancel, isNull);
+        await q.idle();
+        expect(q.isCompleting(t.id), isFalse);
+        expect(t.status, TransferStatus.done);
+      }, _SlowDeleteOverrides(const Duration(milliseconds: 300)));
+    });
+
+    test('退避ファイルの削除が返らなくても完了を報告し、残りは起動時の掃除に任せる', () async {
+      final never = Completer<void>();
+      await IOOverrides.runWithIOOverrides(() async {
+        final q = make(stagedDeleteTimeout: const Duration(milliseconds: 100));
+        await q.restore();
+        final path = await source('hang.jpg', bytesOf(500));
+        await q.enqueueUploads('lib', [
+          UploadSource(name: 'hang.jpg', size: 500, mime: 'image/jpeg', path: path),
+        ]);
+        await until(() => q.tasks.single.status == TransferStatus.done);
+        await q.idle();
+        expect(q.hasActiveWork, isFalse);
+        expect(jsonDecode(ledger.value!), isEmpty);
+        // 消せなかったファイルは残る（起動時の掃除の対象）
+        expect(Directory('${tmp.path}/stage').listSync(), isNotEmpty);
+      }, _HangDeleteOverrides(never));
     });
 
     test('同名があれば「name (2)」で上げる', () async {
@@ -401,6 +750,31 @@ void main() {
       expect(w.creates, 1);
     });
 
+    test('サムネ生成中に止められたら、送り先へサムネは上げない', () async {
+      final called = Completer<void>();
+      final gate = Completer<void>();
+      final q = make(makeThumb: (file, mime) async {
+        if (!called.isCompleted) called.complete();
+        await gate.future;
+        return bytesOf(8);
+      });
+      await q.restore();
+      await q.enqueueUploads('lib', [
+        UploadSource(
+            name: 'a.jpg',
+            size: 4,
+            mime: 'image/jpeg',
+            path: await source('a.jpg', bytesOf(4))),
+      ]);
+      await called.future;
+      q.pause(q.tasks.single.id);
+      gate.complete();
+      await until(() => q.tasks.single.finished);
+      // 本体は上がり切っているので完了になるが、サムネだけは送られていない
+      expect(q.tasks.single.status, TransferStatus.done);
+      expect(w.thumbs, isEmpty);
+    });
+
     test('取り消すと multipart を片付け、退避ファイルと行を消す', () async {
       w.holdPart = 2;
       final q = make();
@@ -454,6 +828,40 @@ void main() {
           a.status == TransferStatus.done && b.status == TransferStatus.done);
       await q.idle();
       expect(jsonDecode(gate.value!), isEmpty);
+    });
+
+    test('退避ファイルの削除中に別の行が台帳を書いても、完了待ちの行を転送中で書き戻さない', () async {
+      await IOOverrides.runWithIOOverrides(() async {
+        w.holdComplete = true;
+        w.holdPutKey = 'a.jpg';
+        final q = make();
+        await q.restore();
+        await q.enqueueUploads('lib', [
+          UploadSource(
+              name: 'a.jpg', size: 4, mime: 'image/jpeg',
+              path: await source('a.jpg', bytesOf(4))),
+          UploadSource(
+              name: 'b.mp4', size: 2000, mime: 'video/mp4',
+              path: await source('b.mp4', bytesOf(2000, 5))),
+        ]);
+        await w.holdPutSeen.future;
+        await w.holdCompleteSeen.future;
+        final a = q.tasks.firstWhere((t) => t.name == 'a.jpg');
+        final b = q.tasks.firstWhere((t) => t.name == 'b.mp4');
+        w.holdPutRelease.complete();
+        // a が削除待ちに入ってから b の完了の書き込みを走らせる
+        await until(() => a.stagedPath == null, what: 'a in staged delete');
+        w.holdCompleteRelease.complete();
+        await until(() =>
+            a.status == TransferStatus.done && b.status == TransferStatus.done);
+        await q.idle();
+        expect(jsonDecode(ledger.value!), isEmpty);
+        // 台帳から再起動しても送り直さない
+        final r = make();
+        await r.restore();
+        await r.idle();
+        expect(w.objects.keys.toSet(), {'a.jpg', 'b.mp4'});
+      }, _SlowDeleteOverrides(const Duration(milliseconds: 500)));
     });
 
     test('同時に走るのは2件まで', () async {
@@ -535,6 +943,209 @@ void main() {
       expect(w.objects['a.jpg'], bytesOf(3));
     });
 
+    test('同名の大きいファイルを同時に上げても、2つとも保存される', () async {
+      // 両方とも分割の開始は通り、完了の時に先着だけが残る（完了時の 409）
+      w.holdComplete = true;
+      final q = make();
+      await q.restore();
+      final a = bytesOf(2000, 1), b = bytesOf(2000, 9);
+      await q.enqueueUploads('lib', [
+        UploadSource(
+            name: 'v.mp4', size: 2000, mime: 'video/mp4',
+            path: await source('a-v.mp4', a)),
+        UploadSource(
+            name: 'v.mp4', size: 2000, mime: 'video/mp4',
+            path: await source('b-v.mp4', b)),
+      ]);
+      await until(() => w.completesSeen >= 2, what: 'both complete requests');
+      w.holdCompleteRelease.complete();
+      await until(() => q.tasks.every((t) => t.status == TransferStatus.done),
+          what: 'all done');
+      await q.idle();
+      expect(w.objects.keys.toSet(), {'v.mp4', 'v (2).mp4'});
+      expect(w.objects.values.map((v) => v[0]).toSet(),
+          {a[0], b[0]});
+    });
+
+    test('再開で、同名の別の中身がサーバーにあれば名前を変えて上げる', () async {
+      w.objects['v.mp4'] = bytesOf(2000, 9);
+      // 台帳には前回決めたキーと uploadId がある行（アプリが落ちた後を真似る）
+      await ledger.write(jsonEncode([
+        {
+          'id': 't1', 'kind': 'up', 'lib': 'lib', 'name': 'v.mp4',
+          'size': 2000, 'mime': 'video/mp4', 'status': 'running',
+          'key': 'v.mp4', 'uploadId': 'gone',
+          'stagedPath': await source('stage-v.mp4', bytesOf(2000, 1)),
+        }
+      ]));
+      final q2 = make();
+      await q2.restore();
+      await until(
+          () => q2.tasks.isNotEmpty &&
+              q2.tasks.single.status == TransferStatus.done,
+          what: 'done');
+      await q2.idle();
+      expect(w.objects['v.mp4'], bytesOf(2000, 9));
+      expect(w.objects['v (2).mp4'], bytesOf(2000, 1));
+    });
+
+    test('再開で、サーバーにある物が手元と同じ中身なら重ねて上げずに完了にする', () async {
+      w.objects['v.mp4'] = bytesOf(2000, 1);
+      await ledger.write(jsonEncode([
+        {
+          'id': 't1', 'kind': 'up', 'lib': 'lib', 'name': 'v.mp4',
+          'size': 2000, 'mime': 'video/mp4', 'status': 'running',
+          'key': 'v.mp4',
+          'stagedPath': await source('stage-v.mp4', bytesOf(2000, 1)),
+        }
+      ]));
+      final q = make();
+      await q.restore();
+      await until(
+          () => q.tasks.isNotEmpty && q.tasks.single.status == TransferStatus.done,
+          what: 'done');
+      await q.idle();
+      expect(w.objects.keys.toList(), ['v.mp4']);
+    });
+
+    /// 台帳に残った1行（アプリが落とされた後）を作る。
+    Future<void> ledgerRow({
+      required String name,
+      required int size,
+      required String mime,
+      required String staged,
+      String? uploadId,
+      int partCount = 0,
+    }) =>
+        ledger.write(jsonEncode([
+          {
+            'id': 't1', 'kind': 'up', 'lib': 'lib', 'name': name,
+            'size': size, 'mime': mime, 'status': 'running',
+            'key': name,
+            'uploadId': ?uploadId,
+            if (partCount > 0)
+              'parts': [
+                for (var n = 1; n <= partCount; n++)
+                  {'partNumber': n, 'etag': 'e$n'}
+              ],
+            'stagedPath': staged,
+          }
+        ]));
+
+    Future<TransferQueue> restored() async {
+      final q = make();
+      await q.restore();
+      return q;
+    }
+
+    test('完了は通っていたが応答が落ちた行は、完了の 409 を中身の照合で完了にする', () async {
+      // 前回の complete は R2 に届いて保存済み。全パート確定の台帳が残っている
+      w.objects['v.mp4'] = bytesOf(2000, 1);
+      await ledgerRow(
+          name: 'v.mp4', size: 2000, mime: 'video/mp4', uploadId: 'up1',
+          partCount: 2, staged: await source('stage-v.mp4', bytesOf(2000, 1)));
+      final q = await restored();
+      await until(() => q.tasks.single.status == TransferStatus.done, what: 'done');
+      await q.idle();
+      expect(w.objects.keys.toList(), ['v.mp4']);
+      expect(w.creates, 0);
+      expect(w.partsRequested, isEmpty);
+    });
+
+    test('完了の 409 で、サーバーの中身が別物なら名前を変えて最初から上げる', () async {
+      w.objects['v.mp4'] = bytesOf(2000, 9);
+      await ledgerRow(
+          name: 'v.mp4', size: 2000, mime: 'video/mp4', uploadId: 'up1',
+          partCount: 2, staged: await source('stage-v.mp4', bytesOf(2000, 1)));
+      final q = await restored();
+      await until(() => q.tasks.single.status == TransferStatus.done, what: 'done');
+      await q.idle();
+      expect(w.objects['v.mp4'], bytesOf(2000, 9));
+      expect(w.objects['v (2).mp4'], bytesOf(2000, 1));
+      expect(w.aborts, contains('up1'));
+    });
+
+    test('小さいファイルの再開で PUT が 409、同じ中身なら重ねずに完了にする', () async {
+      w.objects['a.jpg'] = bytesOf(500, 1);
+      await ledgerRow(
+          name: 'a.jpg', size: 500, mime: 'image/jpeg',
+          staged: await source('stage-a.jpg', bytesOf(500, 1)));
+      final q = await restored();
+      await until(() => q.tasks.single.status == TransferStatus.done, what: 'done');
+      await q.idle();
+      expect(w.objects.keys.toList(), ['a.jpg']);
+    });
+
+    test('小さいファイルの再開で PUT が 409、別の中身なら名前を変えて保存する', () async {
+      w.objects['a.jpg'] = bytesOf(500, 9);
+      await ledgerRow(
+          name: 'a.jpg', size: 500, mime: 'image/jpeg',
+          staged: await source('stage-a.jpg', bytesOf(500, 1)));
+      final q = await restored();
+      await until(() => q.tasks.single.status == TransferStatus.done, what: 'done');
+      await q.idle();
+      expect(w.objects['a.jpg'], bytesOf(500, 9));
+      expect(w.objects['a (2).jpg'], bytesOf(500, 1));
+    });
+
+    test('照合の読み出しが失敗したら、完了にせず失敗の行として残す', () async {
+      w.objects['v.mp4'] = bytesOf(2000, 1);
+      w.failOpen = true;
+      await ledgerRow(
+          name: 'v.mp4', size: 2000, mime: 'video/mp4', uploadId: 'up1',
+          partCount: 2, staged: await source('stage-v.mp4', bytesOf(2000, 1)));
+      final q = await restored();
+      await until(() => q.tasks.single.status == TransferStatus.error, what: 'error');
+      expect(q.tasks.single.status, isNot(TransferStatus.done));
+      expect(w.objects.keys.toList(), ['v.mp4']);
+      // 退避ファイルは残り、読み出しが直れば再試行で完了にできる
+      w.failOpen = false;
+      q.retryAllFailed();
+      await until(() => q.tasks.single.status == TransferStatus.done, what: 'retry done');
+      expect(w.objects.keys.toList(), ['v.mp4']);
+    });
+
+    // #144: 照合は逐次比較。違うバイトで打ち切るので残りを読まない
+    test('照合は違うバイトで打ち切り、残りを読まない', () async {
+      final remote = bytesOf(20000, 1);
+      w.objects['big.bin'] = remote;
+      w.openChunkSize = 1000;
+      w.openChunkDelay = const Duration(milliseconds: 20);
+      final ta = ApiClientTransferApi(api);
+      final local = Uint8List.fromList(remote)..[7] ^= 0xff;
+      final same = await ta.storedMatches('lib', 'big.bin', remote.length,
+          () => Stream<List<int>>.value(local));
+      expect(same, isFalse);
+      expect(w.openBytesSent, lessThan(remote.length));
+    });
+
+    test('照合中は読んだバイト数の進捗が出る', () async {
+      w.objects['a.bin'] = bytesOf(5000, 2);
+      w.openChunkSize = 1000;
+      final ta = ApiClientTransferApi(api);
+      final got = <int>[];
+      final same = await ta.storedMatches('lib', 'a.bin', 5000,
+          () => Stream<List<int>>.value(bytesOf(5000, 2).toList()),
+          onProgress: got.add);
+      expect(same, isTrue);
+      expect(got, isNotEmpty);
+      expect(got.last, 5000);
+    });
+
+    test('照合は送り側と受け側で塊の切れ目が違っても正しく比べる', () async {
+      final b = bytesOf(5000, 2);
+      w.objects['a.bin'] = b;
+      w.openChunkSize = 1000;
+      final ta = ApiClientTransferApi(api);
+      final same = await ta.storedMatches('lib', 'a.bin', 5000, () async* {
+        // ローカル側は333バイトずつ — 切れ目が合わなくても同じ中身と分かる
+        for (var i = 0; i < b.length; i += 333) {
+          yield b.sublist(i, i + 333 > b.length ? b.length : i + 333);
+        }
+      });
+      expect(same, isTrue);
+    });
+
     test('失敗した行は復帰時の再試行でまとめて積み直す', () async {
       w.failPutStatus = 500;
       final q = make();
@@ -581,6 +1192,55 @@ void main() {
       ]);
       await until(() => q.tasks.single.status == TransferStatus.done);
       expect(await offline.readBytes('lib', 'p.jpg'), bytesOf(100));
+    });
+
+    // #117: 数百件まとめて保存しても途中の1件の失敗が残りを止めない回帰テスト
+    test('300件まとめて積んでも全部終わる', () async {
+      for (var i = 0; i < 300; i++) {
+        w.media['img$i.jpg'] = bytesOf(64, i & 0xff);
+      }
+      final q = make();
+      await q.restore();
+      final added = await q.enqueueDownloads('lib', [
+        for (var i = 0; i < 300; i++)
+          MediaItem(
+              key: 'img$i.jpg',
+              type: 'image',
+              url: '${w.base}/m/img$i.jpg?sig=fresh'),
+      ]);
+      expect(added, hasLength(300));
+      await until(() => q.tasks.every((t) => t.finished),
+          what: '300 downloads finished', tries: 1500);
+      expect(q.tasks.where((t) => t.status == TransferStatus.error), isEmpty);
+      expect(await offline.count(), 300);
+      expect(await offline.readBytes('lib', 'img42.jpg'), bytesOf(64, 42));
+      expect(await offline.readBytes('lib', 'img299.jpg'), bytesOf(64, 299));
+    });
+
+    test('300件の途中で取れない物があっても残りは終わり、件数と理由が行に出る',
+        () async {
+      for (var i = 0; i < 300; i++) {
+        if (i != 150) w.media['img$i.jpg'] = bytesOf(64, i & 0xff);
+      }
+      final q = make();
+      await q.restore();
+      await q.enqueueDownloads('lib', [
+        for (var i = 0; i < 300; i++)
+          MediaItem(
+              key: 'img$i.jpg',
+              type: 'image',
+              url: '${w.base}/m/img$i.jpg?sig=fresh'),
+      ]);
+      await until(() => q.tasks.every((t) => t.finished),
+          what: '300 downloads finished', tries: 1500);
+      expect(q.tasks.where((t) => t.status == TransferStatus.done),
+          hasLength(299));
+      final err = q.tasks.singleWhere((t) => t.status == TransferStatus.error);
+      // 落ちたのが 404 にした1件だけか（'key' の隣のリテラルは gitleaks が拾うので変数名に逃がす）
+      final gone = 'img150.jpg';
+      expect(err.itemKey, gone);
+      expect(err.error, isNotEmpty);
+      expect(await offline.count(), 299);
     });
   });
 }

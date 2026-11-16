@@ -20,11 +20,17 @@ export const json = (body: unknown, status = 200): Response =>
     },
   });
 
+// 入口のメソッド拒否と CORS 許可を同じ一覧から作る。別々に持つと片方だけ更新されて
+// ブラウザが事前確認で本リクエストを止める（#54 の PATCH 漏れ）。
+export const ALLOWED_METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"] as const;
+
 export function corsHeaders(): Record<string, string> {
   return {
     "access-control-allow-origin": "*",
-    "access-control-allow-headers": "authorization, content-type",
-    "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+    // アプリが送る独自ヘッダはここに足す。漏れると Web 版だけ事前確認で止まる
+    "access-control-allow-headers": "authorization, content-type, x-content-sha256",
+    // OPTIONS は事前確認そのものなので一覧には含めず、ここで足す
+    "access-control-allow-methods": [...ALLOWED_METHODS, "OPTIONS"].join(", "),
     "access-control-max-age": "86400",
   };
 }

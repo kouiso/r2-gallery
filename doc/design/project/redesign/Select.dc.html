@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>選択モード</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0}
+.ph svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ibtn{width:48px;height:48px;border:0;background:none;color:#E2E2E9;display:grid;place-items:center;border-radius:24px;padding:0;cursor:pointer}
+.act{border:0;background:none;color:#E2E2E9;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-family:inherit;font-size:12px;line-height:16px;font-weight:500;cursor:pointer;padding:0}
+.tile{aspect-ratio:1/1;position:relative;border:0;padding:0;background:#171B20;cursor:pointer}
+.chk{position:absolute;left:6px;top:6px;width:24px;height:24px;border-radius:12px;display:grid;place-items:center}
+.chk svg{width:16px;height:16px;stroke-width:3}
+.dayh{display:flex;align-items:center;justify-content:space-between;padding:8px 4px 4px 16px}
+</style>
+</helmet>
+<div class="ph" style="width: 390px; height: 844px; background: #0F1114; color: #E2E2E9; font-family: 'Noto Sans JP', sans-serif; display: flex; flex-direction: column; position: relative; overflow: hidden">
+  <header style="height: 64px; display: flex; align-items: center; gap: 4px; padding: 0 8px 0 4px; flex-shrink: 0; background: #1D2127">
+    <a href="Main.dc.html" class="ibtn" aria-label="選択を終了"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></a>
+    <h1 style="margin: 0; flex: 1; font-size: 20px; line-height: 28px; font-weight: 700">3件を選択</h1>
+    <button style="height: 40px; padding: 0 12px; border: 0; border-radius: 20px; background: none; color: #9ECAFF; font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer">すべて選択</button>
+  </header>
+  <main style="flex: 1; overflow: hidden; min-height: 0">
+    <sc-for list="{{sections}}" as="sec" hint-placeholder-count="3">
+      <section>
+        <div class="dayh">
+          <h2 style="margin: 0; font-size: 14px; line-height: 20px; font-weight: 700">{{sec.label}}</h2>
+          <button class="ibtn" aria-label="{{sec.aria}}" style="color: {{sec.color}}">
+            <sc-if value="{{sec.all}}" hint-placeholder-val="{{false}}">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="#9ECAFF" stroke="#9ECAFF"/><path d="M8 12.5l3 3 5-6" stroke="#003258" stroke-width="2.4"/></svg>
+            </sc-if>
+            <sc-if value="{{sec.notAll}}" hint-placeholder-val="{{true}}">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg>
+            </sc-if>
+          </button>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px">
+          <sc-for list="{{sec.tiles}}" as="t" hint-placeholder-count="8">
+            <button class="tile" aria-pressed="{{t.pressed}}" aria-label="{{t.label}}">
+              <span style="position: absolute; inset: {{t.inset}}; background: {{t.bg}}; border-radius: {{t.radius}}"></span>
+              <sc-if value="{{t.sel}}" hint-placeholder-val="{{false}}">
+                <span class="chk" style="background: #9ECAFF; color: #003258; left: 10px; top: 10px"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></span>
+              </sc-if>
+              <sc-if value="{{t.unsel}}" hint-placeholder-val="{{true}}">
+                <span class="chk" style="border: 2px solid #FFFFFF; box-sizing: border-box; background: rgba(0,0,0,.25)"></span>
+              </sc-if>
+            </button>
+          </sc-for>
+        </div>
+      </section>
+    </sc-for>
+  </main>
+  <div role="toolbar" aria-label="選択した項目の操作" style="height: 80px; flex-shrink: 0; background: #1D2127; border-top: 1px solid #2A2E33; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr))">
+    <button class="act"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="14" height="14" rx="2"/><path d="M7 3h12a2 2 0 0 1 2 2v12M10 11v6M7 14h6"/></svg>アルバムへ</button>
+    <button class="act"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>オフライン</button>
+    <a href="States.dc.html" class="act" style="color: #FFB4AB; text-decoration: none"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>ゴミ箱へ</a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var tones = ['#3A4A5C','#5C4B3A','#2F4A43','#4A3A52','#56503A','#3A5258','#4F3A3A','#3E4A33','#2E3A52','#5A4A44','#384447','#4B4458'];
+    var picked = { 1: true, 2: true, 5: true };
+    var n = 0;
+    function mk(count) {
+      var out = [];
+      for (var i = 0; i < count; i++) {
+        var s = !!picked[n];
+        out.push({ bg: tones[(n * 5) % tones.length], sel: s, unsel: !s, pressed: s ? 'true' : 'false', label: s ? '写真（選択中）' : '写真', inset: s ? '10px' : '0px', radius: s ? '8px' : '0px' });
+        n++;
+      }
+      return out;
+    }
+    var a = mk(7), b = mk(12), c = mk(12);
+    function sec(label, tiles, all) {
+      return { label: label, tiles: tiles, all: all, notAll: !all, color: all ? '#9ECAFF' : '#C2C7D0', aria: label + 'をすべて選択' };
+    }
+    return { sections: [sec('今日', a, false), sec('10月8日 木曜日', b, false), sec('10月2日 金曜日', c, false)] };
+  }
+}
+</script>
+</body>
+</html>

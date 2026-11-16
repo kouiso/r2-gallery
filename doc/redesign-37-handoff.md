@@ -1,5 +1,9 @@
 # R2 Gallery 再設計（#37）引き継ぎ
 
+> **これは KMP 版クライアントの記録で、現行（Flutter）の手順ではない。** 文中の `kmp/`・
+> `tools/render-harness`・`gradle` の手順は、クライアントを Flutter に替えた後は動かない。
+> 現行の構成は `CLAUDE.md` と `README.md`、機能の対応は `doc/feature-parity.md` を見る。
+
 仕様の正本: issue #37 の「実装仕様の正本」コメント＋ Claude Design キャンバス（番号 01〜13）。
 実装は KMP クライアントだけ（`kmp/composeApp/src/commonMain/kotlin/app/r2gallery/`）。Ionic 版と `worker/` は触っていない。
 

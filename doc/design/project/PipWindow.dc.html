@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>他アプリ上の小窓</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #EEF0F3; color: #15171C; font-family: 'Noto Sans JP', system-ui, sans-serif; position: relative; overflow: hidden; display: flex; flex-direction: column">
+  <div style="height: 56px; display: flex; align-items: center; padding: 0 16px; font-size: 18px; font-weight: 600; background: #FFFFFF; border-bottom: 1px solid #DADDE3">[別のアプリ]</div>
+  <div style="display: flex; flex-direction: column; gap: 12px; padding: 16px">
+    <sc-for list="{{rows}}" as="r" hint-placeholder-count="8">
+      <div style="height: 56px; border-radius: 12px; background: #FFFFFF; display: flex; align-items: center; gap: 12px; padding: 0 12px">
+        <span style="width: 32px; height: 32px; border-radius: 50%; background: #D5D9E0"></span>
+        <span style="height: 10px; border-radius: 5px; background: #D5D9E0; width: {{r.w}}"></span>
+      </div>
+    </sc-for>
+  </div>
+  <div style="position: absolute; right: 16px; bottom: 120px; width: 240px; height: 135px; border-radius: 12px; overflow: hidden; background: #1d2230; box-shadow: 0 6px 20px rgba(0,0,0,0.35)">
+    <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.45); font-size: 12px">[動画の映像]</div>
+    <sc-if value="{{controls}}" hint-placeholder-val="{{true}}">
+      <div style="position: absolute; inset: 0; background: rgba(0,0,0,0.45); display: flex; flex-direction: column; justify-content: space-between; padding: 4px">
+        <div style="display: flex; justify-content: space-between">
+          <button aria-label="元に戻す" style="width: 44px; height: 44px; border: 0; background: transparent; color: #FFFFFF; display: flex; align-items: center; justify-content: center">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 9V4h5M20 15v5h-5M4 4l6 6M20 20l-6-6"></path></svg>
+          </button>
+          <button aria-label="閉じる" style="width: 44px; height: 44px; border: 0; background: transparent; color: #FFFFFF; display: flex; align-items: center; justify-content: center">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+          </button>
+        </div>
+        <div style="display: flex; justify-content: center; margin-bottom: 30px">
+          <button aria-label="一時停止" style="width: 48px; height: 48px; border: 0; background: transparent; color: #FFFFFF; display: flex; align-items: center; justify-content: center">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14"></rect><rect x="14" y="5" width="4" height="14"></rect></svg>
+          </button>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 48px; display: flex; align-items: center; justify-content: center; background: #FFFFFF; border-top: 1px solid #DADDE3">
+    <span style="width: 120px; height: 4px; border-radius: 2px; background: #15171C"></span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"controls":{"editor":"boolean","default":true},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      controls: this.props.controls ?? true,
+      rows: ['70%','55%','80%','40%','65%','75%','50%','60%','45%','70%'].map(w => ({ w }))
+    };
+  }
+}
+</script>
+</body>
+</html>

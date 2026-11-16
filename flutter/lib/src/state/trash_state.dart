@@ -61,29 +61,44 @@ class TrashState extends ChangeNotifier {
   }
 
   /// 1件戻す。成功なら null、失敗なら HTTP ステータス（通信失敗は 0）を返す。
+  /// 行は返事を待たずに外し、戻せなかったら元の位置へ戻す（待たせると操作がもたつくため）。
   Future<int?> restoreOne(String lib, TrashItem t) async {
     if (!restoring.add(t.trashKey)) return null;
+    final removed = _takeRows({t.trashKey});
     notifyListeners();
     final res = await restoreAll(api, [TrashReceipt(lib, t.trashKey)]);
     restoring.remove(t.trashKey);
-    int? status;
-    if (res.restored == 1) {
-      // 読み直しが終わる前にもう一度押せんよう、戻した行を先に外す
-      items = items.where((x) => x.trashKey != t.trashKey).toList();
-      selected.remove(t.trashKey);
-    } else {
-      status = res.conflict > 0
-          ? 409
-          : res.readOnly > 0
-              ? 403
-              : res.notFound > 0
-                  ? 404
-                  : 0;
-    }
+    final status = res.failures[t.trashKey];
+    // 404 = すでに戻っている。行は戻さず、一覧が古いだけなので読み直して整える
+    if (status != null && status != 404) _putBack(removed);
     notifyListeners();
-    // 404 = すでに戻っている。一覧が古いだけなので、失敗でも読み直して整える
-    if (status == null || status == 404) await refresh(lib);
+    if (status == 404) await refresh(lib);
     return status;
+  }
+
+  /// [keys] の行を外し、元の位置と選択の有無を控えて返す。
+  List<({int index, TrashItem item, bool selected})> _takeRows(
+      Set<String> keys) {
+    final out = <({int index, TrashItem item, bool selected})>[];
+    for (var i = 0; i < items.length; i++) {
+      final it = items[i];
+      if (keys.contains(it.trashKey)) {
+        out.add((index: i, item: it, selected: selected.remove(it.trashKey)));
+      }
+    }
+    items = items.where((x) => !keys.contains(x.trashKey)).toList();
+    return out;
+  }
+
+  /// [_takeRows] で外した行を元の位置へ戻す。読み直しで既に戻っている行は重ねない。
+  void _putBack(List<({int index, TrashItem item, bool selected})> rows) {
+    final list = [...items];
+    for (final r in rows) {
+      if (list.any((x) => x.trashKey == r.item.trashKey)) continue;
+      list.insert(r.index.clamp(0, list.length), r.item);
+      if (r.selected) selected.add(r.item.trashKey);
+    }
+    items = list;
   }
 
   void toggle(String trashKey) {
@@ -96,15 +111,23 @@ class TrashState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 選んだ分をまとめて戻す。行は先に外し、戻せなかった行だけ元の位置へ戻す。
   Future<RestoreOutcome> bulkRestore(String lib) async {
     final targets = [for (final k in selected) TrashReceipt(lib, k)];
+    final keys = {for (final t in targets) t.trashKey};
+    final removed = _takeRows(keys);
     selected.clear();
-    restoring.addAll(targets.map((t) => t.trashKey));
+    restoring.addAll(keys);
     notifyListeners();
     final res = await restoreAll(api, targets);
-    restoring.removeAll(targets.map((t) => t.trashKey));
+    restoring.removeAll(keys);
+    _putBack([
+      for (final r in removed)
+        if (res.failures[r.item.trashKey] case final st? when st != 404) r,
+    ]);
     notifyListeners();
-    await refresh(lib);
+    // 全部戻せたなら手元の一覧が正しい。失敗が混ざった時だけ（404 の取り違えも含め）読み直して整える
+    if (res.failed > 0) await refresh(lib);
     return res;
   }
 

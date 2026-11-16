@@ -66,7 +66,8 @@ class MediaListBody extends StatelessWidget {
             onLongPress: (it) => c.onLongPress(context, it),
             onToggleDay: (day) => g.toggleDay(day, c.lib),
             onNearEnd: () => g.loadMore(c.lib),
-            onRefresh: () => g.refresh(c.lib),
+            // 引っ張った時だけ Worker にバケットを数え直させる
+            onRefresh: () => g.refresh(c.lib, fresh: true),
             loadingMore: g.loadingMore,
             folders: folders,
             onOpenFolder: onOpenFolder,

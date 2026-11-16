@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>写真タブ</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0}
+.ph{--bg:#0F1114;--s1:#171B20;--s2:#1D2127;--ln:#2A2E33;--tx:#E2E2E9;--tx2:#C2C7D0;--ac:#9ECAFF;--onac:#003258;--acc:#3B4858;--dng:#FFB4AB}
+.ph svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ibtn{width:48px;height:48px;border:0;background:none;color:#E2E2E9;display:grid;place-items:center;border-radius:24px;padding:0;cursor:pointer}
+.navi{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:12px;line-height:16px;color:#C2C7D0;text-decoration:none;font-weight:500}
+.pill{width:64px;height:32px;border-radius:16px;display:grid;place-items:center}
+.tile{aspect-ratio:1/1;position:relative}
+.dur{position:absolute;right:6px;bottom:6px;display:flex;align-items:center;gap:2px;font-size:12px;line-height:16px;color:#FFFFFF;font-weight:500;text-shadow:0 0 4px rgba(0,0,0,.8)}
+.dur svg{width:14px;height:14px}
+</style>
+</helmet>
+<div class="ph" style="width: 390px; height: 844px; background: #0F1114; color: #E2E2E9; font-family: 'Noto Sans JP', sans-serif; display: flex; flex-direction: column; position: relative; overflow: hidden">
+  <header style="height: 64px; display: flex; align-items: center; gap: 4px; padding: 0 4px 0 8px; flex-shrink: 0">
+    <button class="ibtn" aria-label="ライブラリを切り替え（現在: Personal）" style="width: auto; padding: 0 8px 0 12px; display: flex; align-items: center; gap: 4px; border-radius: 12px">
+      <span style="font-size: 22px; line-height: 28px; font-weight: 700">Personal</span>
+      <svg viewBox="0 0 24 24" aria-hidden="true" style="width: 20px; height: 20px"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    <div style="flex: 1"></div>
+    <button class="ibtn" aria-label="並び替え"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M6 12h12M10 18h4"/></svg></button>
+    <button class="ibtn" aria-label="今すぐロック"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></button>
+  </header>
+  <main style="flex: 1; overflow: hidden; min-height: 0">
+    <sc-for list="{{sections}}" as="sec" hint-placeholder-count="3">
+      <section>
+        <h2 style="margin: 0; padding: 16px 16px 8px; font-size: 14px; line-height: 20px; font-weight: 700; color: #E2E2E9">{{sec.label}}</h2>
+        <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px">
+          <sc-for list="{{sec.tiles}}" as="t" hint-placeholder-count="8">
+            <button class="tile" aria-label="{{t.label}}" style="background: {{t.bg}}; border: 0; padding: 0">
+              <sc-if value="{{t.video}}" hint-placeholder-val="{{false}}">
+                <span class="dur"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor" stroke="none"/></svg></span>
+              </sc-if>
+            </button>
+          </sc-for>
+        </div>
+      </section>
+    </sc-for>
+  </main>
+  <a href="Upload.dc.html" aria-label="写真・動画を追加" style="position: absolute; right: 16px; bottom: 156px; height: 56px; padding: 0 20px 0 16px; border-radius: 16px; background: #9ECAFF; color: #003258; display: flex; align-items: center; gap: 8px; text-decoration: none; font-size: 15px; font-weight: 700; box-shadow: 0 4px 12px rgba(0,0,0,.45)">
+    <svg viewBox="0 0 24 24" aria-hidden="true" style="stroke-width: 2.2"><path d="M12 5v14M5 12h14"/></svg>追加
+  </a>
+  <a href="Transfers.dc.html" aria-label="転送の詳細を開く" style="height: 56px; flex-shrink: 0; background: #171B20; border-top: 1px solid #2A2E33; display: flex; align-items: center; gap: 12px; padding: 0 8px 0 16px; text-decoration: none; color: #E2E2E9; position: relative">
+    <svg viewBox="0 0 24 24" aria-hidden="true" style="color: #9ECAFF"><path d="M12 20V9M7 14l5-5 5 5M5 4h14"/></svg>
+    <span style="flex: 1; display: flex; flex-direction: column; min-width: 0">
+      <span style="font-size: 14px; line-height: 20px; font-weight: 500">アップロード中 2 / 5</span>
+      <span style="font-size: 12px; line-height: 16px; color: #C2C7D0">残り 310 MB · 失敗 0</span>
+    </span>
+    <span style="width: 48px; height: 48px; display: grid; place-items: center"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></span>
+    <span style="position: absolute; left: 0; right: 0; top: -1px; height: 2px; background: #2A2E33"><span style="display: block; width: 42%; height: 2px; background: #9ECAFF"></span></span>
+  </a>
+  <nav aria-label="メイン" style="height: 80px; flex-shrink: 0; background: #171B20; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr))">
+    <a class="navi" href="Main.dc.html" aria-current="page" style="color: #E2E2E9"><span class="pill" style="background: #3B4858; color: #9ECAFF"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg></span>写真</a>
+    <a class="navi" href="Albums.dc.html"><span class="pill"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="14" height="14" rx="2"/><path d="M7 3h12a2 2 0 0 1 2 2v12"/></svg></span>アルバム</a>
+    <a class="navi" href="Import.dc.html"><span class="pill"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></span>取り込み</a>
+    <a class="navi" href="Settings.dc.html"><span class="pill"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg></span>設定</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var tones = ['#3A4A5C','#5C4B3A','#2F4A43','#4A3A52','#56503A','#3A5258','#4F3A3A','#3E4A33','#2E3A52','#5A4A44','#384447','#4B4458'];
+    var vids = { 2: '0:42', 9: '3:15', 17: '1:08' };
+    var n = 0;
+    function mk(count) {
+      var out = [];
+      for (var i = 0; i < count; i++) {
+        var d = vids[n];
+        out.push({ bg: tones[(n * 5) % tones.length], video: !!d, dur: d || '', label: d ? '動画' : '写真' });
+        n++;
+      }
+      return out;
+    }
+    return {
+      sections: [
+        { label: '今日', tiles: mk(7) },
+        { label: '10月8日 木曜日', tiles: mk(12) },
+        { label: '10月2日 金曜日', tiles: mk(12) }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

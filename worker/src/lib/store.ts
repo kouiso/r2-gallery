@@ -80,6 +80,8 @@ export interface GlobalAlbum {
   title: string;
   subtitle?: string;
   items: GlobalAlbumItem[];
+  /** ゴミ箱にいる物も含めた並び（`lib:key`）。複数枚を戻しても元の並びに戻すための控え。 */
+  trashOrder?: string[];
 }
 
 export interface AlbumsFile {
@@ -129,14 +131,29 @@ export async function mutateAlbums(
   throw new Error("albums_store_contended");
 }
 
-export async function mediaFor(env: Env, origin: string, lib: string, item: IndexItem) {
+export async function mediaFor(
+  env: Env,
+  origin: string,
+  lib: string,
+  item: IndexItem,
+  // 一覧の索引がサムネの有無を知っている時に渡す。渡すと 1 件ずつの head を省ける
+  // （200 件のページで head が 200 回走っていた）
+  thumbKnown?: boolean,
+) {
   const type = mediaType(item.key);
   const thumbKey = item.thumb ?? item.key;
   // Images always decode (the /t/ route falls back to the original). For videos a
   // fallback would serve the video itself to an <img>, so only sign a thumb URL
   // when a real image exists: a declared `thumb`, or a generated `.webp` in META.
+  // 索引が「無い」と言う動画だけは実物を確かめる。取り込みの道具は Worker を通さずに
+  // サムネを置くので、索引が追いつくまで動画の絵が出ないままになるのを避ける
+  // （画像は原本へフォールバックできるので、索引の答えのままでよい）
+  const trustIndex = thumbKnown === true || (thumbKnown === false && type !== "video");
   const thumbStored =
-    !!item.thumb || !!(await env.META.head(`${SYSTEM_PREFIX}thumbs/${lib}/${thumbKey}.webp`));
+    !!item.thumb ||
+    (trustIndex
+      ? thumbKnown === true
+      : !!(await env.META.head(`${SYSTEM_PREFIX}thumbs/${lib}/${thumbKey}.webp`)));
   // 画像は /t/ が原本へフォールバックするので常に署名するが、サムネ未生成かは
   // クライアントがバックフィル対象を決められるよう thumbStored で別途伝える。
   const hasThumb = type === "image" ? true : thumbStored;

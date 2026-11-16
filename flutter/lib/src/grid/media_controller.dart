@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../api/models.dart';
@@ -50,16 +52,21 @@ class MediaController extends ChangeNotifier implements SelectionSurface {
   bool get allSelected => _g?.allSelected(_lib) ?? false;
 
   @override
-  void toggleAll() => g.toggleAll(_lib);
+  bool get selectingAll => _g?.selectAllBusy ?? false;
+
+  @override
+  void toggleAll() {
+    if (allSelected) {
+      g.toggleAll(_lib);
+    } else {
+      // 残りページを取り切ってから選ぶ。読み込み済み分だけ選ぶと
+      // 「全部選んだはずなのに保存されない」に見える
+      unawaited(g.selectAllFully(_lib));
+    }
+  }
 
   @override
   void clearSelection() => g.clearSelection();
-
-  // 操作を始めた時の一覧とライブラリを掴んでおく。終わる前に切り替えても別の一覧を取り直さない
-  Future<void> Function() _refresher() {
-    final g = this.g, lib = _lib;
-    return () => g.refresh(lib);
-  }
 
   @override
   List<SelAction> selectionActions(BuildContext context) {
@@ -85,24 +92,34 @@ class MediaController extends ChangeNotifier implements SelectionSurface {
 
   Future<void> trashSelected(BuildContext context) async {
     if (!ensureWritable(context, app, _lib, WriteAction.trash)) return;
+    final targets = g.selection.toList();
+    if (targets.isEmpty) return;
+    await _trashOptimistic(
+        context, targets, (failed) => '$failed件をゴミ箱に移せませんでした');
+  }
+
+  /// 一覧からすぐ外し、「元に戻す」もすぐ出す。送れなかった行は元の位置へ戻して知らせる。
+  /// 一覧と lib は始めた時のものを掴む。終わる前にライブラリを切り替えても別の一覧を触らない
+  Future<void> _trashOptimistic(BuildContext context, List<SelKey> targets,
+      String Function(int failed) failMessage) async {
     final messenger = ScaffoldMessenger.of(context);
     final g = this.g, lib = _lib;
-    final refresh = _refresher();
-    final res = await g.bulkTrash(lib, refresh);
-    // 送れた分の「元に戻す」は失敗の知らせを閉じるのを待たずに出す（6秒しかない）
-    // trashKey を返さん Worker だと戻す手段が無い。移した事実だけは伝える（#148）
-    if (res.trashed > 0 && res.receipts.isEmpty) {
-      messenger.showSnackBar(
-          SnackBar(content: Text('${res.trashed}件をゴミ箱に移しました')));
-    }
-    final undo = offerTrashUndo(
+    final pending = g.trashOptimistic(lib, targets);
+    // 「元に戻す」は失敗の知らせを閉じるのを待たずに出す（6秒しかない）
+    final undo = offerOptimisticTrashUndo(
       messenger,
-      app.api,
-      res.receipts,
-      onRestored: refresh,
+      count: pending.count,
+      done: pending.done,
+      onUndo: () async {
+        final res = await g.undoTrash(lib, pending);
+        // 戻した行をサーバーの今の状態（新しい署名URLなど）にそろえる。読み進めた位置は崩さない
+        unawaited(g.softRefresh(lib));
+        return res;
+      },
     );
+    final res = await pending.done;
     if (res.failed > 0 && context.mounted) {
-      await _alert(context, '${res.failed}件をゴミ箱に移せませんでした');
+      await _alert(context, failMessage(res.failed));
     }
     await undo;
   }
@@ -121,14 +138,17 @@ class MediaController extends ChangeNotifier implements SelectionSurface {
     final outcome =
         await pickAlbumAndAdd(context, app, lib: lib, targets: targets);
     if (outcome == null || !context.mounted) return;
-    if (!outcome.ok) {
-      await _alert(context, outcome.error!);
-      return;
-    }
+    // 送り終わるのを待たずに選択を解いて知らせる。失敗したら選択を戻して理由を出す
+    final picked = {...g.selection};
     g.clearSelection();
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('${targets.length}件をアルバムに追加しました')));
+    final messenger = ScaffoldMessenger.of(context);
+    final shown = messenger.showSnackBar(
+        SnackBar(content: Text('${targets.length}件をアルバムに追加しました')));
+    final err = await outcome.done;
+    if (err == null) return;
+    shown.close();
+    if (g.selection.isEmpty) g.reselect(picked);
+    if (context.mounted) await _alert(context, err);
   }
 
   Future<void> saveSelectedOffline(BuildContext context) async {
@@ -250,35 +270,21 @@ class MediaController extends ChangeNotifier implements SelectionSurface {
       case 'album':
         final outcome = await pickAlbumAndAdd(context, app,
             lib: itemLib, targets: [(itemLib, item.key)]);
-        if (outcome != null && !outcome.ok && context.mounted) {
-          await _alert(context, outcome.error!);
-        }
+        final err = await outcome?.done;
+        if (err != null && context.mounted) await _alert(context, err);
       case 'trash':
         await trashOne(context, item);
     }
   }
 
   /// 1枚をすぐゴミ箱へ送り、「元に戻す」を出す（確認ダイアログは置かない。KMP 版と同じ）。
+  /// 選んでいた1枚なら選択からも外れる（trashOptimistic が外す）。
   Future<void> trashOne(BuildContext context, MediaItem item) async {
     if (!ensureWritable(context, app, item.lib ?? _lib, WriteAction.trash)) {
       return;
     }
-    final messenger = ScaffoldMessenger.of(context);
-    final g = this.g, lib = _lib;
-    final refresh = _refresher();
-    final itemLib = item.lib ?? lib;
-    final res = await trashAll(app.api, [(lib: itemLib, key: item.key)]);
-    if (res.failed > 0) {
-      if (context.mounted) await _alert(context, 'ゴミ箱への移動に失敗しました');
-      return;
-    }
-    // 選んでいた1枚が消えるので、選択からも外して件数を合わせる
-    if (g.selection.contains(g.selKeyOf(item, lib))) {
-      g.toggleSelect(item, lib);
-    }
-    await refresh();
-    await offerTrashUndo(messenger, app.api, res.receipts,
-        onRestored: refresh);
+    await _trashOptimistic(
+        context, [g.selKeyOf(item, _lib)], (_) => 'ゴミ箱への移動に失敗しました');
   }
 
   Future<void> _alert(BuildContext context, String msg) => showDialog<void>(

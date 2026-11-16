@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -30,14 +31,35 @@ abstract class TransferApi {
   Future<void> multipartComplete(
       String lib, String key, String uploadId, List<UploadPart> parts);
   Future<void> multipartAbort(String lib, String key, String uploadId);
+
+  /// 積んだ時の接続へ abort を送る。行が覚えている接続に送るのが正しいので、
+  /// 送り先ごと渡す。接続を切り替えられる実装を持たない場合は今の接続へ送る
+  Future<void> multipartAbortOn(String endpoint, String token, String lib,
+          String key, String uploadId) =>
+      multipartAbort(lib, key, uploadId);
+  /// [sha256] は重複確認で計算済みの時だけ渡す（Worker へ x-content-sha256 で添える）。
   Future<void> putObject(String lib, String key, Uint8List bytes, String mime,
-      {CancelToken? cancelToken, void Function(int sent)? onProgress});
+      {CancelToken? cancelToken,
+      void Function(int sent)? onProgress,
+      String? sha256});
   Future<void> putThumb(String lib, String key, Uint8List bytes);
   Future<Uint8List> fetchBytes(String url,
       {CancelToken? cancelToken, void Function(int got, int total)? onProgress});
 
+  /// そのキーに今ある物が、手元の中身（local）と同じか。無ければ false。
+  /// 同名・同サイズだけでは同じと決められないので、中身をストリームで逐次照合する。
+  /// 違うバイトで打ち切るので、別物なら最後まで読まない。[onProgress] には
+  /// 照合の済んだバイト数が来る（#144）。
+  Future<bool> storedMatches(
+      String lib, String key, int size, Stream<List<int>> Function() local,
+      {CancelToken? cancelToken, void Function(int matched)? onProgress});
+
   /// 署名URLは期限が切れるので、一覧から取り直す。見つからなければ null。
   Future<String?> itemUrl(String lib, String key);
+
+  /// アップロード確定後に、そのキーをアルバムへ入れる（#102）。
+  /// 失敗しても上げ直しにはしないので、呼び出し側が結果だけ記録する。
+  Future<void> albumAdd(String lib, String albumId, List<String> keys);
 }
 
 /// 本物の ApiClient の接続情報を使う実装。パート単位の呼び出しは ApiClient に無いのでここで持つ。
@@ -70,9 +92,15 @@ class ApiClientTransferApi implements TransferApi {
     return ApiError(0, e.toString());
   }
 
-  Future<Map<String, Object?>> _postJson(String url, Object body) async {
+  Future<Map<String, Object?>> _postJson(String url, Object body) =>
+      _postJsonConn(_conn, url, body);
+
+  Future<Map<String, Object?>> _postJsonConn(
+      Connection conn, String url, Object body) async {
     try {
-      final res = await _dio.post<Object?>(url, data: body, options: _auth());
+      final res = await _dio.post<Object?>(url,
+          data: body,
+          options: Options(headers: {'Authorization': 'Bearer ${conn.token}'}));
       final d = res.data;
       return d is Map<String, Object?> ? d : const {};
     } catch (e) {
@@ -133,15 +161,32 @@ class ApiClientTransferApi implements TransferApi {
   }
 
   @override
+  Future<void> multipartAbortOn(String endpoint, String token, String lib,
+      String key, String uploadId) async {
+    final conn = Connection(endpoint, token);
+    await _postJsonConn(
+        conn,
+        '${conn.endpoint}/v1/${Uri.encodeComponent(lib)}/objects/multipart/abort',
+        {'key': key, 'uploadId': uploadId});
+  }
+
+  @override
   Future<void> putObject(String lib, String key, Uint8List bytes, String mime,
-          {CancelToken? cancelToken, void Function(int sent)? onProgress}) =>
+          {CancelToken? cancelToken,
+          void Function(int sent)? onProgress,
+          String? sha256}) =>
       api.putObject(lib, key, bytes, mime,
           cancelToken: cancelToken,
-          onProgress: onProgress == null ? null : (s, _) => onProgress(s));
+          onProgress: onProgress == null ? null : (s, _) => onProgress(s),
+          sha256: sha256);
 
   @override
   Future<void> putThumb(String lib, String key, Uint8List bytes) =>
       api.putThumb(lib, key, bytes);
+
+  @override
+  Future<void> albumAdd(String lib, String albumId, List<String> keys) =>
+      api.albumAdd(lib, albumId, keys);
 
   @override
   Future<Uint8List> fetchBytes(String url,
@@ -156,6 +201,56 @@ class ApiClientTransferApi implements TransferApi {
       final d = res.data;
       if (d == null) return Uint8List(0);
       return d is Uint8List ? d : Uint8List.fromList(d);
+    } catch (e) {
+      throw _err(e);
+    }
+  }
+
+  @override
+  Future<bool> storedMatches(
+      String lib, String key, int size, Stream<List<int>> Function() local,
+      {CancelToken? cancelToken,
+      void Function(int matched)? onProgress}) async {
+    final there = await api.objectAt(lib, key);
+    if (there == null || (there.size != null && there.size != size)) return false;
+    try {
+      final res = await _dio.get<ResponseBody>(there.url,
+          options: Options(responseType: ResponseType.stream),
+          cancelToken: cancelToken);
+      final body = res.data;
+      if (body == null) throw const ApiError(502, '保存済みファイルを確認できません');
+      // 両側をストリームで逐次比べる。違うバイトが出た時点で切り、
+      // 「同じ」と決める時だけ全体を読む（#144）
+      final it = StreamIterator(local());
+      var rest = const <int>[];
+      var matched = 0;
+      var localHasMore = false;
+      try {
+        await for (final rc in body.stream) {
+          var off = 0;
+          while (off < rc.length) {
+            while (rest.length < rc.length - off) {
+              if (!await it.moveNext()) return false; // 手元が短い＝別物
+              rest = [...rest, ...it.current];
+            }
+            final need = rc.length - off;
+            for (var i = 0; i < need; i++) {
+              if (rest[i] != rc[off + i]) return false;
+            }
+            rest = rest.sublist(need);
+            off += need;
+          }
+          matched += rc.length;
+          onProgress?.call(matched);
+        }
+        // 受け側が尽きた後に手元に余りがあれば別物
+        localHasMore = rest.isNotEmpty || await it.moveNext();
+      } finally {
+        await it.cancel();
+      }
+      // 受け取った量が公称サイズと違う、または手元に残りがあれば別物
+      if (matched != size || localHasMore) return false;
+      return true;
     } catch (e) {
       throw _err(e);
     }

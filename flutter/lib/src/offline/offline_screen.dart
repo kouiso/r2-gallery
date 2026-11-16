@@ -8,6 +8,7 @@ import 'package:video_player/video_player.dart';
 import '../state/app_state.dart';
 import '../transfer/transfer_rows.dart';
 import '../ui/app_lock_layer.dart';
+import '../ui/settings_tab.dart' show SettingsGroup;
 import '../ui/theme.dart';
 import '../viewer/screen_awake.dart';
 import '../playback/mobile_playback.dart';
@@ -133,44 +134,41 @@ class _OfflineSettingsCardState extends State<OfflineSettingsCard> {
       ));
     }
     final n = _count;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Card(
-        child: Column(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.download_done, color: AppColors.accent),
-              title: const Text('オフライン保存'),
-              subtitle: Text(!widget.app.offlineAccessible
-                  ? '接続とロック解除が必要です'
-                  : _loadError ? '保存の一覧を読めませんでした'
-                  : n == null ? '…' : '$n件 · ${formatBytes(_bytes ?? 0)} · このアプリ内のみ',
-                  style:
-                      const TextStyle(color: AppColors.textDim, fontSize: 12)),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: !widget.app.offlineAccessible ? null : () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(builder: (_) => OfflineListScreen(app: widget.app))),
-            ),
-            if (_legacy)
-              const Padding(
-                padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: Text('以前の保存は接続先を確認できないため隔離しています。自動移行・削除はしていません。'),
-              ),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: Text('保存は接続ごとに分かれます。ログアウトや接続切替では消しません。アプリの削除やOSのデータ消去で失われます。'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_sweep_outlined,
-                  color: AppColors.danger),
-              title: const Text('オフライン保存をすべて削除'),
-              enabled: (n ?? 0) > 0,
-              onTap: _deleteAll,
-            ),
-          ],
-        ),
+    return SettingsGroup(children: [
+      ListTile(
+        leading: const Icon(Icons.download_done, color: AppColors.accent),
+        title: const Text('端末に暗号化して保存中'),
+        subtitle: Text(!widget.app.offlineAccessible
+            ? '接続とロック解除が必要です'
+            : _loadError ? '保存の一覧を読めませんでした'
+            : n == null ? '…' : '$n件 · ${formatBytes(_bytes ?? 0)} · このアプリ内のみ',
+            style: AppText.caption.copyWith(color: AppColors.textDim)),
+        // 一覧への入口だと分かるよう、デザインどおり文字も添える
+        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text('一覧',
+              style: AppText.body.copyWith(color: AppColors.textDim)),
+          Icon(Icons.chevron_right, color: AppColors.textDim),
+        ]),
+        onTap: !widget.app.offlineAccessible ? null : () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => OfflineListScreen(app: widget.app))),
       ),
-    );
+      if (_legacy)
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: Text('以前の保存は接続先を確認できないため隔離しています。自動移行・削除はしていません。'),
+        ),
+      const Padding(
+        padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+        child: Text('保存は接続ごとに分かれます。ログアウトや接続切替では消しません。アプリの削除やOSのデータ消去で失われます。'),
+      ),
+      ListTile(
+        leading:
+            const Icon(Icons.delete_sweep_outlined, color: AppColors.danger),
+        title: const Text('オフライン保存をすべて削除'),
+        enabled: (n ?? 0) > 0,
+        onTap: _deleteAll,
+      ),
+    ]);
   }
 }
 

@@ -1,11 +1,169 @@
+import { journalBestEffort, rowOf } from "../lib/catalog";
 import { MAX_SIMPLE_UPLOAD, SYSTEM_PREFIX, TRASH_PREFIX } from "../lib/const";
 import type { Env } from "../lib/env";
-import { readable, writable } from "../lib/env";
+import { bucketFor, readable, writable } from "../lib/env";
+import { dropHashBestEffort, isSha256Hex, recordHashBestEffort } from "../lib/hashes";
 import { assertUserKey, HttpError, json, readJson, ref } from "../lib/http";
 import { handleImport } from "../lib/import";
-import { completeCreateOnly, copyObject, createOnly, moveObject } from "../lib/objects";
-import { loadIndex, mutateAlbums } from "../lib/store";
-import type { AlbumsFile, GlobalAlbum } from "../lib/store";
+import {
+  completeCreateOnly,
+  copyObject,
+  createOnly,
+  dropThumbBestEffort,
+  moveObject,
+} from "../lib/objects";
+import { loadAlbums, loadIndex, mutateAlbums } from "../lib/store";
+import type { AlbumsFile, GlobalAlbum, GlobalAlbumItem } from "../lib/store";
+import { trashDuplicate } from "./duplicates";
+
+const thumbPath = (lib: string, key: string) => `${SYSTEM_PREFIX}thumbs/${lib}/${key}.webp`;
+
+/** 新しく置いた物を索引へ足す。同名の古いサムネは消した後なので、サムネ無しとして足す。 */
+const journalCreated = (env: Env, lib: string, obj: R2Object) =>
+  journalBestEffort(env, lib, { put: [rowOf(obj)], unthumb: [obj.key] });
+
+// ゴミ箱へ送る時に外したアルバムの控え。復元で元のアルバムへ戻すために、
+// 外した項目そのものを META に置く（R2 のゴミ箱には載せない）。
+interface TrashAlbumMembership {
+  albumId: string;
+  item: GlobalAlbumItem;
+}
+const trashAlbumsPath = (lib: string, trashKey: string) =>
+  `${SYSTEM_PREFIX}trash-albums/${lib}/${trashKey.slice(TRASH_PREFIX.length)}.json`;
+const refKey = (i: { lib: string; key: string }) => `${i.lib}:${i.key}`;
+
+// 位置の控えは index ではなく「ゴミ箱の物も含めた並び」を albums.json 側に持つ。
+// index だと、複数枚を送った時に後の物の位置が先に抜けた物の分ずれて、戻すと逆順になる。
+function foldGhostsIntoOrder(album: GlobalAlbum) {
+  const order = album.items.map(refKey);
+  const seen = new Set(order);
+  const prev = album.trashOrder ?? [];
+  prev.forEach((id, i) => {
+    if (seen.has(id)) return;
+    // 手前にいた物のうち残っている最寄りの後ろへ。無ければ先頭
+    let at = 0;
+    for (let j = i - 1; j >= 0; j--) {
+      const k = order.indexOf(prev[j]!);
+      if (k >= 0) {
+        at = k + 1;
+        break;
+      }
+    }
+    order.splice(at, 0, id);
+    seen.add(id);
+  });
+  album.trashOrder = order;
+}
+
+// 候補のうち「まだ戻せる物」を返す。期限切れ purge は控えを消さないので、控えがあり、かつ
+// .trash の実体も元の key も無い物だけを purge 済みと見なす。restore は実体を先に元の key へ戻して
+// からアルバムを更新するので、元の key を見ないと、その間に戻している途中の物が落ちてしまう。
+// 控えの一覧と head の結果はリクエスト内で使い回し、mutateAlbums がやり直す時だけ捨てる
+// （並行した trash が書いた控えを見落として落とさないため）。
+function makeProbe(env: Env) {
+  let lists = new Map<string, Promise<Map<string, string[]>>>();
+  let heads = new Map<string, Promise<boolean>>();
+  const listSidecars = (lib: string) => {
+    let p = lists.get(lib);
+    if (!p) {
+      p = (async () => {
+        const out = new Map<string, string[]>();
+        const prefix = `${SYSTEM_PREFIX}trash-albums/${lib}/`;
+        let cursor: string | undefined;
+        do {
+          const listed = await env.META.list({ prefix, cursor });
+          for (const o of listed.objects) {
+            const m = /^(\d+)\/([\s\S]+)\.json$/.exec(o.key.slice(prefix.length));
+            if (!m) continue;
+            const id = `${lib}:${m[2]}`;
+            out.set(id, [...(out.get(id) ?? []), `${TRASH_PREFIX}${m[1]}/${m[2]}`]);
+          }
+          cursor = listed.truncated ? listed.cursor : undefined;
+        } while (cursor);
+        return out;
+      })();
+      lists.set(lib, p);
+    }
+    return p;
+  };
+  const head = (lib: string, bucket: R2Bucket, key: string) => {
+    const id = `${lib}\n${key}`;
+    let p = heads.get(id);
+    if (!p) {
+      p = bucket.head(key).then((o) => o !== null);
+      heads.set(id, p);
+    }
+    return p;
+  };
+  return {
+    reset() {
+      lists = new Map();
+      heads = new Map();
+    },
+    async live(candidates: Set<string>): Promise<Set<string>> {
+      const live = new Set<string>();
+      for (const id of candidates) {
+        const lib = id.slice(0, id.indexOf(":"));
+        const original = id.slice(lib.length + 1);
+        const t = bucketFor(env, lib);
+        const trashKeys = t ? (await listSidecars(lib)).get(id) : undefined;
+        if (!t || !trashKeys) continue;
+        const alive = await Promise.all([
+          head(lib, t.bucket, original),
+          ...trashKeys.map((k) => head(lib, t.bucket, k)),
+        ]);
+        if (alive.some(Boolean)) live.add(id);
+      }
+      return live;
+    },
+  };
+}
+type Probe = ReturnType<typeof makeProbe>;
+
+// 並びの控えが増え続けないよう、アルバムにも今のゴミ箱にも無い key（アルバムから外した物、
+// purge された物）を落とし、ゴミ箱の物が無くなれば控え自体を消す。mutateAlbums の中で呼ぶ。
+// trash は控えを書いてから albums.json を更新するので、並行して送った物は落ちない。
+async function pruneTrashOrder(probe: Probe, album: GlobalAlbum) {
+  const order = album.trashOrder;
+  if (!order) return;
+  const present = new Set(album.items.map(refKey));
+  const ghosts = new Set(order.filter((k) => !present.has(k)));
+  const live = ghosts.size ? await probe.live(ghosts) : ghosts;
+  if (!live.size) {
+    delete album.trashOrder;
+    return;
+  }
+  album.trashOrder = order.filter((k) => present.has(k) || live.has(k));
+}
+
+function insertByTrashOrder(album: GlobalAlbum, item: GlobalAlbumItem) {
+  const id = refKey(item);
+  const order = album.trashOrder ?? [];
+  const idx = order.indexOf(id);
+  // 項目数の2乗にならないよう、現在の位置は一度だけ作る
+  const where = new Map(album.items.map((i, n) => [refKey(i), n]));
+  let at = album.items.length;
+  if (idx >= 0) {
+    // 最寄りの手前の物の後ろ → 無ければ最寄りの後ろの物の前 → 無ければ先頭
+    at = 0;
+    let found = false;
+    for (let j = idx - 1; j >= 0 && !found; j--) {
+      const k = where.get(order[j]!);
+      if (k !== undefined) {
+        at = k + 1;
+        found = true;
+      }
+    }
+    for (let j = idx + 1; j < order.length && !found; j++) {
+      const k = where.get(order[j]!);
+      if (k !== undefined) {
+        at = k;
+        found = true;
+      }
+    }
+  }
+  album.items.splice(at, 0, item);
+}
 
 /** PUT /v1/:lib/objects?key= — small object upload; refuses to overwrite. */
 export async function handlePutObject(req: Request, env: Env, lib: string, url: URL) {
@@ -14,14 +172,33 @@ export async function handlePutObject(req: Request, env: Env, lib: string, url: 
   const len = Number(req.headers.get("content-length") ?? "0");
   if (!req.body || !len) throw new HttpError(411, "length_required");
   if (len > MAX_SIMPLE_UPLOAD) throw new HttpError(413, "too_large_use_multipart");
+  // アプリが計算した中身のハッシュ。R2 に検証させ、通った物だけを重複判定の記録に使う
+  const claimed = req.headers.get("x-content-sha256")?.toLowerCase();
+  if (claimed !== undefined && !isSha256Hex(claimed)) throw new HttpError(400, "bad_sha256");
   if (await bucket.head(key)) throw new HttpError(409, "destination_exists");
-  const put = await bucket.put(key, req.body, {
-    httpMetadata: {
-      contentType: req.headers.get("content-type") ?? "application/octet-stream",
-    },
-    onlyIf: createOnly(),
-  });
+  let put: R2Object | null;
+  try {
+    put = await bucket.put(key, req.body, {
+      httpMetadata: {
+        contentType: req.headers.get("content-type") ?? "application/octet-stream",
+      },
+      onlyIf: createOnly(),
+      ...(claimed ? { sha256: claimed } : {}),
+    });
+  } catch (e) {
+    // 申告と中身が違う時、R2 は保存せずに例外を投げる
+    if (claimed && /sha-?256|checksum|digest/i.test(e instanceof Error ? e.message : String(e))) {
+      throw new HttpError(400, "checksum_mismatch");
+    }
+    throw e;
+  }
   if (!put) throw new HttpError(409, "destination_exists");
+  // 同名の削除済みの物のサムネが残っていると、新しい物に古い絵が出る
+  await dropThumbBestEffort(env, lib, key);
+  await journalCreated(env, lib, put);
+  if (claimed) {
+    await recordHashBestEffort(env, lib, key, { size: put.size, etag: put.etag, sha256: claimed });
+  }
   return json({ key, size: put.size }, 201);
 }
 
@@ -85,6 +262,8 @@ export async function handleMultipartDone(
   });
   if (!uploaded.length) throw new HttpError(400, "bad_parts");
   const obj = await completeCreateOnly(bucket, up, uploaded);
+  await dropThumbBestEffort(env, lib, key);
+  await journalCreated(env, lib, obj);
   return json({ key, size: obj.size }, 201);
 }
 
@@ -116,9 +295,10 @@ export async function handleThumb(req: Request, env: Env, lib: string, url: URL)
   // 配られたまま残っているので、表記違いは弾かず正しい形式で記録し直す
   const actual = sniffThumbType(bytes);
   if (!actual) throw new HttpError(415, "thumb_must_be_jpeg_or_webp");
-  const obj = await env.META.put(`${SYSTEM_PREFIX}thumbs/${lib}/${key}.webp`, bytes, {
+  const obj = await env.META.put(thumbPath(lib, key), bytes, {
     httpMetadata: { contentType: actual },
   });
+  await journalBestEffort(env, lib, { thumb: [key] });
   return json({ key: obj.key, size: obj.size, contentType: actual }, 201);
 }
 
@@ -142,11 +322,27 @@ export async function handleCopyMove(
   if (action === "copy") {
     const src = readable(env, from.lib);
     const put = await copyObject(env, src.bucket, srcKey, dst.bucket, dstKey);
+    await dropThumbBestEffort(env, dst.lib.id, dstKey);
+    await journalCreated(env, dst.lib.id, put);
     return json({ ok: true, to: { lib: dst.lib.id, key: dstKey }, size: put.size });
   }
   const src = writable(env, from.lib);
   if (src.lib.id === dst.lib.id && srcKey === dstKey) throw new HttpError(400, "same_key");
   const put = await moveObject(env, src.bucket, srcKey, dst.bucket, dstKey);
+  await dropThumbBestEffort(env, dst.lib.id, dstKey);
+  if (src.lib.id === dst.lib.id) {
+    await journalBestEffort(env, dst.lib.id, {
+      del: [srcKey],
+      put: [rowOf(put)],
+      unthumb: [dstKey],
+    });
+  } else {
+    await journalBestEffort(env, src.lib.id, { del: [srcKey] });
+    await journalCreated(env, dst.lib.id, put);
+  }
+  await dropHashBestEffort(env, src.lib.id, srcKey);
+  // 元の key は無くなるので、そのサムネは誰からも参照されない。孤児にしない
+  await dropThumbBestEffort(env, src.lib.id, srcKey);
   return json({ ok: true, to: { lib: dst.lib.id, key: dstKey }, size: put.size });
 }
 
@@ -162,28 +358,107 @@ export async function handleLibOps(
   if (action === "mkdir") {
     const prefix = assertUserKey(String(body.prefix ?? "").replace(/\/+$/, ""));
     const key = `${prefix}/.keep`;
-    if (!(await bucket.head(key))) await bucket.put(key, new Uint8Array(0));
+    if (!(await bucket.head(key))) {
+      // フォルダの段は索引から作るので、目印のファイルも索引に足す
+      const marker = await bucket.put(key, new Uint8Array(0));
+      if (marker) await journalBestEffort(env, lib, { put: [rowOf(marker)] });
+    }
     return json({ ok: true, prefix: `${prefix}/` }, 201);
   }
   if (action === "trash") {
     const key = assertUserKey(body.key);
+    if (body.duplicateOf !== undefined) {
+      return trashDuplicate(env, lib, bucket, key, assertUserKey(body.duplicateOf));
+    }
     const trashKey = `${TRASH_PREFIX}${Date.now()}/${key}`;
-    await moveObject(env, bucket, key, bucket, trashKey);
+    const sidecar = trashAlbumsPath(lib, trashKey);
+    // 外す前に控えを書く。ここで失敗すれば何も動かないので、所属が失われない。
+    const snapshot = (data: AlbumsFile): TrashAlbumMembership[] =>
+      data.albums.flatMap((a) => {
+        const item = a.items.find((i) => i.lib === lib && i.key === key);
+        return item ? [{ albumId: a.id, item }] : [];
+      });
+    const planned = snapshot(await loadAlbums(env));
+    const putSidecar = (m: TrashAlbumMembership[]) =>
+      env.META.put(sidecar, JSON.stringify(m), {
+        httpMetadata: { contentType: "application/json" },
+      });
+    if (planned.length) await putSidecar(planned);
+    try {
+      await moveObject(env, bucket, key, bucket, trashKey);
+    } catch (e) {
+      if (planned.length) await env.META.delete(sidecar);
+      throw e;
+    }
+    // アルバムの更新より先に索引から外す。後ろで失敗しても、一覧に消した物が残らない
+    await journalBestEffort(env, lib, { del: [key] });
+    await dropHashBestEffort(env, lib, key);
     // Shared albums must not keep pointing at an object that no longer
     // exists — drop the key from every album that lists it.
-    await mutateAlbums(env, (data) => {
+    let removed: TrashAlbumMembership[] = [];
+    const probe = makeProbe(env);
+    let attempt = 0;
+    await mutateAlbums(env, async (data) => {
+      if (attempt++) probe.reset();
+      // etag 競合で再実行されるので、毎回作り直す
+      removed = snapshot(data);
       for (const a of data.albums) {
+        if (!a.items.some((i) => i.lib === lib && i.key === key)) continue;
+        foldGhostsIntoOrder(a);
         a.items = a.items.filter((i) => !(i.lib === lib && i.key === key));
+        await pruneTrashOrder(probe, a);
       }
     });
+    // 控えを書いてから所属が増減していたら（並行操作）、実際に外した分で書き直す
+    if (JSON.stringify(removed) !== JSON.stringify(planned)) {
+      if (removed.length) await putSidecar(removed);
+      else await env.META.delete(sidecar);
+    }
     return json({ ok: true, trashKey });
   }
   // restore
   const trashKey = typeof body.trashKey === "string" ? body.trashKey : "";
-  const tm = /^\.trash\/(\d+)\/(.+)$/.exec(trashKey);
+  const tm = /^\.trash\/(\d+)\/([\s\S]+)$/.exec(trashKey);
   if (!tm) throw new HttpError(400, "bad_trash_key");
   const original = assertUserKey(tm[2]);
-  await moveObject(env, bucket, trashKey, bucket, original);
+  // 控えがあれば、まだ存在するアルバムへ元の並びで戻す。控えが無い（この修正より前に
+  // 捨てた）物は従来どおりファイルだけ戻る。
+  const sidecar = trashAlbumsPath(lib, trashKey);
+  const saved = await env.META.get(sidecar);
+  // 前回、ファイルは戻ったのにアルバムの更新で失敗した場合のやり直し：移動は済んでいるので飛ばす
+  const resumed = saved && !(await bucket.head(trashKey)) && !!(await bucket.head(original));
+  if (!resumed) {
+    const back = await moveObject(env, bucket, trashKey, bucket, original);
+    // ゴミ箱の間もサムネは残してある。あるかを 1 回だけ確かめて索引に足す
+    // 確かめられなかった時はサムネの有無に触れない。ここで 5xx にすると、本体は戻ったのに
+    // 失敗と伝わり、やり直しは「もうゴミ箱に無い」で通らなくなる
+    const hasThumb = await env.META.head(thumbPath(lib, original)).then(
+      (o) => o !== null,
+      (e: unknown) => {
+        console.error("thumb_probe_failed", lib, original, e);
+        return null;
+      },
+    );
+    await journalBestEffort(env, lib, {
+      put: [rowOf(back)],
+      ...(hasThumb === null ? {} : hasThumb ? { thumb: [original] } : { unthumb: [original] }),
+    });
+  }
+  if (saved) {
+    const memberships = await saved.json<TrashAlbumMembership[]>();
+    const probe = makeProbe(env);
+    let attempt = 0;
+    await mutateAlbums(env, async (data) => {
+      if (attempt++) probe.reset();
+      for (const m of memberships) {
+        const album = data.albums.find((a) => a.id === m.albumId);
+        if (!album || album.items.some((i) => i.lib === lib && i.key === original)) continue;
+        insertByTrashOrder(album, m.item);
+        await pruneTrashOrder(probe, album);
+      }
+    });
+    await env.META.delete(sidecar);
+  }
   return json({ ok: true, key: original });
 }
 
@@ -257,11 +532,15 @@ export async function handleAlbumItemsRemove(req: Request, env: Env, lib: string
   writable(env, lib);
   const keys = new Set(albumKeys(await readJson(req)));
   let removed = 0;
-  const data = await mutateAlbums(env, (d) => {
+  const probe = makeProbe(env);
+  let attempt = 0;
+  const data = await mutateAlbums(env, async (d) => {
+    if (attempt++) probe.reset();
     const album = findAlbum(d, id);
     const before = album.items.length;
     album.items = album.items.filter((i) => !(i.lib === lib && keys.has(i.key)));
     removed = before - album.items.length;
+    await pruneTrashOrder(probe, album);
   });
   const album = findAlbum(data, id);
   return json({ id, removed, count: album.items.length });

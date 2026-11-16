@@ -11,9 +11,11 @@ else
   GITLEAKS="$DIR/gitleaks"
 fi
 BASE="${CI_SCAN_BASE:-}"
+# --first-parent を付けると、マージコミットを HEAD にした時（PR のマージ参照・main への merge push）に
+# PR 側のコミットが第2親にあるため範囲が空になり、何も検査されなくなる。--no-merges だけ残す
 if [ -n "$BASE" ] && [ "$BASE" != "0000000000000000000000000000000000000000" ]; then
   "$GITLEAKS" detect --redact -v --exit-code=2 --source . --log-level=warn \
-    --log-opts="--no-merges --first-parent ${BASE}..${CI_SCAN_HEAD:-HEAD}"
+    --log-opts="--no-merges ${BASE}..${CI_SCAN_HEAD:-HEAD}"
 else
   "$GITLEAKS" detect --redact -v --exit-code=2 --source . --log-level=warn
 fi

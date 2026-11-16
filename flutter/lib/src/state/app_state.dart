@@ -882,6 +882,14 @@ class GalleryState extends ChangeNotifier {
       if (e != epoch) return;
       _adoptFirstPage(page);
       _saveSnapshot(lib);
+      // 古い Worker が type を無視する時、先頭ページが全部除かれても 0 件で止めず
+      // 続きを読み進める。空のままだと「メディアが無い」に見えるし、行が無いので
+      // スクロール由来の続き読み込みも起きない
+      while (e == epoch && !_disposed && items.isEmpty && cursor != null) {
+        final before = cursor;
+        await _fetchNextPage(lib);
+        if (cursor == before) break;
+      }
     } catch (err) {
       if (e != epoch) return;
       // 控えを出していれば消さずに残し、失敗は上の帯で知らせる

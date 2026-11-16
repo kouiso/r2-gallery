@@ -473,6 +473,21 @@ group('検出一覧の種別絞り込み（#26）', () {
     await tester.pump();
     expect(find.text('検出されたメディア（3件）'), findsOneWidget);
   });
+
+  testWidgets('絞り込んだ種類が全部除外済みなら未検出ではなく除外済みと出す', (tester) async {
+    final f = _filter();
+    addTearDown(f.dispose);
+    // 動画だけの一覧で「写真」に絞る → 本当に未検出
+    await tester.pumpWidget(_sheet(const [_video], f));
+    await tester.tap(find.text('写真'));
+    await tester.pump();
+    expect(find.text('この種類のメディアは検出されていません'), findsOneWidget);
+    // 画像もいる一覧で「写真」に絞り、画像を全部除外 → 検出済みだが全部除外
+    await tester.pumpWidget(_sheet(const [_video, _image], f));
+    await tester.tap(find.text('画像をすべて除外'));
+    await tester.pump();
+    expect(find.text('検出はすべて除外されています'), findsOneWidget);
+  });
 });
 
 }

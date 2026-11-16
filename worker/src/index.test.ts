@@ -550,6 +550,22 @@ describe("folders", () => {
       expect(video.total).toBe(2);
     });
 
+    it("sort を付けない type 指定でも絞り込まれる", async () => {
+      const photo = (await (await api("/v1/a/folders?prefix=typed/&type=photo")).json()) as Folders;
+      expect(photo.items.map((i) => i.key).sort()).toEqual(["typed/one.jpg", "typed/two.png"]);
+      const video = (await (await api("/v1/a/folders?prefix=typed/&type=video")).json()) as Folders;
+      expect(video.items.map((i) => i.key).sort()).toEqual(["typed/mov.mp4", "typed/mov2.mov"]);
+      // 続きのカーソルも種別込みで進む
+      if (photo.cursor) {
+        const next = (await (
+          await api(
+            `/v1/a/folders?prefix=typed/&type=photo&cursor=${encodeURIComponent(photo.cursor)}`,
+          )
+        ).json()) as Folders;
+        expect(next.items.every((i) => i.type === "image")).toBe(true);
+      }
+    });
+
     it("知らない type は 400", async () => {
       const res = await api("/v1/a/folders?prefix=typed/&sort=new&type=document");
       expect(res.status).toBe(400);

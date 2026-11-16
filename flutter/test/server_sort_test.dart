@@ -46,6 +46,8 @@ class _SortingApi extends ApiClient {
   String? moreSort;
   // 種別絞り込みのテスト用に、画像と動画が混ざった一覧へ切り替える
   bool mixed = false;
+  // 先頭ページが全部動画（type を無視する古い Worker で端末側フィルタが空にする場面）
+  bool firstPageAllVideo = false;
 
   static final _newest = [
     _it('m.jpg', at: 5, size: 1),
@@ -87,6 +89,11 @@ class _SortingApi extends ApiClient {
     if (failNext) {
       failNext = false;
       throw const ApiError(0, 'offline');
+    }
+    if (firstPageAllVideo) {
+      return cursor == null
+          ? FolderPage(items: [_mixed[1], _mixed[3]], cursor: '2')
+          : FolderPage(items: [_mixed[0]]);
     }
     var all = mixed ? [..._mixed] : _order(sort);
     // 古い Worker は type も無視する。新しい Worker はここで絞り込む
@@ -188,6 +195,18 @@ void main() {
     expect(_keys(g.items), ['p1.jpg']);
     await g.loadMore('a');
     expect(_keys(g.items), ['p1.jpg', 'p2.png']);
+  });
+
+  test('古い Worker で先頭ページが全部除かれても、続きを読み進めて 0 件にしない(#26)', () async {
+    final api = _SortingApi()
+      ..mixed = true
+      ..oldWorker = true
+      ..firstPageAllVideo = true;
+    final g = GalleryState(api, kind: MediaKind.photo);
+    await g.refresh('a');
+    // 1ページ目は全部動画で端末側が空にするが、2ページ目の画像まで読み進める
+    expect(api.calls.length, 2);
+    expect(_keys(g.items), ['p1.jpg']);
   });
 
   test('sort を返さない古い Worker では、端末側で並べ直す', () async {

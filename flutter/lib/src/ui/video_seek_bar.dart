@@ -1,6 +1,8 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import 'theme.dart';
+
 class VideoSeekBar extends StatefulWidget {
   final Duration position;
   final Duration duration;
@@ -155,15 +157,12 @@ class _VideoSeekBarState extends State<VideoSeekBar> {
                             height: 28,
                             alignment: Alignment.center,
                             decoration: BoxDecoration(
-                              color: Colors.black87,
-                              borderRadius: BorderRadius.circular(4),
+                              color: AppColors.scrimPanel,
+                              borderRadius: BorderRadius.circular(AppRadius.small),
                             ),
                             child: Text(
                               shown,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                              ),
+                              style: AppText.caption.copyWith(color: AppColors.onScrimText),
                             ),
                           ),
                         ),
@@ -179,17 +178,11 @@ class _VideoSeekBarState extends State<VideoSeekBar> {
                         children: [
                           Text(
                             shown,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                            ),
+                            style: AppText.caption.copyWith(color: AppColors.onScrimText),
                           ),
                           Text(
                             widget.format(widget.duration),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                            ),
+                            style: AppText.caption.copyWith(color: AppColors.onScrimText),
                           ),
                         ],
                       ),

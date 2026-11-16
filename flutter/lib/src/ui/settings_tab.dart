@@ -12,7 +12,7 @@ import 'lock_gate.dart';
 import 'theme.dart';
 
 // 接続中の印。KMP 版 SuccessGreen と同じ色
-const _connectedGreen = Color(0xFF7FD1A8);
+const _connectedGreen = AppColors.success;
 
 /// 設定タブ: 接続情報・ロック（画面ロック/再ロック/今すぐ/PIN）・切断。
 class SettingsTab extends StatefulWidget {
@@ -122,8 +122,8 @@ class _SettingsTabState extends State<SettingsTab> {
             leading: const Icon(Icons.link_off, color: AppColors.danger),
             title: const Text('切断',
                 style: TextStyle(color: AppColors.danger)),
-            subtitle: const Text('保存した接続情報を消去します',
-                style: TextStyle(color: AppColors.textDim, fontSize: 12)),
+            subtitle: Text('保存した接続情報を消去します',
+                style: AppText.caption.copyWith(color: AppColors.textDim)),
             onTap: () async {
               final ok = await showDialog<bool>(
                 context: context,
@@ -171,10 +171,10 @@ class _SettingsTabState extends State<SettingsTab> {
             title: Text(host != null ? '接続中' : '未接続'),
             subtitle: host != null
                 ? Text('$host · ライブラリ ${app.libraries.length}',
-                    style: const TextStyle(
-                        color: AppColors.textDim, fontSize: 12))
-                : const Text('タップして接続先を設定',
-                    style: TextStyle(color: AppColors.textDim, fontSize: 12)),
+                    style: AppText.caption.copyWith(
+                        color: AppColors.textDim))
+                : Text('タップして接続先を設定',
+                    style: AppText.caption.copyWith(color: AppColors.textDim)),
             // 接続中は接続先の変更へ。切断せずに直せる道を作る
             trailing: host != null
                 ? const Row(mainAxisSize: MainAxisSize.min, children: [
@@ -194,13 +194,13 @@ class _SettingsTabState extends State<SettingsTab> {
         SettingsGroup(children: [
           SwitchListTile(
             secondary: const Icon(Icons.fingerprint, color: AppColors.accent),
-            title: const Text('画面ロックで保護'),
+            title: Text('画面ロックで保護'),
             subtitle: Text(
                 canToggleDeviceLock || app.deviceLockEnabled
                     ? '開くとき指紋・顔・PINを求めます'
                     : 'この端末では画面ロックを使えません。PINで保護できます',
-                style: const TextStyle(
-                    color: AppColors.textDim, fontSize: 12)),
+                style: AppText.caption.copyWith(
+                    color: AppColors.textDim)),
             value: app.deviceLockEnabled && canToggleDeviceLock,
             onChanged: canToggleDeviceLock
                 ? (on) => app.setDeviceLockEnabled(on)
@@ -210,8 +210,8 @@ class _SettingsTabState extends State<SettingsTab> {
             leading:
                 const Icon(Icons.timer_outlined, color: AppColors.accent),
             title: const Text('再ロックまでの時間'),
-            subtitle: const Text('アプリを離れてからロックするまで',
-                style: TextStyle(color: AppColors.textDim, fontSize: 12)),
+            subtitle: Text('アプリを離れてからロックするまで',
+                style: AppText.caption.copyWith(color: AppColors.textDim)),
             trailing: Text(graceLabel(app.relockGraceMs),
                 style: const TextStyle(color: AppColors.textDim)),
             onTap: _pickGrace,
@@ -224,8 +224,8 @@ class _SettingsTabState extends State<SettingsTab> {
           ListTile(
             leading: const Icon(Icons.pin_outlined, color: AppColors.accent),
             title: Text(app.hasPin ? 'PINを変更' : 'PINを設定'),
-            subtitle: const Text('画面ロックの代わりに、PINでも解除できます',
-                style: TextStyle(color: AppColors.textDim, fontSize: 12)),
+            subtitle: Text('画面ロックの代わりに、PINでも解除できます',
+                style: AppText.caption.copyWith(color: AppColors.textDim)),
             trailing: app.hasPin
                 ? TextButton(
                     onPressed: _removePin, child: const Text('解除'))
@@ -247,8 +247,8 @@ class _SettingsTabState extends State<SettingsTab> {
               leading: const Icon(Icons.content_copy_outlined,
                   color: AppColors.accent),
               title: const Text('重複した写真・動画を探す'),
-              subtitle: const Text('中身がまったく同じ物を、今のライブラリから探します',
-                  style: TextStyle(color: AppColors.textDim, fontSize: 12)),
+              subtitle: Text('中身がまったく同じ物を、今のライブラリから探します',
+                  style: AppText.caption.copyWith(color: AppColors.textDim)),
               onTap: () => openDuplicates(context, app, app.activeLib!),
             ),
           ]),
@@ -305,12 +305,7 @@ class SettingsHeading extends StatelessWidget {
         header: true,
         child: Text(
           text,
-          style: const TextStyle(
-            color: AppColors.textDim,
-            fontSize: 13,
-            height: 20 / 13,
-            fontWeight: FontWeight.w700,
-          ),
+          style: AppText.label.copyWith(color: AppColors.textDim),
         ),
       ),
     );
@@ -334,10 +329,10 @@ class AppVersionLabel extends StatelessWidget {
               ? '—'
               : formatAppVersion(info.version, info.buildNumber);
           return ListTile(
-            title: const Text('バージョン'),
+            title: Text('バージョン'),
             trailing: Text(
               value,
-              style: const TextStyle(color: AppColors.textDim, fontSize: 14),
+              style: AppText.body.copyWith(color: AppColors.textDim),
             ),
           );
         },

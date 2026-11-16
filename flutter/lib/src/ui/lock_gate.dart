@@ -115,12 +115,12 @@ class _LockGateState extends State<LockGate> {
         const SizedBox(height: 20),
         const Text('ロック中',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            style: AppText.title),
         const SizedBox(height: 8),
         // 実際は取り込み含め画面全体を覆うので、対象を列挙せず「アプリ全体」と書く
-        const Text('このアプリを開くには、ロックを解除してください。',
+        Text('このアプリを開くには、ロックを解除してください。',
             textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.textDim, fontSize: 13)),
+            style: AppText.caption.copyWith(color: AppColors.textDim)),
         const SizedBox(height: 28),
         if (device) ...[
           FilledButton.icon(
@@ -131,22 +131,22 @@ class _LockGateState extends State<LockGate> {
           ),
           if (app.deviceLockProbe == DeviceLockProbe.unknown) ...[
             const SizedBox(height: 12),
-            const Text('端末の画面ロックを確認できませんでした。ボタンから認証を試せます。',
+            Text('端末の画面ロックを確認できませんでした。ボタンから認証を試せます。',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.textDim, fontSize: 12)),
+                style: AppText.caption.copyWith(color: AppColors.textDim)),
           ],
           if (deviceFailed) ...[
             const SizedBox(height: 12),
-            const Text('認証できませんでした。もう一度お試しください。',
+            Text('認証できませんでした。もう一度お試しください。',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.danger, fontSize: 13)),
+                style: AppText.caption.copyWith(color: AppColors.danger)),
           ],
         ],
         if (device && hasPin) ...[
           const SizedBox(height: 24),
-          const Text('または PIN で解除',
+          Text('または PIN で解除',
               textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textDim, fontSize: 12)),
+              style: AppText.caption.copyWith(color: AppColors.textDim)),
           const SizedBox(height: 12),
         ],
         if (hasPin) ..._pinForm(autofocus: !device),
@@ -171,7 +171,7 @@ class _LockGateState extends State<LockGate> {
           const SizedBox(height: 10),
           Text(error!,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.danger, fontSize: 13)),
+              style: AppText.caption.copyWith(color: AppColors.danger)),
         ],
         const SizedBox(height: 20),
         FilledButton(
@@ -188,13 +188,13 @@ class _LockGateState extends State<LockGate> {
           const SizedBox(height: 20),
           const Text('画面ロックがありません',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              style: AppText.title),
           const SizedBox(height: 8),
-          const Text(
+          Text(
               'このアプリは端末の画面ロック（PIN・パターン・指紋・顔）で保護します。'
               '端末の設定で画面ロックを有効にすると、次回起動時にロックがかかります。',
               textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textDim, fontSize: 13)),
+              style: AppText.caption.copyWith(color: AppColors.textDim)),
           const SizedBox(height: 28),
           FilledButton(
             onPressed: widget.app.unlock,

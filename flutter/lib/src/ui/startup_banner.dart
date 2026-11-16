@@ -29,9 +29,8 @@ class StartupErrorBanner extends StatelessWidget {
                     Expanded(
                       child: Text(
                         '初期化に失敗: $msg',
-                        style: const TextStyle(
+                        style: AppText.caption.copyWith(
                           color: AppColors.textPrimary,
-                          fontSize: 12,
                         ),
                       ),
                     ),

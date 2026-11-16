@@ -560,7 +560,7 @@ class _ViewerScreenState extends State<ViewerScreen>
         ? it.name
         : formatDateTime(it.createdAt!, _now);
     return Container(
-      color: const Color(0x8C000000),
+      color: AppColors.scrimBar,
       child: SafeArea(
         bottom: false,
         child: Row(
@@ -581,20 +581,14 @@ class _ViewerScreenState extends State<ViewerScreen>
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: AppText.label.copyWith(color: AppColors.onScrimText),
                     ),
                     Text(
                       '${_index + 1}件目 · ${it.name}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xCCFFFFFF),
-                        fontSize: 12,
-                      ),
+                      style: AppText.caption.copyWith(
+                          color: AppColors.onScrimDim),
                     ),
                   ],
                 ),
@@ -608,14 +602,14 @@ class _ViewerScreenState extends State<ViewerScreen>
 
   Widget _memo(String note) => Container(
     width: double.infinity,
-    color: const Color(0x8C000000),
+    color: AppColors.scrimBar,
     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
     child: Text(
       note,
       key: const ValueKey('viewer-memo'),
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
-      style: const TextStyle(color: Color(0xEBFFFFFF), fontSize: 14),
+      style: AppText.body.copyWith(color: AppColors.onScrimText),
     ),
   );
 
@@ -657,7 +651,7 @@ class _ViewerScreenState extends State<ViewerScreen>
       ],
     ];
     return Container(
-      color: const Color(0x8C000000),
+      color: AppColors.scrimBar,
       padding: EdgeInsets.only(bottom: bottomSafe),
       child: SizedBox(
         height: viewerActionBarHeight,
@@ -704,7 +698,7 @@ class _ViewerAction extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
-              style: TextStyle(color: color, fontSize: 12),
+              style: AppText.caption.copyWith(color: color),
             ),
           ],
         ),
@@ -778,7 +772,7 @@ class ViewerInfoSheet extends StatelessWidget {
           children: [
             const Text(
               '情報',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              style: AppText.heading,
             ),
             const SizedBox(height: 8),
             _row(
@@ -835,12 +829,11 @@ class ViewerInfoSheet extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(primary, style: const TextStyle(fontSize: 15)),
+              Text(primary, style: AppText.body),
               if (secondary != null)
                 Text(
                   secondary,
-                  style: const TextStyle(
-                    fontSize: 12,
+                  style: AppText.caption.copyWith(
                     color: AppColors.textDim,
                   ),
                 ),

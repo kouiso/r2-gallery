@@ -180,7 +180,7 @@ class _TrashTabState extends State<TrashTab> {
                   child: Material(
                     color: AppColors.surfaceHigh,
                     elevation: 8,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(AppRadius.large),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 6),

@@ -53,7 +53,7 @@ class SelectionActionsBar extends StatelessWidget {
                         Text(a.label,
                             maxLines: 2,
                             textAlign: TextAlign.center,
-                            style: TextStyle(color: color, fontSize: 12)),
+                            style: AppText.caption.copyWith(color: color)),
                       ]);
                     }),
                   ),
@@ -224,9 +224,9 @@ class FolderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: AppColors.surfaceHigh,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(AppRadius.medium),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.medium),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(10),
@@ -237,7 +237,7 @@ class FolderCard extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 12)),
+                style: AppText.caption),
           ]),
         ),
       ),

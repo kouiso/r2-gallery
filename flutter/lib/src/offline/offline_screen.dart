@@ -76,11 +76,11 @@ class _OfflineSettingsCardState extends State<OfflineSettingsCard> {
         leading: const Icon(Icons.download_done, color: AppColors.accent),
         title: const Text('端末に暗号化して保存中'),
         subtitle: Text(n == null ? '…' : '$n件',
-            style: const TextStyle(color: AppColors.textDim, fontSize: 12)),
+            style: AppText.caption.copyWith(color: AppColors.textDim)),
         // 一覧への入口だと分かるよう、デザインどおり文字も添える
-        trailing: const Row(mainAxisSize: MainAxisSize.min, children: [
+        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
           Text('一覧',
-              style: TextStyle(color: AppColors.textDim, fontSize: 14)),
+              style: AppText.body.copyWith(color: AppColors.textDim)),
           Icon(Icons.chevron_right, color: AppColors.textDim),
         ]),
         onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
@@ -151,8 +151,8 @@ class _OfflineListScreenState extends State<OfflineListScreen> {
                       title: Text(r.entry.name,
                           maxLines: 1, overflow: TextOverflow.ellipsis),
                       subtitle: Text(formatBytes(r.entry.size),
-                          style: const TextStyle(
-                              color: AppColors.textDim, fontSize: 12)),
+                          style: AppText.caption.copyWith(
+                              color: AppColors.textDim)),
                       trailing: IconButton(
                         tooltip: '端末から削除',
                         icon: const Icon(Icons.delete_outline),

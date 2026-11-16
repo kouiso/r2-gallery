@@ -99,8 +99,8 @@ class UploadConfirmContent extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2),
                 child: Text('ほか ${summary.more}件',
-                    style: const TextStyle(
-                        color: AppColors.textDim, fontSize: 12)),
+                    style: AppText.caption.copyWith(
+                        color: AppColors.textDim)),
               ),
             ?duplicateCheck,
             if (albumLabel != null && onPickAlbum != null)
@@ -123,8 +123,7 @@ class UploadConfirmContent extends StatelessWidget {
                   readOnly
                       ? 'このライブラリは読み取り専用なので、アップロードできません。'
                       : '保存先のライブラリが見つかりません。接続先を確認してください。',
-                  style:
-                      const TextStyle(color: AppColors.danger, fontSize: 13),
+                  style: AppText.caption.copyWith(color: AppColors.danger),
                 ),
               ),
             const SizedBox(height: 16),
@@ -162,10 +161,10 @@ class _Fact extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 4, right: 16),
               child: Text(label,
-                  style:
-                      const TextStyle(color: AppColors.textDim, fontSize: 12)),
+                  style: AppText.caption.copyWith(
+                      color: AppColors.textDim)),
             ),
-            Expanded(child: Text(value, style: const TextStyle(fontSize: 16))),
+            Expanded(child: Text(value, style: AppText.body)),
             ?trailing,
           ],
         ),
@@ -193,7 +192,7 @@ class _PreviewRow extends StatelessWidget {
       }
     }
     return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(AppRadius.small),
       child: SizedBox(
         width: box,
         height: box,

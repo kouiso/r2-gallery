@@ -11,7 +11,7 @@
     "build": "node -e \"console.log('web dist は .github/workflows/web-deploy.yml が flutter/build/web から pages-dist へ出す。ここでは何もしない')\"",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "test": "vitest run && pnpm test:worker",
+    "test": "vitest run && pnpm test:worker && bash tools/android-probes.sh",
     "test:worker": "cd worker && vitest run",
     "worker:dev": "cd worker && wrangler dev",
     "worker:deploy": "cd worker && wrangler deploy",

@@ -77,3 +77,72 @@ describe("browser manual rescan", () => {
     expect(() => p.window.__r2rescan()).toThrow("media scan failed");
   });
 });
+
+// 動画1本につき v と d の2件を積むので、101本以上で受信側の上限（200件）を超える。
+// 超えた分は seen に記録済みのため二度と届かない。何本でも全件が上限以下の通知に分かれて届くこと
+function videoPage(count) {
+  const videos = Array.from({ length: count }, (_, i) => ({
+    readyState: 1,
+    duration: 60 + i,
+    poster: "",
+    currentSrc: `https://fixture.example/v${i}.mp4`,
+    getAttribute: () => "",
+    querySelectorAll: () => [],
+    addEventListener() {},
+  }));
+  const timers = [];
+  const messages = [];
+  const window = {};
+  runInNewContext(hook, {
+    window,
+    document: {
+      baseURI: "https://fixture.example/",
+      documentElement: {},
+      querySelectorAll: (kind) => (kind === "video" ? videos : []),
+    },
+    performance: { getEntriesByType: () => [] },
+    URL,
+    R2Sniff: { postMessage: (value) => messages.push(JSON.parse(value)) },
+    setTimeout: (callback) => timers.push(callback),
+    MutationObserver: class {
+      observe() {}
+    },
+  });
+  return {
+    window,
+    messages,
+    flush: () => {
+      while (timers.length) timers.shift()();
+    },
+  };
+}
+
+describe("browser hook message size", () => {
+  for (const count of [100, 120, 150, 450]) {
+    it(`delivers every candidate of ${count} videos in slices the receiver reads fully`, () => {
+      const p = videoPage(count);
+      p.flush();
+      expect(p.messages.every((m) => m.length <= 200)).toBe(true);
+      const urls = new Set(
+        p.messages
+          .flat()
+          .filter((e) => e[0] === "v")
+          .map((e) => e[1]),
+      );
+      expect(urls.size).toBe(count);
+      const durs = new Set(
+        p.messages
+          .flat()
+          .filter((e) => e[0] === "d")
+          .map((e) => e[1]),
+      );
+      expect(durs.size).toBe(count);
+    });
+  }
+
+  it("keeps manual rescan results whole so the receiver can slice them", () => {
+    const p = videoPage(150);
+    const all = JSON.parse(p.window.__r2rescan());
+    expect(all).toHaveLength(300);
+  });
+});

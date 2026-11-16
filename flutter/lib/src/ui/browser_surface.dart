@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -28,7 +29,10 @@ const _hookJs = r'''
   var HLS=/\.m3u8(\?|#|$)/i;
   var seen={}, queue=[], timer=null;
   function abs(u){ try{ return new URL(u, document.baseURI).href; }catch(e){ return ''; } }
-  function flush(){ timer=null; if(!queue.length) return; var q=queue; queue=[]; R2Sniff.postMessage(JSON.stringify(q)); }
+  function flush(){ timer=null; if(!queue.length) return; var q=queue; queue=[];
+    // 受信側は1通につき先頭の 200 件しか読まない。seen は消えないので、溢れた分は二度と届かない
+    while(q.length) R2Sniff.postMessage(JSON.stringify(q.splice(0,200)));
+  }
   function push(k,u){
     u=abs(u); if(!/^https?:/i.test(u)) return;
     var id=k+u; if(seen[id]) return; seen[id]=1;
@@ -81,6 +85,17 @@ const _hookJs = r'''
       queue.push(['f',u,d]); if(!timer) timer=setTimeout(flush,250);
     }catch(e){}
   }
+  // video 要素のメタデータが示す再生時間（秒）を送る。ライブ配信の Infinity や未読込の NaN は送らない。
+  // 長さは後から分かる（loadedmetadata）ので、分かった時点で1回だけ送る
+  function pushd(v,u){
+    try{
+      var d=v.duration;
+      if(!isFinite(d) || d<=0) return;
+      u=abs(u); if(!/^https?:/i.test(u)) return;
+      var id='d'+u+'|'+Math.round(d); if(seen[id]) return; seen[id]=1;
+      queue.push(['d',u,d]); if(!timer) timer=setTimeout(flush,250);
+    }catch(e){}
+  }
   function scan(){
     try{
       document.querySelectorAll('img').forEach(function(e){var s=e.currentSrc||e.src; if(s) push('p',s)});
@@ -93,6 +108,14 @@ const _hookJs = r'''
         if(v.currentSrc) srcs.push(v.currentSrc); if(v.src) srcs.push(v.src);
         v.querySelectorAll('source').forEach(function(s){ if(s.src) srcs.push(s.src) });
         srcs.forEach(function(s){ pushv(s,poster,label) });
+        var sendDur=function(){
+          var ss=[];
+          if(v.currentSrc) ss.push(v.currentSrc); if(v.src) ss.push(v.src);
+          v.querySelectorAll('source').forEach(function(s){ if(s.src) ss.push(s.src) });
+          ss.forEach(function(s){ pushd(v,s) });
+        };
+        if(!v.__r2d){ v.__r2d=1; v.addEventListener('loadedmetadata',sendDur); v.addEventListener('durationchange',sendDur); }
+        sendDur();
         // 実コマは「絵が出る状態になった時」に1回だけ取る。まだ読めていなければ
         // 最初のコマが出た所で送る（preload=none でずっと読まない物はそのまま）。
         // 送り先の URL は取る時点で拾い直す（走査の時は src がまだ無く、後から
@@ -145,6 +168,13 @@ const _pauseJs = r'''
 
 /// 1回の通知で受け取る件数の上限。ページは信用できんので、巨大な配列で固まらんようにする。
 const _maxPairsPerMessage = 200;
+
+/// 通知を受信側の上限ごとに分ける。JS の `flush` と同じ大きさで、途中で捨てる件が出ないようにする。
+@visibleForTesting
+List<List<Object?>> sliceMessagePairs(List<Object?> pairs) => [
+  for (var i = 0; i < pairs.length; i += _maxPairsPerMessage)
+    pairs.sublist(i, math.min(i + _maxPairsPerMessage, pairs.length)),
+];
 
 class BrowserRescan extends ChangeNotifier {
   Future<int> Function()? _scan;
@@ -411,7 +441,10 @@ class _BrowserSurfaceState extends State<BrowserSurface>
     // Android は JavaScript の文字列を JSON の文字列として返す。
     if (pairs is String) pairs = jsonDecode(pairs);
     if (pairs is! List) throw const FormatException('invalid scan result');
-    await _onMessage(JavaScriptMessage(message: jsonEncode(pairs)));
+    // 受信側は1通 200 件までしか読まないので、手動の再走査も同じ大きさに分けて渡す
+    for (final slice in sliceMessagePairs(pairs)) {
+      await _onMessage(JavaScriptMessage(message: jsonEncode(slice)));
+    }
     if (!mounted || gen != _gen || id != _scanId) {
       throw StateError('page changed');
     }
@@ -454,6 +487,13 @@ class _BrowserSurfaceState extends State<BrowserSurface>
       };
       if (kind == 's') {
         _collector.capture(url, headers);
+      } else if (kind == 'd') {
+        // 'd' は [要素, URL, 秒] の3つ組。数でない・有限でない・0 以下は長さ不明として捨てる
+        final seconds = p.length > 2 && p[2] is num ? (p[2] as num).toDouble() : 0.0;
+        if (seconds.isFinite && seconds > 0) {
+          _collector.addFromPage(url, headers,
+              duration: Duration(milliseconds: (seconds * 1000).round()));
+        }
       } else if (kind == 'f') {
         // 'f' は [要素, URL, 実コマの dataURL] の3つ組
         final frame = p.length > 2 && p[2] is String ? p[2] as String : '';

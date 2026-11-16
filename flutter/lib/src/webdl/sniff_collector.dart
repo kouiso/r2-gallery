@@ -38,23 +38,32 @@ class SniffCollector {
   }
 
   /// DOM 走査の結果を取り込む。通信で拾済みの URL は、そちらのヘッダを優先して触らない。
-  /// [poster] / [label] / [frame] は video 要素の表紙・カードのタイトル・実コマ。
+  /// [poster] / [label] / [frame] / [duration] は video 要素の表紙・カードのタイトル・実コマ・再生時間。
   /// 通信だけで拾った検出にも、あとで分かった物なら足す
   /// （ファイル名では一覧で見分けがつかないため）。
   DetectedItem? addFromPage(String url, Map<String, String> headers,
-      {String poster = '', String label = '', String frame = ''}) {
+      {String poster = '',
+      String label = '',
+      String frame = '',
+      Duration? duration}) {
     final kind = detectKind(url);
     if (kind == null || !_accept(url)) return null;
+    // 再生時間は動画だけ。画像・音声・HLS（部分区間の長さを全体と取り違えかねない）には付けない
+    final dur = kind == DetectedKind.video && duration != null && duration > Duration.zero
+        ? duration
+        : null;
     final existing = _found[url];
     if (existing == null) {
-      return _found[url] = DetectedItem(url, kind, headers, poster, label, frame);
+      return _found[url] =
+          DetectedItem(url, kind, headers, poster, label, frame, dur);
     }
     // 足せる物が無い通知では同じ物を保つ（ヘッダの優先順位を壊さない）
     if ((poster.isNotEmpty && existing.poster.isEmpty) ||
         (label.isNotEmpty && existing.label.isEmpty) ||
-        (frame.isNotEmpty && existing.frame.isEmpty)) {
-      return _found[url] =
-          existing.withMeta(poster: poster, label: label, frame: frame);
+        (frame.isNotEmpty && existing.frame.isEmpty) ||
+        (dur != null && existing.duration == null)) {
+      return _found[url] = existing.withMeta(
+          poster: poster, label: label, frame: frame, duration: dur);
     }
     return existing;
   }

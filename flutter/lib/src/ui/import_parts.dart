@@ -206,9 +206,11 @@ class DetectedSheetContent extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(
                   horizontal: 24, vertical: 12),
-              // 除外で消えたのか絞り込みで消えたのかを分けて出す（混同すると戻せない）
+              // 除外で消えたのか絞り込みで消えたのかを分けて出す（混同すると戻せない）。
+              // 種類の合う候補自体はあるなら、未検出ではなく全部除外の方
               child: Text(
-                  f != null && f.view != DetectedView.all
+                  f != null && f.view != DetectedView.all &&
+                          f.matchingOf(items).isEmpty
                       ? 'この種類のメディアは検出されていません'
                       : '検出はすべて除外されています',
                   style: const TextStyle(color: AppColors.textDim)),

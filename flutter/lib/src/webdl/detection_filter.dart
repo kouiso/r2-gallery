@@ -38,6 +38,11 @@ class DetectionFilter extends ChangeNotifier {
   List<DetectedItem> visibleOf(List<DetectedItem> items) =>
       [for (final d in items) if (_inView(d) && !excluded.contains(d.url)) d];
 
+  /// 絞り込み条件に合う候補（除外済みも含む）。「この種類は未検出」と
+  /// 「この種類は検出済みだが全部除外」を分けて出すため
+  List<DetectedItem> matchingOf(List<DetectedItem> items) =>
+      [for (final d in items) if (_inView(d)) d];
+
   /// 除外された候補だけを返す（戻す操作の一覧用）
   List<DetectedItem> excludedOf(List<DetectedItem> items) =>
       [for (final d in items) if (excluded.contains(d.url)) d];

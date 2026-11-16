@@ -274,7 +274,10 @@ export async function handleFolders(
   const typeParam = url.searchParams.get("type");
   if (typeParam !== null && !isFolderType(typeParam)) return json({ error: "invalid_type" }, 400);
   const type = (typeParam as FolderType | null) ?? undefined;
-  if (sort) {
+  // 種別だけの指定でも索引側で絞る。並びの指定が無い時は name で view を作る。
+  // カーソルは view の並び内で完結するので、応答の sort は要求通り null のまま返す。
+  const viewSort = sort ?? (type ? ("name" as FolderSort) : null);
+  if (viewSort) {
     // 直下だけの一覧は、1000 件に収まるなら R2 に直接聞く。アプリは上げた直後に
     // 「その key が今あるか」をこの口で確かめるので、索引への追記が遅れても正しく答える。
     const fresh = url.searchParams.get("fresh") === "1";
@@ -298,17 +301,17 @@ export async function handleFolders(
         direct.objects.filter((o) => !isReserved(o.key)).map(rowOf),
         prefix,
         false,
-        sort,
+        viewSort,
         type,
       );
       view.folders = direct.delimitedPrefixes.filter((p) => !isReserved(p));
     } else {
-      view = catalog!.view(prefix, recursive, sort, type);
+      view = catalog!.view(prefix, recursive, viewSort, type);
     }
     // 位置カーソル(<並べ替えの値>|<key>)で続きを探す。件数オフセットだと、先頭に
     // 新しい物が入った時に既に出した分をもう一度出してしまう。
-    const at = parseFolderCursor(sort, cursor);
-    const start = at ? indexAfter(sort, view.points, at) : 0;
+    const at = parseFolderCursor(viewSort, cursor);
+    const start = at ? indexAfter(viewSort, view.points, at) : 0;
     const slice = view.files.slice(start, start + 200);
     const items = await Promise.all(
       slice.map(([key, size, uploaded]) =>

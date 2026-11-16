@@ -232,8 +232,8 @@ class MemKv implements SecretKv {
 Uint8List bytesOf(int n, [int seed = 3]) =>
     Uint8List.fromList(List.generate(n, (i) => (i * 7 + seed) & 0xff));
 
-Future<void> until(bool Function() cond, {String? what}) async {
-  for (var i = 0; i < 500; i++) {
+Future<void> until(bool Function() cond, {String? what, int tries = 500}) async {
+  for (var i = 0; i < tries; i++) {
     if (cond()) return;
     await Future<void>.delayed(const Duration(milliseconds: 10));
   }
@@ -1049,6 +1049,53 @@ void main() {
       ]);
       await until(() => q.tasks.single.status == TransferStatus.done);
       expect(await offline.readBytes('lib', 'p.jpg'), bytesOf(100));
+    });
+
+    // #114/#117 の回帰: 何百件まとめて積んでもキューは全部回し切る
+    test('300件まとめて積んでも全部終わる', () async {
+      for (var i = 0; i < 300; i++) {
+        w.media['bulk-$i.jpg'] = bytesOf(64, i & 0xff);
+      }
+      final q = make();
+      await q.restore();
+      final added = await q.enqueueDownloads('lib', [
+        for (var i = 0; i < 300; i++)
+          MediaItem(
+              key: 'bulk-$i.jpg',
+              type: 'image',
+              url: '${w.base}/m/bulk-$i.jpg?sig=fresh'),
+      ]);
+      expect(added, hasLength(300));
+      await until(() => q.tasks.every((t) => t.finished),
+          what: '300 downloads finished', tries: 1500);
+      expect(q.tasks.where((t) => t.status == TransferStatus.error), isEmpty);
+      expect(await offline.count(), 300);
+      expect(await offline.readBytes('lib', 'bulk-42.jpg'), bytesOf(64, 42));
+      expect(await offline.readBytes('lib', 'bulk-299.jpg'), bytesOf(64, 299));
+    });
+
+    test('300件の途中で取れない物があっても残りは終わり、件数と理由が行に出る',
+        () async {
+      for (var i = 0; i < 300; i++) {
+        if (i != 150) w.media['bulk-$i.jpg'] = bytesOf(64, i & 0xff);
+      }
+      final q = make();
+      await q.restore();
+      await q.enqueueDownloads('lib', [
+        for (var i = 0; i < 300; i++)
+          MediaItem(
+              key: 'bulk-$i.jpg',
+              type: 'image',
+              url: '${w.base}/m/bulk-$i.jpg?sig=fresh'),
+      ]);
+      await until(() => q.tasks.every((t) => t.finished),
+          what: '300 downloads finished', tries: 1500);
+      expect(q.tasks.where((t) => t.status == TransferStatus.done),
+          hasLength(299));
+      final err = q.tasks.singleWhere((t) => t.status == TransferStatus.error);
+      expect(err.itemKey, 'bulk-150.jpg');
+      expect(err.error, isNotEmpty);
+      expect(await offline.count(), 299);
     });
   });
 }

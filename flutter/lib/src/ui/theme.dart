@@ -53,6 +53,55 @@ class AppColors {
   // selection_widgets にはまだ同じ値の直書きが残っており、画面側の作業で置き換える
   static const success = Color(0xFF7FD1A8);
   static const onAccent = Color(0xFF1A1408);
+
+  /// 押せる物の枠（入力欄・枠線ボタン）。地との差 3:1 以上。border は飾りの区切り線専用
+  static const borderStrong = Color(0xFF6E6C7C);
+
+  /// メディアの上に重ねる黒の濃さは2段だけ。バー（細い帯）は 55%、パネル（面）は 80%
+  static const scrimBar = Color(0x8C000000);
+  static const scrimPanel = Color(0xCC000000);
+
+  /// スクリムの上の文字。本文用と補足用の2段
+  static const onScrimText = Color(0xEBFFFFFF);
+  static const onScrimDim = Color(0xCCFFFFFF);
+}
+
+/// Foundation「文字（提案）」の5段。画面への大きさ直書きはこれへ寄せる。
+/// PIN の入力欄（24）は例外としてテーマへ入れない。
+class AppText {
+  /// 画面の見出し。20／28 Bold
+  static const title = TextStyle(
+    fontSize: 20,
+    height: 28 / 20,
+    fontWeight: FontWeight.w700,
+  );
+
+  /// シート見出し・空の状態の見出し。16／24 Bold
+  static const heading = TextStyle(
+    fontSize: 16,
+    height: 24 / 16,
+    fontWeight: FontWeight.w700,
+  );
+
+  /// 本文・行の主表示。15／22
+  static const body = TextStyle(fontSize: 15, height: 22 / 15);
+
+  /// ボタン・日付見出しの太い小字。14／20 Bold
+  static const label = TextStyle(
+    fontSize: 14,
+    height: 20 / 14,
+    fontWeight: FontWeight.w700,
+  );
+
+  /// 補足・タブ名・操作バー名。12／16
+  static const caption = TextStyle(fontSize: 12, height: 16 / 12);
+}
+
+/// 角丸は3段。8 はタイルの選択・小さい部品、14 はボタン・入力欄、16 はカード・シート
+class AppRadius {
+  static const small = 8.0;
+  static const medium = 14.0;
+  static const large = 16.0;
 }
 
 /// デザインのナビ選択ピルは 56x30 / r15 だが、M3 のインジケータ枠は 64x32 固定で

@@ -157,16 +157,16 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
   }
 
   Widget _header() {
-    const dim = TextStyle(color: AppColors.textDim, fontSize: 12);
+    final dim = AppText.caption.copyWith(color: AppColors.textDim);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('${_c.total}組 · ${formatBytes(_c.reclaimable)} 空けられます',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 4),
-          const Text('中身がまったく同じ物だけを並べています。消すかどうかは1件ずつ選べます',
+              style: AppText.heading),
+          SizedBox(height: 4),
+          Text('中身がまったく同じ物だけを並べています。消すかどうかは1件ずつ選べます',
               style: dim),
           if (_c.skipped > 0)
             Text('大きすぎて確認できなかった物: ${_c.skipped} 件', style: dim),
@@ -178,7 +178,7 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
               child: Text(
                   widget.app.writeBlock(widget.lib, WriteAction.trash) ??
                       'このライブラリは読み取り専用です',
-                  style: const TextStyle(color: AppColors.danger, fontSize: 12)),
+                  style: AppText.caption.copyWith(color: AppColors.danger)),
             ),
         ],
       ),
@@ -240,7 +240,7 @@ class _GroupCard extends StatelessWidget {
           children: [
             Text('${items.length}件 · 1件 ${formatBytes(group.size)}',
                 style:
-                    const TextStyle(color: AppColors.textDim, fontSize: 12)),
+                    AppText.caption.copyWith(color: AppColors.textDim)),
             const SizedBox(height: 8),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -296,7 +296,7 @@ class _ItemCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const dim = TextStyle(color: AppColors.textDim, fontSize: 11);
+    final dim = AppText.caption.copyWith(color: AppColors.textDim);
     final thumb = item.thumbUrl;
     final created = item.createdAt;
     final size = item.size;
@@ -312,7 +312,7 @@ class _ItemCell extends StatelessWidget {
             child: GestureDetector(
               onTap: onOpen,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(AppRadius.small),
                 child: SizedBox(
                   width: 128,
                   height: 128,
@@ -336,11 +336,11 @@ class _ItemCell extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: 4),
           Text(item.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12)),
+              style: AppText.caption),
           if (showDir)
             Text(dir.isEmpty ? '（一番上）' : dir,
                 maxLines: 1, overflow: TextOverflow.ellipsis, style: dim),

@@ -10,6 +10,7 @@ import '../viewer/level_gesture.dart';
 import '../viewer/player_system.dart';
 import '../viewer/screen_awake.dart';
 import 'app_lock_layer.dart';
+import 'theme.dart';
 import 'video_levels.dart';
 import 'video_seek_bar.dart';
 
@@ -858,12 +859,12 @@ class _VideoViewState extends State<VideoView>
                       vertical: 10,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xCC000000),
-                      borderRadius: BorderRadius.circular(12),
+                      color: AppColors.scrimPanel,
+                      borderRadius: BorderRadius.circular(AppRadius.small),
                     ),
                     child: Text(
                       _notice!,
-                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      style: AppText.caption.copyWith(color: Colors.white),
                     ),
                   ),
                 ),
@@ -954,7 +955,7 @@ class _VideoViewState extends State<VideoView>
         gradient: LinearGradient(
           begin: Alignment.bottomCenter,
           end: Alignment.topCenter,
-          colors: [Color(0xBF000000), Colors.transparent],
+          colors: [AppColors.scrimBar, Colors.transparent],
         ),
       ),
       padding: const EdgeInsets.only(bottom: 6),
@@ -1015,9 +1016,7 @@ class _VideoViewState extends State<VideoView>
                     padding: const EdgeInsets.all(4),
                     icon: Icon(
                       Icons.tune,
-                      color: _panelOpen
-                          ? const Color(0xFFFFAE00)
-                          : Colors.white,
+                      color: _panelOpen ? AppColors.accent : Colors.white,
                     ),
                     onPressed: _togglePanel,
                   ),
@@ -1073,11 +1072,11 @@ class _Overlay extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: ColoredBox(
-        color: const Color(0x33000000),
+        color: AppColors.scrimBar,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(text, style: const TextStyle(color: Colors.white)),
+            Text(text, style: TextStyle(color: AppColors.onScrimText)),
             const SizedBox(height: 8),
             Icon(icon, color: Colors.white, size: 48, semanticLabel: label),
           ],

@@ -271,8 +271,8 @@ class _OfflineListScreenState extends State<OfflineListScreen> {
                       title: Text(r.entry.name,
                           maxLines: 1, overflow: TextOverflow.ellipsis),
                       subtitle: Text(formatBytes(r.entry.size),
-                          style: const TextStyle(
-                              color: AppColors.textDim, fontSize: 12)),
+                          style: AppText.caption.copyWith(
+                              color: AppColors.textDim)),
                       trailing: IconButton(
                         tooltip: 'アプリ内の保存を削除',
                         icon: const Icon(Icons.delete_outline),

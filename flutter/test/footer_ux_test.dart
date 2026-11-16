@@ -27,7 +27,7 @@ const _clip = MediaItem(
 class _Api extends ApiClient {
   @override
   Future<FolderPage> folder(String libId,
-          {String prefix = '', String? cursor, bool recursive = false}) async =>
+          {String prefix = '', String? cursor, bool recursive = false, bool fresh = false, String? sort, String? type}) async =>
       const FolderPage(items: [_clip]);
   @override
   Future<ReviewMeta?> meta(String libId, String key) async => null;

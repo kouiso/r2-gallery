@@ -79,6 +79,9 @@ class _Api extends ApiClient {
     String prefix = '',
     String? cursor,
     bool recursive = false,
+    bool fresh = false,
+    String? sort,
+    String? type,
   }) async {
     folders++;
     throw StateError('Startup must use the URL already in the list');

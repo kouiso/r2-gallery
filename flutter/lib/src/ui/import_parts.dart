@@ -85,9 +85,9 @@ class DetectionBar extends StatelessWidget {
       onTapHint: '検出したメディアの一覧を開く',
       child: Material(
         color: AppColors.surfaceHigh,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.large),
         child: InkWell(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppRadius.large),
           onTap: onTap,
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: 56),
@@ -157,7 +157,7 @@ class DetectedSheetContent extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Text(block!.message,
                   style:
-                      const TextStyle(color: AppColors.danger, fontSize: 13)),
+                      AppText.caption.copyWith(color: AppColors.danger)),
             ),
           if (f != null) ...[
             // 種別の絞り込みチップ（#26）。件数が多い時に写真だけ・動画だけへ絞る
@@ -227,8 +227,8 @@ class DetectedSheetContent extends StatelessWidget {
                     tilePadding:
                         const EdgeInsets.symmetric(horizontal: 24),
                     title: Text('除外したメディア（${hidden.length}件）',
-                        style: const TextStyle(
-                            color: AppColors.textDim, fontSize: 13)),
+                        style: AppText.caption.copyWith(
+                            color: AppColors.textDim)),
                     children: [
                       for (final d in hidden)
                         ListTile(
@@ -284,8 +284,8 @@ class DetectedSheetContent extends StatelessWidget {
                                   '${kindLabel(d.kind)}${d.duration == null ? '' : ' ${fmtDuration(d.duration!)}'}・$host${d.label.isNotEmpty ? '・${d.displayName}' : ''}${savable ? '' : '・ギャラリー非対応'}',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                      color: AppColors.textDim, fontSize: 12),
+                                  style: AppText.caption.copyWith(
+                                      color: AppColors.textDim),
                                 ),
                               ],
                             ),
@@ -335,7 +335,7 @@ class DetectedThumb extends StatelessWidget {
         if (bytes == null) return _icon;
         final px = (size * MediaQuery.devicePixelRatioOf(context)).round();
         return ClipRRect(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(AppRadius.small),
           child: Image.memory(
             bytes,
             width: size,
@@ -413,8 +413,8 @@ class TransfersSheetContent extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Text('${summary.title} · ${summary.detail}',
-                      style: const TextStyle(
-                          color: AppColors.textDim, fontSize: 12)),
+                      style: AppText.caption.copyWith(
+                          color: AppColors.textDim)),
                 ),
               if (rows.isEmpty)
                 const Padding(
@@ -431,9 +431,7 @@ class TransfersSheetContent extends StatelessWidget {
                       Padding(
                         padding: const EdgeInsets.fromLTRB(24, 12, 8, 2),
                         child: Text('${group.title} ${items.length}',
-                            style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
+                            style: AppText.label.copyWith(
                                 color: group == TransferGroup.attention
                                     ? AppColors.danger
                                     : AppColors.textDim)),
@@ -480,8 +478,7 @@ class _TransferRowTile extends StatelessWidget {
                 Text(r.label,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        fontSize: 12,
+                    style: AppText.caption.copyWith(
                         color: r.status == TransferStatus.error
                             ? AppColors.danger
                             : r.status == TransferStatus.done
@@ -565,10 +562,10 @@ class HistoryList extends StatelessWidget {
                       Text(h.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 13)),
+                          style: AppText.body),
                       Text('${fmtHist(h.at)}・${fmtSize(h.size)}',
-                          style: const TextStyle(
-                              fontSize: 11, color: AppColors.textDim)),
+                          style: AppText.caption.copyWith(
+                              color: AppColors.textDim)),
                     ],
                   ),
                 ),

@@ -77,7 +77,7 @@ class _OpButton extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: color, fontSize: 12),
+                  style: AppText.caption.copyWith(color: color),
                 ),
               ],
             ),
@@ -200,14 +200,14 @@ class SelectCheck extends StatelessWidget {
         shape: BoxShape.circle,
         color: selected
             ? AppColors.accent
-            : Colors.black.withValues(alpha: 0.25),
+            : AppColors.scrimBar,
         border: selected ? null : Border.all(color: Colors.white, width: 2),
       ),
       child: selected
           ? const Icon(
               Icons.check,
               size: 16,
-              color: Color(0xFF1A1408),
+              color: AppColors.onAccent,
               semanticLabel: '選択中',
             )
           : null,

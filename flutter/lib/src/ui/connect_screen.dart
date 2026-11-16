@@ -79,34 +79,30 @@ class _ConnectScreenState extends State<ConnectScreen> {
                   const Icon(Icons.photo_library_outlined,
                       size: 56, color: AppColors.accent),
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     'R2 Gallery',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
+                    style: AppText.title.copyWith(
                       color: AppColors.textPrimary,
                       letterSpacing: 0.5,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   // 黙って入力欄だけ出すと「なぜ聞かれたのか」が分からんので、埋め込み接続の失敗を明示する
                   Text(
                     probeFailed ? '接続先に到達できません' : 'サーバーに接続',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700),
+                    style: AppText.heading.copyWith(
+                        color: AppColors.textPrimary),
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   Text(
                     probeFailed
                         ? '設定済みの接続先に接続できませんでした。ネットワークを確認して接続を試すか、接続先を入力し直してください。'
                         : '写真を見るには接続先を設定してください。取り込みだけなら接続なしで使えます。',
                     textAlign: TextAlign.center,
                     style:
-                        const TextStyle(color: AppColors.textDim, fontSize: 13),
+                        AppText.caption.copyWith(color: AppColors.textDim),
                   ),
                   const SizedBox(height: 36),
                   TextField(
@@ -130,15 +126,15 @@ class _ConnectScreenState extends State<ConnectScreen> {
                     onChanged: (_) => setState(() => error = null),
                   ),
                   const SizedBox(height: 6),
-                  const Text(
+                  Text(
                     'r2g://setup… のペアリング文字列を貼り付けても接続できます',
-                    style: TextStyle(color: AppColors.textDim, fontSize: 12),
+                    style: AppText.caption.copyWith(color: AppColors.textDim),
                   ),
                   if (error != null) ...[
                     const SizedBox(height: 14),
                     Text(error!,
                         style: const TextStyle(
-                            color: AppColors.danger, fontSize: 13)),
+                            color: AppColors.danger)),
                   ],
                   const SizedBox(height: 24),
                   FilledButton(

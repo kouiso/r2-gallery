@@ -249,7 +249,7 @@ class _GalleryTabState extends State<GalleryTab> {
                 child: FloatingActionButton.extended(
                   onPressed: _upload,
                   backgroundColor: AppColors.accent,
-                  foregroundColor: const Color(0xFF1A1408),
+                  foregroundColor: AppColors.onAccent,
                   icon: const Icon(Icons.add),
                   label: const Text('追加'),
                 ),

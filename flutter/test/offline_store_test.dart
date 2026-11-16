@@ -130,28 +130,25 @@ void main() {
   });
 
   test('接続先が違えば同じキーでも別の保存として扱い、切り替えると前の分は出ない', () async {
-    String? endpoint = 'https://a.example';
-    final s = OfflineStore(
-        kv: kv, dir: () async => tmp, endpoint: () => endpoint);
-    await s.saveBytes(
+    final root = OfflineStore(kv: kv, dir: () async => tmp);
+    final a = root.forAccount('https://a.example');
+    await a.saveBytes(
         lib: 'lib', key: 'x.jpg', type: 'image', name: 'x.jpg', plain: Uint8List.fromList([1]));
 
-    endpoint = 'https://b.example';
-    expect(await s.has('lib', 'x.jpg'), isFalse);
-    expect(await s.count(), 0);
-    expect(await s.list(), isEmpty);
-    await s.saveBytes(
+    final b = root.forAccount('https://b.example');
+    expect(await b.has('lib', 'x.jpg'), isFalse);
+    expect(await b.count(), 0);
+    expect(await b.list(), isEmpty);
+    await b.saveBytes(
         lib: 'lib', key: 'x.jpg', type: 'image', name: 'x.jpg', plain: Uint8List.fromList([2]));
-    expect(await s.readBytes('lib', 'x.jpg'), [2]);
+    expect(await b.readBytes('lib', 'x.jpg'), [2]);
     expect(tmp.listSync().length, 2);
 
-    endpoint = 'https://a.example';
-    expect(await s.readBytes('lib', 'x.jpg'), [1]);
-    expect(await s.count(), 1);
+    expect(await a.readBytes('lib', 'x.jpg'), [1]);
+    expect(await a.count(), 1);
   });
 
-  test('接続先なしの時代の目録は、繋がっている接続先の分として読み替える', () async {
-    String? endpoint = 'https://a.example';
+  test('接続先なしの時代の目録は、所有者不明の旧保存として残り接続先の分には出ない', () async {
     kv.values[OfflineStore.dekKey] = base64Encode(Uint8List(32));
     final ek = OfflineStore.entryKey('lib', 'a.jpg');
     final file = OfflineStore.fileNameFor(ek);
@@ -163,15 +160,15 @@ void main() {
       ..._hex('cea7403d4d606b6e074ec5d3baf39d18'),
       ..._hex('d0d1c8a799996bf0265b98b5d48ab919'),
     ]);
-    final s = OfflineStore(
-        kv: kv, dir: () async => tmp, endpoint: () => endpoint);
-    expect(await s.readBytes('lib', 'a.jpg'), Uint8List(16));
+    // 旧保存は所有者を特定できない。接続先のスコープには読み替えず root 側に残す
+    final root = OfflineStore(kv: kv, dir: () async => tmp);
+    expect(await root.readBytes('lib', 'a.jpg'), Uint8List(16));
 
-    // 読み替え済みなので、別の接続先では出ない
-    endpoint = 'https://b.example';
-    final s2 = OfflineStore(
-        kv: kv, dir: () async => tmp, endpoint: () => endpoint);
-    expect(await s2.readBytes('lib', 'a.jpg'), isNull);
+    final a = root.forAccount('https://a.example');
+    expect(await a.has('lib', 'a.jpg'), isFalse);
+    expect(await a.hasLegacyData(), isTrue);
+    final b = root.forAccount('https://b.example');
+    expect(await b.readBytes('lib', 'a.jpg'), isNull);
   });
 
   test('鍵は1回作ったら使い回す（作り直すと前の保存が読めなくなる）', () async {

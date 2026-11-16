@@ -331,7 +331,7 @@ class _HomeShellState extends State<HomeShell> {
                             ),
                             backgroundColor: AppColors.surface,
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20)),
+                                borderRadius: BorderRadius.circular(AppRadius.large)),
                           ),
                         ),
                     ],

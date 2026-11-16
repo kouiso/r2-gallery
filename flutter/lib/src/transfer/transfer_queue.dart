@@ -9,11 +9,17 @@ import 'package:path_provider/path_provider.dart';
 import '../api/client.dart';
 import '../api/models.dart';
 import '../offline/offline_store.dart';
+import '../state/pairing.dart';
 import '../store/kv.dart';
 import '../webdl/media_name.dart';
 import 'transfer_api.dart';
 
 enum TransferStatus { queued, preparing, running, done, error, cancelled, paused }
+
+/// 送っている途中で接続が替わり、その行が動けなくなった印。失敗ではなく待機に戻す
+class _ConnSwitched implements Exception {
+  const _ConnSwitched();
+}
 
 /// アップロードする元。端末ではピッカーが返したファイル、Web ではメモリ上のバイト列。
 class UploadSource {
@@ -83,6 +89,11 @@ class TransferTask {
   /// 重複確認で計算済みの中身のハッシュ。一括PUTの時だけ Worker へ添える。
   String? sha256;
 
+  /// この行を積んだ時の接続。切り替えた後は別の送り先へ送らない・abort も元の接続へ
+  /// 送るために覚えておく（#149）。台帳は端末の秘密置き場なのでトークンを置いてよい
+  String? connEndpoint;
+  String? connToken;
+
   // オフライン保存
   String? itemKey;
   String? itemType;
@@ -130,6 +141,8 @@ class TransferTask {
         'sha256': ?sha256,
         if (itemKey != null) 'itemKey': itemKey,
         if (itemType != null) 'itemType': itemType,
+        if (connEndpoint != null) 'connEndpoint': connEndpoint,
+        if (connToken != null) 'connToken': connToken,
       };
 }
 
@@ -167,10 +180,12 @@ class TransferQueue extends ChangeNotifier {
     this.partSize = 8 * 1024 * 1024,
     bool? persist,
     bool Function()? configured,
+    Connection? Function()? connOf,
   })  : _ledger = ledger ?? const KvLedgerStore(),
         _stageDirFn = stageDir ?? _defaultStageDir,
         _persistOn = persist ?? !kIsWeb,
-        _configured = configured ?? (() => true);
+        _configured = configured ?? (() => true),
+        _connOf = connOf ?? (() => null);
 
   final TransferApi api;
   final OfflineStore offline;
@@ -184,6 +199,9 @@ class TransferQueue extends ChangeNotifier {
   final Future<Directory> Function() _stageDirFn;
   final bool _persistOn;
   final bool Function() _configured;
+
+  /// いまの接続。行がどの接続の物かを見るのと、abort を正しい送り先へ出すのに使う
+  final Connection? Function() _connOf;
 
   /// 同名キーが既にある時に「name (2)」…「name (9)」まで試す回数（KMP 版と同じ）。
   static const maxKeyAttempts = 9;
@@ -358,6 +376,9 @@ class TransferQueue extends ChangeNotifier {
       mime: mime is String ? mime : 'application/octet-stream',
       status: status,
     )..fromLedger = true;
+    final connE = e['connEndpoint'], connT = e['connToken'];
+    if (connE is String) t.connEndpoint = connE;
+    if (connT is String) t.connToken = connT;
     final err = e['error'];
     if (status == TransferStatus.error && err is String) t.error = err;
     if (kind == 'down') {
@@ -407,6 +428,7 @@ class TransferQueue extends ChangeNotifier {
   Future<List<TransferTask>> enqueueUploads(
       String lib, List<UploadSource> sources) async {
     await _restored.future;
+    final conn = _connOf();
     final added = <TransferTask>[];
     for (final s in sources) {
       final t = TransferTask(
@@ -421,6 +443,8 @@ class TransferQueue extends ChangeNotifier {
         ..sourcePath = s.path
         ..memory = s.bytes
         ..sha256 = s.sha256
+        ..connEndpoint = conn?.endpoint
+        ..connToken = conn?.token
         .._reader = s.reader;
       if (t.memory != null) {
         t.size = t.memory!.length;
@@ -449,6 +473,7 @@ class TransferQueue extends ChangeNotifier {
       for (final t in _tasks)
         if (t.kind == 'down' && !t.finished) '${t.lib}\u0000${t.itemKey}',
     };
+    final conn = _connOf();
     final added = <TransferTask>[];
     for (final it in items) {
       final l = it.lib ?? lib;
@@ -464,7 +489,9 @@ class TransferQueue extends ChangeNotifier {
       )
         ..itemKey = it.key
         ..itemType = it.type
-        ..itemUrl = it.url;
+        ..itemUrl = it.url
+        ..connEndpoint = conn?.endpoint
+        ..connToken = conn?.token;
       _tasks.add(t);
       added.add(t);
     }
@@ -529,12 +556,22 @@ class TransferQueue extends ChangeNotifier {
 
   // ---------- 実行 ----------
 
+  /// その行が動いてよい接続か。積んだ時の接続と違う送り先へは送らない（#149）。
+  /// 古い台帳の行は接続を持たないので、今の接続で動かす（切り替え前の従来通り）
+  bool _forThisConn(TransferTask t) {
+    final e = t.connEndpoint;
+    if (e == null) return true;
+    final cur = _connOf();
+    return cur != null && isSameEndpoint(cur.endpoint, e);
+  }
+
   void _pump() {
     if (_disposed || !_restored.isCompleted || !online || !_configured()) return;
     for (final t in _tasks) {
       if (_workers.length >= parallel) break;
       if (t.status != TransferStatus.queued || _workers.containsKey(t.id)) continue;
       if (_waits.containsKey(t.id)) continue;
+      if (!_forThisConn(t)) continue;
       final gen = ++t._gen;
       t.status = TransferStatus.running;
       t.error = null;
@@ -588,7 +625,10 @@ class TransferQueue extends ChangeNotifier {
         await _persist();
         return;
       }
-      if (_isNetwork(e)) {
+      if (e is _ConnSwitched) {
+        // 別の接続の行なので失敗にせず待機に戻す。元の接続へ戻った時に再開される
+        t.status = TransferStatus.queued;
+      } else if (_isNetwork(e)) {
         // 回線の問題は失敗にせず待機に戻し、少し後か接続の回復で自動で再開する
         t.status = TransferStatus.queued;
         _waits[t.id]?.cancel();
@@ -737,6 +777,7 @@ class TransferQueue extends ChangeNotifier {
   }
 
   /// 開いたままの multipart を畳む。キーに紐づくので、名前を変える時は新しく作り直す必要がある。
+  /// セッションは積んだ時の接続に開かれているので、切り替え後でも abort はそちらへ送る（#149）
   Future<void> _abortSession(TransferTask t) async {
     final id = t.uploadId;
     final key = t.key;
@@ -744,7 +785,12 @@ class TransferQueue extends ChangeNotifier {
     t.parts = [];
     if (id == null || key == null) return;
     try {
-      await api.multipartAbort(t.lib, key, id);
+      final e = t.connEndpoint, tok = t.connToken;
+      if (e != null && tok != null) {
+        await api.multipartAbortOn(e, tok, t.lib, key, id);
+      } else {
+        await api.multipartAbort(t.lib, key, id);
+      }
     } on ApiError catch (e) {
       debugPrint('stale multipart not aborted: $e');
     }
@@ -806,6 +852,7 @@ class TransferQueue extends ChangeNotifier {
       final thumb = await maker(File(path), t.mime);
       // 生成中に止められた・接続先が替わったなら、新しい送り先へは上げない
       if (t._token?.isCancelled == true) return;
+      if (!_forThisConn(t)) return;
       if (thumb != null && thumb.isNotEmpty) await api.putThumb(t.lib, key, thumb);
     } on Exception catch (e) {
       debugPrint('upload thumb skipped: $e');
@@ -831,6 +878,9 @@ class TransferQueue extends ChangeNotifier {
     }
     _checkCancelled(token);
     if (bytes.isEmpty) throw const ApiError(0, 'empty download');
+    // 取った先と今の接続が違うなら、新しい接続の袋へは書けない。
+    // 待機へ戻して、元の接続へ戻した時にもう一度取り直す（#149）
+    if (!_forThisConn(t)) throw const _ConnSwitched();
     t.size = bytes.length;
     await offline.saveBytes(
       lib: t.lib,

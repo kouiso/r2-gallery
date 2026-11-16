@@ -31,6 +31,12 @@ abstract class TransferApi {
   Future<void> multipartComplete(
       String lib, String key, String uploadId, List<UploadPart> parts);
   Future<void> multipartAbort(String lib, String key, String uploadId);
+
+  /// 積んだ時の接続へ abort を送る。行が覚えている接続に送るのが正しいので、
+  /// 送り先ごと渡す。接続を切り替えられる実装を持たない場合は今の接続へ送る
+  Future<void> multipartAbortOn(String endpoint, String token, String lib,
+          String key, String uploadId) =>
+      multipartAbort(lib, key, uploadId);
   /// [sha256] は重複確認で計算済みの時だけ渡す（Worker へ x-content-sha256 で添える）。
   Future<void> putObject(String lib, String key, Uint8List bytes, String mime,
       {CancelToken? cancelToken,
@@ -80,9 +86,15 @@ class ApiClientTransferApi implements TransferApi {
     return ApiError(0, e.toString());
   }
 
-  Future<Map<String, Object?>> _postJson(String url, Object body) async {
+  Future<Map<String, Object?>> _postJson(String url, Object body) =>
+      _postJsonConn(_conn, url, body);
+
+  Future<Map<String, Object?>> _postJsonConn(
+      Connection conn, String url, Object body) async {
     try {
-      final res = await _dio.post<Object?>(url, data: body, options: _auth());
+      final res = await _dio.post<Object?>(url,
+          data: body,
+          options: Options(headers: {'Authorization': 'Bearer ${conn.token}'}));
       final d = res.data;
       return d is Map<String, Object?> ? d : const {};
     } catch (e) {
@@ -139,6 +151,16 @@ class ApiClientTransferApi implements TransferApi {
   @override
   Future<void> multipartAbort(String lib, String key, String uploadId) async {
     await _postJson('${_base(lib)}/objects/multipart/abort',
+        {'key': key, 'uploadId': uploadId});
+  }
+
+  @override
+  Future<void> multipartAbortOn(String endpoint, String token, String lib,
+      String key, String uploadId) async {
+    final conn = Connection(endpoint, token);
+    await _postJsonConn(
+        conn,
+        '${conn.endpoint}/v1/${Uri.encodeComponent(lib)}/objects/multipart/abort',
         {'key': key, 'uploadId': uploadId});
   }
 

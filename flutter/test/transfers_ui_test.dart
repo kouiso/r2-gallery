@@ -136,6 +136,10 @@ class _StuckApi implements TransferApi {
   Future<String> multipartCreate(String lib, String key, String contentType) =>
       throw UnimplementedError();
   @override
+  Future<void> multipartAbortOn(String endpoint, String token, String lib,
+          String key, String uploadId) =>
+      multipartAbort(lib, key, uploadId);
+  @override
   Future<UploadPart> putPart(
           String lib, String key, String uploadId, int part, Uint8List bytes,
           {CancelToken? cancelToken, void Function(int sent)? onProgress}) =>

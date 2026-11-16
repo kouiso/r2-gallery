@@ -55,7 +55,7 @@ void main() {
     expect(raw.length, 12 + plain.length + 16);
     expect(utf8.decode(raw, allowMalformed: true), isNot(contains('secret photo')));
     expect(blob.path.endsWith(OfflineStore.fileNameFor(
-        OfflineStore.entryKey('lib', 'p/a.jpg'))), isTrue);
+        '\u0000${OfflineStore.entryKey('lib', 'p/a.jpg')}')), isTrue);
     expect(await store.readBytes('lib', 'p/a.jpg'), plain);
     expect(store.hasCached('lib', 'p/a.jpg'), isTrue);
     expect(await store.count(), 1);
@@ -94,6 +94,51 @@ void main() {
     expect(await store.count(), 0);
     expect(tmp.listSync(), isEmpty);
     expect(await store.readBytes('lib', '0.jpg'), isNull);
+  });
+
+  test('接続先が違えば同じキーでも別の保存として扱い、切り替えると前の分は出ない', () async {
+    String? endpoint = 'https://a.example';
+    final s = OfflineStore(
+        kv: kv, dir: () async => tmp, endpoint: () => endpoint);
+    await s.saveBytes(
+        lib: 'lib', key: 'x.jpg', type: 'image', name: 'x.jpg', plain: Uint8List.fromList([1]));
+
+    endpoint = 'https://b.example';
+    expect(await s.has('lib', 'x.jpg'), isFalse);
+    expect(await s.count(), 0);
+    expect(await s.list(), isEmpty);
+    await s.saveBytes(
+        lib: 'lib', key: 'x.jpg', type: 'image', name: 'x.jpg', plain: Uint8List.fromList([2]));
+    expect(await s.readBytes('lib', 'x.jpg'), [2]);
+    expect(tmp.listSync().length, 2);
+
+    endpoint = 'https://a.example';
+    expect(await s.readBytes('lib', 'x.jpg'), [1]);
+    expect(await s.count(), 1);
+  });
+
+  test('接続先なしの時代の目録は、繋がっている接続先の分として読み替える', () async {
+    String? endpoint = 'https://a.example';
+    kv.values[OfflineStore.dekKey] = base64Encode(Uint8List(32));
+    final ek = OfflineStore.entryKey('lib', 'a.jpg');
+    final file = OfflineStore.fileNameFor(ek);
+    kv.values[OfflineStore.manifestKey] = jsonEncode({
+      ek: {'file': file, 'mime': 'image/*', 'name': 'a.jpg', 'size': 16, 'savedAt': 1},
+    });
+    await File('${tmp.path}/$file').writeAsBytes([
+      ...Uint8List(12),
+      ..._hex('cea7403d4d606b6e074ec5d3baf39d18'),
+      ..._hex('d0d1c8a799996bf0265b98b5d48ab919'),
+    ]);
+    final s = OfflineStore(
+        kv: kv, dir: () async => tmp, endpoint: () => endpoint);
+    expect(await s.readBytes('lib', 'a.jpg'), Uint8List(16));
+
+    // 読み替え済みなので、別の接続先では出ない
+    endpoint = 'https://b.example';
+    final s2 = OfflineStore(
+        kv: kv, dir: () async => tmp, endpoint: () => endpoint);
+    expect(await s2.readBytes('lib', 'a.jpg'), isNull);
   });
 
   test('鍵は1回作ったら使い回す（作り直すと前の保存が読めなくなる）', () async {

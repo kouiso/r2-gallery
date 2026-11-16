@@ -741,6 +741,61 @@ void main() {
       expect(s.objects, isEmpty);
     });
 
+    test('積んだ時と違う接続先へは送らず、元の接続に戻ると動く', () async {
+      var conn = Connection(s.base, 'tok');
+      final q = WebTransferQueue(
+        api: api,
+        stageDir: await tmp.createTemp('q-conn-'),
+        retryDelay: Duration.zero,
+        connOf: () => conn,
+      );
+      addTearDown(q.dispose);
+      s.media['clip.mp4'] = _bytes(1000);
+
+      // A で積んだ行は、取り込みの途中で別の接続先へ替わっても送らない
+      final t = q.enqueue('lib', [video('clip.mp4')]).single;
+      conn = Connection('http://127.0.0.1:9', 'tok');
+      await q.idle().timeout(const Duration(seconds: 20));
+      expect(t.status, WebTaskStatus.queued);
+      expect(s.objectPuts, 0);
+
+      // 元の接続へ戻れば動く
+      conn = Connection(s.base, 'tok');
+      q.wake();
+      await q.idle().timeout(const Duration(seconds: 20));
+      expect(t.status, WebTaskStatus.done, reason: t.error);
+      expect(s.objectPuts, 1);
+    });
+
+    test('取り込みの途中で接続先が替わったら、送らずに待機へ戻す', () async {
+      var conn = Connection(s.base, 'tok');
+      final q = WebTransferQueue(
+        api: api,
+        stageDir: await tmp.createTemp('q-conn2-'),
+        retryDelay: Duration.zero,
+        connOf: () => conn,
+      );
+      addTearDown(q.dispose);
+      // ゆっくり流れる大きめの物にして、取り込み中に接続を替える
+      s.media['clip.mp4'] = _bytes(400 * 1024);
+      s.slow.add('clip.mp4');
+      final t = q.enqueue('lib', [video('clip.mp4')]).single;
+      // 取り込みが走り出すまで待つ
+      for (var i = 0; i < 200 && t.status != WebTaskStatus.fetching; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      conn = Connection('http://127.0.0.1:9', 'tok');
+      await q.idle().timeout(const Duration(seconds: 30));
+      expect(t.status, WebTaskStatus.queued);
+      expect(s.objectPuts, 0);
+
+      conn = Connection(s.base, 'tok');
+      q.wake();
+      await q.idle().timeout(const Duration(seconds: 20));
+      expect(t.status, WebTaskStatus.done, reason: t.error);
+      expect(s.objectPuts, 1);
+    });
+
     test('http/https 以外の URL は積んでも取りに行かない', () async {
       queue.enqueue('lib', const [
         DetectedItem('file:///sdcard/DCIM/a.mp4', DetectedKind.video),

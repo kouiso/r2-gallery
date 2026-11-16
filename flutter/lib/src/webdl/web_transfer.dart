@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../api/client.dart';
 import '../api/models.dart';
+import '../state/pairing.dart';
 import '../store/kv.dart';
 import '../transfer/transfer_queue.dart' show LedgerStore;
 import 'detected.dart';
@@ -54,6 +55,10 @@ class WebTransferTask {
   /// R2 に確定したキー。
   String? key;
 
+  /// この行を積んだ時の接続。別の送り先へは送らないために覚えておく（#149）
+  String? connEndpoint;
+  String? connToken;
+
   /// 今送っている（または最後に送りかけた）キーと、その何番目の名前か。
   /// 送り終えた直後に落とされても、次の起動でこのキーを確かめて二重に上げない。
   String? pendingKey;
@@ -88,6 +93,8 @@ class WebTransferTask {
         'keyAttempt': keyAttempt,
         // 端末に取り終えたか。取り終えていれば次は送るだけで済む
         'fetched': staged != null,
+        if (connEndpoint != null) 'connEndpoint': connEndpoint,
+        if (connToken != null) 'connToken': connToken,
       };
 
   /// 一時停止を頼まれた。止まった時に取り消しと区別し、落とした分を残すため。
@@ -143,7 +150,9 @@ class WebTransferQueue extends ChangeNotifier {
     this.retryDelay = const Duration(seconds: 2),
     this.ledger,
     Future<Directory> Function()? persistentStageDir,
-  })  : fetcher = fetcher ?? WebFetcher(),
+    Connection? Function()? connOf,
+  })  : _connOf = connOf ?? (() => null),
+        fetcher = fetcher ?? WebFetcher(),
         history = history ?? WebHistoryStore(),
         _persistentDirFn = persistentStageDir,
         _dir = stageDir;
@@ -162,6 +171,9 @@ class WebTransferQueue extends ChangeNotifier {
   /// アプリが消えても残る一時ファイルの置き場。OS の一時領域は再起動で消されることがあるため。
   static Future<Directory> defaultStageDir() async =>
       Directory('${(await getApplicationSupportDirectory()).path}/web-stage');
+
+  /// いまの接続。行がどの接続の物かを見るのに使う
+  final Connection? Function() _connOf;
 
   /// 取り込みの台帳。無ければ記録しない（テストや Web 版）。
   final LedgerStore? ledger;
@@ -200,6 +212,7 @@ class WebTransferQueue extends ChangeNotifier {
     for (final it in items) {
       if (!inFlight.add(it.url)) continue;
       final target = webUploadTarget(it);
+      final conn = _connOf();
       final t = WebTransferTask(
         // 前回の起動の台帳から戻した行と重ならないよう、起動ごとに変わる値を混ぜる（一時ファイル名にも使う）
         id: 'w${_session}_${++_seq}',
@@ -209,7 +222,9 @@ class WebTransferQueue extends ChangeNotifier {
         hls: it.kind == DetectedKind.hls,
         name: target.name,
         mime: target.mime,
-      );
+      )
+        ..connEndpoint = conn?.endpoint
+        ..connToken = conn?.token;
       if (!isWebUrl(t.url)) {
         // 検出一覧はページ（信用できん側）が送ってくる。端末内などへ向く URL は取りに行かない
         t.status = WebTaskStatus.error;
@@ -315,6 +330,8 @@ class WebTransferQueue extends ChangeNotifier {
     t.keyAttempt = n('keyAttempt');
     t.hlsVariant = str('hlsVariant');
     t.pendingKey = str('pendingKey');
+    t.connEndpoint = str('connEndpoint');
+    t.connToken = str('connToken');
     final file = _stagePath(dir, t);
     final exists = await file.exists();
     if (e['fetched'] == true) {
@@ -503,6 +520,9 @@ class WebTransferQueue extends ChangeNotifier {
     }
   }
 
+  /// 接続が戻った・ロックが解けたあとに、待っている行を動かし直す。
+  void wake() => _pump();
+
   /// 失敗・取り消しの行をやり直す。途中まで落とせていれば続きから取る。
   void retry(String id) {
     final t = _find(id);
@@ -554,7 +574,9 @@ class WebTransferQueue extends ChangeNotifier {
 
   /// 積んだものが全部片付くまで待つ（テスト用）。
   Future<void> idle() {
-    if (_running.isEmpty && !_tasks.any((t) => t.status == WebTaskStatus.queued)) {
+    if (_running.isEmpty &&
+        !_tasks.any(
+            (t) => t.status == WebTaskStatus.queued && _forThisConn(t))) {
       return Future.value();
     }
     final c = Completer<void>();
@@ -600,15 +622,29 @@ class WebTransferQueue extends ChangeNotifier {
     }
   }
 
+  /// その行が動いてよい接続か。積んだ時の接続と違う送り先へは送らない（#149）。
+  /// 古い台帳の行は接続を持たないので、今の接続で動かす（切り替え前の従来通り）
+  bool _forThisConn(WebTransferTask t) {
+    final e = t.connEndpoint;
+    if (e == null) return true;
+    final cur = _connOf();
+    return cur != null && isSameEndpoint(cur.endpoint, e);
+  }
+
   void _pump() {
     for (final t in _tasks) {
       if (_running.length >= parallel) break;
-      if (t.status == WebTaskStatus.queued && !_running.contains(t.id)) {
+      if (t.status == WebTaskStatus.queued &&
+          !_running.contains(t.id) &&
+          _forThisConn(t)) {
         _running.add(t.id);
         unawaited(_run(t));
       }
     }
-    if (_running.isEmpty && !_tasks.any((t) => t.status == WebTaskStatus.queued)) {
+    // 別の接続の行は残ったまま数えない。戻した時に動くので待機中とはみなさない
+    if (_running.isEmpty &&
+        !_tasks.any(
+            (t) => t.status == WebTaskStatus.queued && _forThisConn(t))) {
       for (final c in _idleWaiters) {
         if (!c.isCompleted) c.complete();
       }
@@ -627,6 +663,12 @@ class WebTransferQueue extends ChangeNotifier {
         t.staged = t.hls ? await _fetchHls(t, token) : await _fetchFile(t, token);
         _checkCancelled(token);
         await _persist(requireSuccess: true);
+      }
+      // 取り込み中に接続先が替わっていたら、取れた一時ファイルは残したまま待機に戻す。
+      // 新しい送り先へは送らない。元の接続に戻れば続きから上げる（#149）
+      if (!_forThisConn(t)) {
+        t.status = WebTaskStatus.queued;
+        return;
       }
       t.status = WebTaskStatus.uploading;
       t.loaded = 0;
@@ -944,6 +986,7 @@ class WebTransferQueue extends ChangeNotifier {
       if (!t.active || t.pauseRequested || t.cancel?.isCancelled == true) {
         return;
       }
+      if (!_forThisConn(t)) return;
       if (thumb != null && thumb.isNotEmpty) {
         await api.putThumb(t.lib, key, thumb);
       }

@@ -24,6 +24,12 @@ appId: app.r2gallery
       - tapOn:
           text: "Photo taken.*"
           index: 0
+# 写真ピッカーはタップで選択状態になるだけなので「Add」で確定する
+- runFlow:
+    when:
+      visible: "Add.*"
+    commands:
+      - tapOn: "Add.*"
 - extendedWaitUntil:
     visible: "1件をアップロード"
     timeout: 20000

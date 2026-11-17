@@ -1,0 +1,20 @@
+doc/evidence/cloud-upload-20261022/README.md       |  68 ++++++++++
+ doc/evidence/cloud-upload-20261022/ai-rules.txt    |   1 +
+ .../cloud-upload-20261022/ci-contracts.txt         |  16 +++
+ doc/evidence/cloud-upload-20261022/fast.txt        |  66 +++++++++
+ flutter/lib/src/ui/gallery_tab.dart                |  24 ++++
+ flutter/test/import_gallery_test.dart              | 150 +++++++++++++++++++++
+ flutter/test/transfer_queue_test.dart              |  52 +++++++
+ flutter/test/transfers_ui_test.dart                | 120 +++++++++++++++++
+ worker/src/index.test.ts                           |  80 ++++++++++-
+ 9 files changed, 576 insertions(+), 1 deletion(-)
+
+A	doc/evidence/cloud-upload-20261022/README.md
+A	doc/evidence/cloud-upload-20261022/ai-rules.txt
+A	doc/evidence/cloud-upload-20261022/ci-contracts.txt
+A	doc/evidence/cloud-upload-20261022/fast.txt
+M	flutter/lib/src/ui/gallery_tab.dart
+A	flutter/test/import_gallery_test.dart
+M	flutter/test/transfer_queue_test.dart
+M	flutter/test/transfers_ui_test.dart
+M	worker/src/index.test.ts

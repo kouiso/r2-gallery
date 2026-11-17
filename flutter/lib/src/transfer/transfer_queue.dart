@@ -4,13 +4,13 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../api/client.dart';
 import '../api/models.dart';
 import '../offline/offline_store.dart';
 import '../state/pairing.dart';
 import '../store/kv.dart';
+import '../store/private_storage.dart';
 import '../webdl/media_name.dart';
 import 'transfer_api.dart';
 
@@ -107,6 +107,7 @@ class TransferTask {
   String? itemKey;
   String? itemType;
   String? itemUrl;
+  String? offlineAccountId;
 
   /// 前回の起動から引き継いだ行か。
   bool fromLedger = false;
@@ -155,6 +156,7 @@ class TransferTask {
         if (albumId != null) 'albumId': albumId,
         if (albumAdded) 'albumAdded': true,
         if (albumError != null) 'albumError': albumError,
+        if (offlineAccountId != null) 'offlineAccountId': offlineAccountId,
       };
 }
 
@@ -192,6 +194,8 @@ class TransferQueue extends ChangeNotifier {
     this.partSize = 8 * 1024 * 1024,
     bool? persist,
     bool Function()? configured,
+    this.requireDownloadAccount = false,
+    this.canUseOfflineAccount,
     Connection? Function()? connOf,
   })  : _ledger = ledger ?? const KvLedgerStore(),
         _stageDirFn = stageDir ?? _defaultStageDir,
@@ -211,6 +215,8 @@ class TransferQueue extends ChangeNotifier {
   final Future<Directory> Function() _stageDirFn;
   final bool _persistOn;
   final bool Function() _configured;
+  final bool requireDownloadAccount;
+  final bool Function(String? accountId, String lib)? canUseOfflineAccount;
 
   /// いまの接続。行がどの接続の物かを見るのと、abort を正しい送り先へ出すのに使う
   final Connection? Function() _connOf;
@@ -238,16 +244,21 @@ class TransferQueue extends ChangeNotifier {
   /// 回線が無い間はアップロードを始めず「待機中」にしておく。
   bool online = true;
 
-  List<TransferTask> get tasks => List.unmodifiable(_tasks);
+  List<TransferTask> get tasks => List.unmodifiable(_tasks.where((t) =>
+      t.isUpload || !requireDownloadAccount || _canSaveOffline(t)));
+
+  bool _canSaveOffline(TransferTask t) => !requireDownloadAccount ||
+      (t.offlineAccountId != null &&
+       (canUseOfflineAccount?.call(t.offlineAccountId, t.lib) ?? false));
 
   /// 完了した転送。一覧の取り直しに使う。
   Stream<TransferTask> get doneEvents => _done.stream;
 
   /// 裏で動き続けるべき転送があるか（フォアグラウンドサービスを張る目安）。
-  bool get hasActiveWork => _tasks.any((t) => t.active);
+  bool get hasActiveWork => _tasks.any((t) =>
+      t.active && (t.isUpload || _canSaveOffline(t)));
 
-  static Future<Directory> _defaultStageDir() async =>
-      Directory('${(await getApplicationSupportDirectory()).path}/transfers');
+  static Future<Directory> _defaultStageDir() => privatePersistentDirectory('transfers');
 
   Future<Directory> _dir() async {
     final d = _stage ??= await _stageDirFn();
@@ -398,6 +409,12 @@ class TransferQueue extends ChangeNotifier {
       if (ik is! String) return null;
       t.itemKey = ik;
       t.itemType = it is String ? it : 'image';
+      final account = e['offlineAccountId'];
+      if (account is String) t.offlineAccountId = account;
+      if (requireDownloadAccount && t.offlineAccountId == null) {
+        t.status = TransferStatus.error;
+        t.error = '保存先アカウントを確認し、もう一度オフライン保存を選んでください';
+      }
       return t;
     }
     if (kind != 'up') return null;
@@ -486,18 +503,20 @@ class TransferQueue extends ChangeNotifier {
 
   /// 選んだ写真・動画をオフライン保存に積む。保存済みのものと積んだばかりのものは積み直さない。
   Future<List<TransferTask>> enqueueDownloads(
-      String lib, List<MediaItem> items) async {
+      String lib, List<MediaItem> items, {OfflineStore? targetStore}) async {
     await _restored.future;
+    final store = targetStore ?? offline;
     final pending = {
       for (final t in _tasks)
-        if (t.kind == 'down' && !t.finished) '${t.lib}\u0000${t.itemKey}',
+        if (t.kind == 'down' && !t.finished && t.offlineAccountId == store.accountId)
+          '${t.lib}\u0000${t.itemKey}',
     };
     final conn = _connOf();
     final added = <TransferTask>[];
     for (final it in items) {
       final l = it.lib ?? lib;
       if (!pending.add('$l\u0000${it.key}')) continue;
-      if (await offline.has(l, it.key)) continue;
+      if (await store.has(l, it.key)) continue;
       final t = TransferTask(
         id: 'd${++_seq}',
         kind: 'down',
@@ -510,7 +529,8 @@ class TransferQueue extends ChangeNotifier {
         ..itemType = it.type
         ..itemUrl = it.url
         ..connEndpoint = conn?.endpoint
-        ..connToken = conn?.token;
+        ..connToken = conn?.token
+        ..offlineAccountId = store.accountId;
       _tasks.add(t);
       added.add(t);
     }
@@ -591,6 +611,7 @@ class TransferQueue extends ChangeNotifier {
       if (t.status != TransferStatus.queued || _workers.containsKey(t.id)) continue;
       if (_waits.containsKey(t.id)) continue;
       if (!_forThisConn(t)) continue;
+      if (!t.isUpload && !_canSaveOffline(t)) continue;
       final gen = ++t._gen;
       t.status = TransferStatus.running;
       t.error = null;
@@ -904,6 +925,14 @@ class TransferQueue extends ChangeNotifier {
   }
 
   Future<void> _download(TransferTask t, CancelToken token) async {
+    void checkAccount() {
+      if (!_canSaveOffline(t)) {
+        throw const ApiError(403, '保存先アカウントの接続とロック解除を確認してください');
+      }
+    }
+    checkAccount();
+    final store = t.offlineAccountId == null
+        ? offline : offline.forAccount(t.offlineAccountId!);
     // 署名URLは期限が切れる。引き継いだ行や 403 は一覧から取り直す
     var url = t.itemUrl ?? await _resign(t);
     Future<Uint8List> fetch(String u) => api.fetchBytes(u, cancelToken: token,
@@ -921,12 +950,13 @@ class TransferQueue extends ChangeNotifier {
       bytes = await fetch(url);
     }
     _checkCancelled(token);
+    checkAccount();
     if (bytes.isEmpty) throw const ApiError(0, 'empty download');
     // 取った先と今の接続が違うなら、新しい接続の袋へは書けない。
     // 待機へ戻して、元の接続へ戻した時にもう一度取り直す（#149）
     if (!_forThisConn(t)) throw const _ConnSwitched();
     t.size = bytes.length;
-    await offline.saveBytes(
+    await store.saveBytes(
       lib: t.lib,
       key: t.itemKey!,
       type: t.itemType ?? 'image',
@@ -964,6 +994,13 @@ class TransferQueue extends ChangeNotifier {
   }
 
   // ---------- 操作 ----------
+
+  /// 接続資格を替える前にダウンロードだけ止める。保存済みデータとアップロードは触らない。
+  void pauseOfflineDownloads() {
+    for (final t in _tasks.toList()) {
+      if (!t.isUpload && t.active) pause(t.id);
+    }
+  }
 
   /// 一時停止。退避したファイル・uploadId・確定済みパートは残し、再開で続きから送る。
   void pause(String id) {

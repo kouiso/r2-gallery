@@ -30,10 +30,12 @@ object SharedEngine {
     /** 画面を作る前に呼ぶ。エンジンが無ければ作って Dart を走らせ、あればそのまま使う。 */
     fun attach(activity: Activity) {
         host = WeakReference(activity)
+        PlaybackBridge.attach(activity)
         val cache = FlutterEngineCache.getInstance()
         if (cache.get(ENGINE_ID) != null) return
         // プラグインはエンジンの生成時に自動で登録される。キャッシュのエンジンは画面側が Dart を起動しないので、ここで起動する
         val engine = FlutterEngine(activity.applicationContext)
+        PlaybackBridge.register(activity.applicationContext, engine.dartExecutor.binaryMessenger)
         engine.dartExecutor.executeDartEntrypoint(DartExecutor.DartEntrypoint.createDefault())
         cache.put(ENGINE_ID, engine)
     }
@@ -45,12 +47,14 @@ object SharedEngine {
     fun detach(activity: Activity) {
         if (host?.get() !== activity) return
         host = null
-        if (!TransferService.running) release(activity.applicationContext)
+        PlaybackBridge.detach(activity)
+        if (!TransferService.running && !PlaybackBridge.hasSession) release(activity.applicationContext)
     }
 
     private fun release(context: Context) {
         host = null
         TransferBridge.release(context)
+        PlaybackBridge.release()
         val cache = FlutterEngineCache.getInstance()
         cache.get(ENGINE_ID)?.destroy()
         cache.remove(ENGINE_ID)
@@ -65,7 +69,7 @@ object SharedEngine {
     fun releaseIfDetached(context: Context) {
         Handler(Looper.getMainLooper()).postDelayed({
             val alive = FlutterEngineCache.getInstance().get(ENGINE_ID) != null
-            if (host?.get() == null && alive && !TransferService.running) release(context)
+            if (host?.get() == null && alive && !TransferService.running && !PlaybackBridge.hasSession) release(context)
         }, RELEASE_DELAY_MS)
     }
 

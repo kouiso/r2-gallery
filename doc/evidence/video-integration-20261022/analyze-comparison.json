@@ -1,0 +1,14 @@
+{
+  "info_count": 7,
+  "retained_series_info_count": 6,
+  "added_from_main_test_file": [
+    "info \u2022 Field overrides a field inherited from 'AppState'. Try removing the field, overriding the getter and setter if necessary \u2022 test/import_gallery_test.dart:69:26 \u2022 overridden_fields"
+  ],
+  "main_test_file_blob": "1bbe0fd81b489326f8ffdfa16ce297e36d277a23",
+  "integrated_test_file_blob": "1bbe0fd81b489326f8ffdfa16ce297e36d277a23",
+  "main_already_defines_AppState_webQueue": true,
+  "exit_code": 1,
+  "errors": 0,
+  "warnings": 0,
+  "no_diagnostics_suppressed": true
+}

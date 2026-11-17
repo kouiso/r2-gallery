@@ -1,0 +1,115 @@
+{
+  "utc": "2026-10-22T18:58:51.200811+00:00",
+  "branch": "integration/video-ux-main-20261022",
+  "merge_commit": "0eb5d2820c2afdbbd95d35781d288309a8233bd4",
+  "parents": [
+    "c85bc935deb9e7bb4fdeabbbb5cd91b96a99180b",
+    "75e8fe4017e2a6cc6830fe650a469c85a664cca6"
+  ],
+  "main": "75e8fe4017e2a6cc6830fe650a469c85a664cca6",
+  "preserved_series_head": "c85bc935deb9e7bb4fdeabbbb5cd91b96a99180b",
+  "preserved_series_branch_unchanged": true,
+  "all_15_series_commits_included": true,
+  "commits": [
+    {
+      "sha": "c90bf7c215855cb26098e5a4d66bf14e49d8df6b",
+      "subject": "fix(viewer): keep action labels readable with adaptive footer layout",
+      "included_as_ancestor": true
+    },
+    {
+      "sha": "ac287ad493d0e55bc0d8e91ff18ebc7e322839ca",
+      "subject": "fix(player): expose safe brightness and volume controls",
+      "included_as_ancestor": true
+    },
+    {
+      "sha": "717378b37c974e3e389fa19c0c5feddbe22cf760",
+      "subject": "fix(media): honor suffix ranges and avoid HEAD body reads",
+      "included_as_ancestor": true
+    },
+    {
+      "sha": "f18fe7ae1c2efbbabdb61fb69a5f97d65d203127",
+      "subject": "feat(offline): unify private saves and isolate authenticated connections",
+      "included_as_ancestor": true
+    },
+    {
+      "sha": "0bd173ff6ca124e76e693ec77e345340f71d5fa4",
+      "subject": "fix(player): bind screen wake locks to authorized foreground playback",
+      "included_as_ancestor": true
+    },
+    {
+      "sha": "d9f0364d9f3476ed20c1b12b12d7871194af22f1",
+      "subject": "fix(privacy): omit private media details from playback diagnostics",
+      "included_as_ancestor": true
+    },
+    {
+      "sha": "0fa54ae54047611c882ceb0a3c5de337fd86235e",
+      "subject": "fix(typography): bundle licensed Japanese glyphs for Android and Web",
+      "included_as_ancestor": true
+    },
+    {
+      "sha": "7cfe804c46e3f528399df950c060d5b21d04423a",
+      "subject": "test(viewer): add screen evidence harness and track verification gaps",
+      "included_as_ancestor": true
+    },
+    {
+      "sha": "7acde4aa5614026e9e370967bb19a2f2395816e5",
+      "subject": "docs(evidence): record fixture scan fix and published-host SDK failure",
+      "included_as_ancestor": true
+    },
+    {
+      "sha": "0738bee990d4ff80b24dd17bec8e75a3065c125d",
+      "subject": "docs(evidence): attach passing cloud checks and remaining blockers",
+      "included_as_ancestor": true
+    },
+    {
+      "sha": "4a77fd628f7713ca382b7cec32c371c1b088f0fb",
+      "subject": "fix(viewer): preserve Japanese footer typography and complete regressions",
+      "included_as_ancestor": true
+    },
+    {
+      "sha": "a7c3e83456f3de9d9b3935a16303bdcdd999be84",
+      "subject": "feat(player): unify mobile background playback and media controls",
+      "included_as_ancestor": true
+    },
+    {
+      "sha": "b93fa74c61c92c58604feef4c7e52a2ba2205c11",
+      "subject": "docs(player): record verified implementation push and secret scan",
+      "included_as_ancestor": true
+    },
+    {
+      "sha": "3e93d7ca4b37fe1ef8127658085d7728621e0ceb",
+      "subject": "fix(storage): isolate private saves and exclude backups",
+      "included_as_ancestor": true
+    },
+    {
+      "sha": "c85bc935deb9e7bb4fdeabbbb5cd91b96a99180b",
+      "subject": "perf(player): defer review fetches and offload large decrypts",
+      "included_as_ancestor": true
+    }
+  ],
+  "merge_conflicts": false,
+  "incoming_main_paths": [
+    "doc/evidence/cloud-upload-20261022/README.md",
+    "doc/evidence/cloud-upload-20261022/ai-rules.txt",
+    "doc/evidence/cloud-upload-20261022/ci-contracts.txt",
+    "doc/evidence/cloud-upload-20261022/fast.txt",
+    "flutter/lib/src/ui/gallery_tab.dart",
+    "flutter/test/import_gallery_test.dart",
+    "flutter/test/transfer_queue_test.dart",
+    "flutter/test/transfers_ui_test.dart",
+    "worker/src/index.test.ts"
+  ],
+  "unchanged_from_series_paths": [
+    "flutter/lib/src/ui/viewer_screen.dart",
+    "flutter/lib/src/offline/offline_store.dart",
+    "flutter/pubspec.lock",
+    "pnpm-lock.yaml",
+    "doc/feature-parity.md"
+  ],
+  "worktree_clean_after_merge": true,
+  "validated_code_tree": "0e3d836905d4689632e5969d7ca0513b09d7ff52",
+  "metadata_only_subject_update": {
+    "validated_commit_before_subject_update": "62774653cafae81132ba6f83b434af596818b896",
+    "same_tree": true
+  }
+}

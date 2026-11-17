@@ -1,0 +1,65 @@
+{
+  "scope": "Loopback asset GET/HEAD and bytes only; no browser rendering or real media playback",
+  "checks": [
+    {
+      "path": "index.html",
+      "GET": 200,
+      "HEAD": {
+        "status": 200,
+        "length": 1508
+      },
+      "mime": "text/html",
+      "sha256": "8b4591bc2a1b34d28e8daab006f2633a453c87d572bc605cc3187a42e27c81cc"
+    },
+    {
+      "path": "main.dart.js",
+      "GET": 200,
+      "HEAD": {
+        "status": 200,
+        "length": 3426181
+      },
+      "mime": "text/javascript",
+      "sha256": "1fa41336b6b311f5e7be0ac395c356e10cc76a0f8b9305eae3f25b8fd18bf985"
+    },
+    {
+      "path": "flutter_bootstrap.js",
+      "GET": 200,
+      "HEAD": {
+        "status": 200,
+        "length": 9974
+      },
+      "mime": "text/javascript",
+      "sha256": "7d61f40f94545975377dbcd50455eb69607d50338183b1efd805f207e8ff7fa1"
+    },
+    {
+      "path": "assets/FontManifest.json",
+      "GET": 200,
+      "HEAD": {
+        "status": 200,
+        "length": 364
+      },
+      "mime": "application/json",
+      "sha256": "b1e0a136446079e2762ea2062f087d238e4badef0535413cf15cc0dfa4be3acb"
+    },
+    {
+      "path": "assets/assets/fonts/R2GalleryJP-Regular.otf",
+      "GET": 200,
+      "HEAD": {
+        "status": 200,
+        "length": 4306852
+      },
+      "mime": "font/otf",
+      "sha256": "63563be433f3f9be61a826a7acd3155a4998e60bf9c956e763c527d9cc86c110"
+    },
+    {
+      "path": "assets/assets/fonts/R2GalleryJP-Bold.otf",
+      "GET": 200,
+      "HEAD": {
+        "status": 200,
+        "length": 4419896
+      },
+      "mime": "font/otf",
+      "sha256": "7a33dd400cd6ea38f9ee836ee8573a03d78ec25a71b08ebd23967683bc5976bd"
+    }
+  ]
+}

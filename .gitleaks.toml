@@ -7,8 +7,10 @@ useDefault = true
 # 手元の wrangler.test.toml の公開ダミートークンで秘密ではないので、curl-auth-header が
 # 当たる例文の形だけを外す（後のコミットで $TOKEN に書き換え済みだが履歴には残る）
 [allowlist]
-description = "public test-vector keys and doc placeholders"
+description = "public test-vector keys, APK signing digests, and doc placeholders"
+# APK署名検証が出力した公開鍵のfingerprintだけ。秘密鍵・APIキー・ファイル全体は除外しない。
 regexes = [
-  '''^feffe9928665731c6d6a8f9467308308feffe9928665731c6d6a8f9467308308$''',
-  '''test-access-token''',
+    '''^feffe9928665731c6d6a8f9467308308feffe9928665731c6d6a8f9467308308$''',
+    '''^(5746f9988814e33067db7a8f175a6f87862b821d36f6c25e5b6df2625349b4bc|aa168e8b3d3f266a94944fa9555d43dbae68c609|99c247016b391d26af6c6583df02b8b8)$''',
+    '''test-access-token''',
 ]

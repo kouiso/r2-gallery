@@ -1,0 +1,99 @@
+UTC: 2026-10-22T16:11:29.794360+00:00
+CWD: /workspace/r2-validation-0738bee/flutter
+ARGV: ["flutter", "test", "--no-pub", "--reporter", "expanded", "test/screen_awake_test.dart", "test/offline_privacy_test.dart", "test/grid_test.dart", "test/video_view_test.dart", "test/footer_ux_test.dart", "--dart-define=FOOTER_EVIDENCE_DIR=/workspace/r2-video-fix-evidence/footer-after"]
+
+00:00 +0: loading /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart
+00:00 +0: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 画面保持の要求と Web の解放・再取得 再生要求がある時だけ一度取得し、反復通知では取り直さない
+00:00 +1: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 画面保持の要求と Web の解放・再取得 ScreenAwakeStatus.unsupported を成功と扱わず、拒否後に進捗通知で要求を連打しない
+00:00 +2: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 画面保持の要求と Web の解放・再取得 ScreenAwakeStatus.denied を成功と扱わず、拒否後に進捗通知で要求を連打しない
+00:00 +3: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 画面保持の要求と Web の解放・再取得 ScreenAwakeStatus.failed を成功と扱わず、拒否後に進捗通知で要求を連打しない
+00:00 +4: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 画面保持の要求と Web の解放・再取得 OS による解放は尊重し、非表示から表示へ戻った時に新しく取得する
+00:00 +5: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 画面保持の要求と Web の解放・再取得 一時停止したまま可視化しても再取得しない
+00:00 +6: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 画面保持の要求と Web の解放・再取得 取得待ちの間に退出したら、遅れて届いた保持を直ちに解放する
+00:00 +7: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 画面保持の要求と Web の解放・再取得 新しい動画の要求を、古い画面の dispose で解除しない
+00:00 +8: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 画面保持の要求と Web の解放・再取得 古い解放が処理中でも、新しい取得はその後に行う
+00:00 +9: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 画面保持の要求と Web の解放・再取得 解放失敗を成功と扱わず、次の再生要求が内部の held に取り残されない
+00:00 +10: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 画面保持の要求と Web の解放・再取得 停止中の解放失敗は進捗通知で連打せず、退出時に保持不明分を再解放する
+00:00 +11: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 再生画面への接続 前景で初期化済みの再生中だけ保持し、pause/end/error/退出で解放する
+00:01 +12: /workspace/r2-validation-0738bee/flutter/test/offline_privacy_test.dart: 初期化中に閉じても平文を残さず、遅れて再生しない
+00:01 +13: /workspace/r2-validation-0738bee/flutter/test/offline_privacy_test.dart: 初期化中に閉じても平文を残さず、遅れて再生しない
+00:01 +14: /workspace/r2-validation-0738bee/flutter/test/offline_privacy_test.dart: 初期化中に閉じても平文を残さず、遅れて再生しない
+00:02 +15: /workspace/r2-validation-0738bee/flutter/test/screen_awake_test.dart: 再生画面への接続 VideoView の pause と退出から共通保持を解放する
+00:02 +16: /workspace/r2-validation-0738bee/flutter/test/offline_privacy_test.dart: 再生初期化に失敗したら平文と再生器を片付け、内部パスを表示しない
+00:02 +17: /workspace/r2-validation-0738bee/flutter/test/offline_privacy_test.dart: 再生初期化に失敗したら平文と再生器を片付け、内部パスを表示しない
+00:02 +18: /workspace/r2-validation-0738bee/flutter/test/offline_privacy_test.dart: 再生初期化に失敗したら平文と再生器を片付け、内部パスを表示しない
+00:02 +19: /workspace/r2-validation-0738bee/flutter/test/offline_privacy_test.dart: 再生初期化に失敗したら平文と再生器を片付け、内部パスを表示しない
+00:02 +20: /workspace/r2-validation-0738bee/flutter/test/offline_privacy_test.dart: バックグラウンドで初期化が終わっても再生を始めない
+00:03 +21: /workspace/r2-validation-0738bee/flutter/test/offline_privacy_test.dart: 復帰のロック判定中にロックされたら再開しない
+00:03 +22: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H1 並び替え 4種の並びと、同点は元の順を保つ
+00:03 +23: /workspace/r2-validation-0738bee/flutter/test/offline_privacy_test.dart: 復帰待ち中の手動停止を後から自動再生で上書きしない
+00:04 +24: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H1 並び替え メニューで「サイズ順」を選ぶと並びが変わり、日付見出しが消える
+00:04 +25: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H1 並び替え メニューで「サイズ順」を選ぶと並びが変わり、日付見出しが消える
+00:04 +26: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H1 並び替え メニューで「サイズ順」を選ぶと並びが変わり、日付見出しが消える
+00:04 +27: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H1 並び替え メニューで「サイズ順」を選ぶと並びが変わり、日付見出しが消える
+00:04 +27: /workspace/r2-validation-0738bee/flutter/test/offline_privacy_test.dart: 新しい接続の読み込みを待つ間にも古い接続の一覧を見せない
+offline playback cache sweep unavailable
+00:05 +28: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H1 並び替え メニューで「サイズ順」を選ぶと並びが変わり、日付見出しが消える
+00:05 +29: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H2 日付見出し 今日・昨日・今年は曜日つき・去年は年つき・無ければ日付不明
+00:05 +30: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H2 日付見出し 写真タブに日ごとの見出しが出る
+00:05 +31: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H3/H14 選択 見出しの丸でその日をまとめて選択・解除できる
+00:06 +32: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: P3: 再生中は操作バーを3.5秒で隠し、タップでまた出す
+00:06 +33: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: P3: 再生中は操作バーを3.5秒で隠し、タップでまた出す
+00:07 +34: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: P3: 再生中は操作バーを3.5秒で隠し、タップでまた出す
+00:07 +35: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H3/H14 選択 閉じるボタンで選択を抜ける
+00:07 +36: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: P3: 一時停止中は操作バーを隠さない
+00:07 +37: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す 文字付きの操作が並び、オフライン保存できない環境ではオフラインを出さない
+00:07 +38: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: P2: ±10秒ボタンでその分だけ動く
+00:07 +39: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す 下端にジェスチャー帯がある端末でも、操作バーは帯の上に収まって押せる
+00:08 +40: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す 下端にジェスチャー帯がある端末でも、操作バーは帯の上に収まって押せる
+00:08 +41: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: P2: 一時停止中は中央に再生アイコン、読み込み中はスピナーを出す
+00:08 +42: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す オフライン保存できる環境なら、選んだ分をライブラリごとに #149 のオフライン保存へ積む
+00:08 +43: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す オフライン保存できる環境なら、選んだ分をライブラリごとに #149 のオフライン保存へ積む
+00:08 +43: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: P2: 開けなかったら「再生できませんでした」を出し、押すと読み直す
+video initialization failed
+00:08 +44: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す オフライン保存できる環境なら、選んだ分をライブラリごとに #149 のオフライン保存へ積む
+00:08 +45: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: P1: 動画を縦にスワイプしても明るさや端末音量を変更しない
+00:08 +46: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す ライブラリ間の保存待ち中にアカウントを切り替えたら後続を保存しない
+00:09 +47: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: P1: 明示したパネルでだけ明るさを少しずつ変更し、音量はこの動画だけに適用する
+00:09 +48: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す ライブラリ間の保存待ち中にロックしたら後続を保存しない
+00:09 +49: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す ライブラリ間の保存待ち中にロックしたら後続を保存しない
+00:09 +50: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: P1: 初期値が届く前には明るさを操作できない
+00:10 +51: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す ゴミ箱へ送ると「元に戻す」が出て、押すと trashKey で戻す
+00:10 +52: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: P1: 狭い横画面で文字を拡大しても調整の入口・再生操作を押せる
+00:10 +53: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す 元の場所に同じ名前があると戻せなかった旨を出す
+00:10 +54: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す 元の場所に同じ名前があると戻せなかった旨を出す
+00:10 +55: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: #196: 復帰判定を待っている間にdetachedになったら自動再生しない
+00:11 +56: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す 「元に戻す」は6秒で消える
+00:11 +57: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す 「元に戻す」は6秒で消える
+00:11 +58: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: #196: 復帰判定中の手動再生もロックを追い越さない
+00:11 +59: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す 送れなかった件数を知らせる
+00:11 +60: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す 送れなかった件数を知らせる
+00:11 +61: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H4/H9 選択バーとゴミ箱の元に戻す 送れなかった件数を知らせる
+00:11 +62: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: 再生開始の非同期失敗は再試行に戻し、未処理のFutureにしない
+00:11 +63: /workspace/r2-validation-0738bee/flutter/test/video_view_test.dart: 再生開始の非同期失敗は再試行に戻し、未処理のFutureにしない
+00:11 +64: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H5 アルバムへ 書き込めるアルバムだけ選べて、選ぶと選択分を追加する
+00:12 +65: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H5 アルバムへ 書き込めるアルバムだけ選べて、選ぶと選択分を追加する
+00:12 +66: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H5 アルバムへ 新しい名前を入れると作成してから追加する
+00:13 +67: /workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart: 一覧→動画→情報→ロック解除→元一覧 narrow-1.3
+00:14 +68: /workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart: 一覧→動画→情報→ロック解除→元一覧 narrow-1.3
+00:14 +69: /workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart: 一覧→動画→情報→ロック解除→元一覧 narrow-1.3
+00:14 +70: /workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart: 一覧→動画→情報→ロック解除→元一覧 narrow-1.3
+00:14 +71: /workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart: 一覧→動画→情報→ロック解除→元一覧 narrow-1.3
+00:14 +72: /workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart: 一覧→動画→情報→ロック解除→元一覧 narrow-1.3
+00:14 +73: /workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart: 一覧→動画→情報→ロック解除→元一覧 narrow-1.3
+00:15 +74: /workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart: 一覧→動画→情報→ロック解除→元一覧 narrow-1.3
+00:15 +75: /workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart: 一覧→動画→情報→ロック解除→元一覧 narrow-1.3
+player getBrightness missing: MissingPluginException(No implementation found for method getBrightness on channel app.r2gallery/player)
+00:15 +76: /workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart: 一覧→動画→情報→ロック解除→元一覧 narrow-1.3
+00:15 +77: /workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart: 一覧→動画→情報→ロック解除→元一覧 narrow-1.3
+00:15 +78: /workspace/r2-validation-0738bee/flutter/test/grid_test.dart: H15 フォルダ 末尾のフォルダカードから下の階層へ辿れる
+00:15 +79: /workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart: 一覧→動画→情報→ロック解除→元一覧 narrow-2.0
+00:16 +80: /workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart: 一覧→動画→情報→ロック解除→元一覧 narrow-2.0
+00:16 +81: /workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart: 一覧→動画→情報→ロック解除→元一覧 narrow-2.0
+player getBrightness missing: MissingPluginException(No implementation found for method getBrightness on channel app.r2gallery/player)
+00:16 +82: /workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart: 一覧→動画→情報→ロック解除→元一覧 landscape
+player getBrightness missing: MissingPluginException(No implementation found for method getBrightness on channel app.r2gallery/player)
+00:17 +83: /workspace/r2-validation-0738bee/flutter/test/footer_ux_test.dart: (tearDownAll)
+00:17 +83: All tests passed!
+
+EXIT: 0

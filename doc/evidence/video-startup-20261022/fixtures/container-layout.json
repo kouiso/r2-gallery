@@ -1,0 +1,68 @@
+{
+  "scope": "Generated test pattern MP4 only; container layout inspection and ffprobe, NOT native/mobile playback or frame timing",
+  "same_encoded_video_packets": true,
+  "fixtures": [
+    {
+      "fixture": "tail.mp4",
+      "sha256": "8b656b412ac5ef14cda7bed5b89cb2aa003d3ebba51ce46e3f6d4b989d758556",
+      "bytes": 22688,
+      "atoms": [
+        {
+          "type": "ftyp",
+          "offset": 0,
+          "bytes": 32
+        },
+        {
+          "type": "free",
+          "offset": 32,
+          "bytes": 8
+        },
+        {
+          "type": "mdat",
+          "offset": 40,
+          "bytes": 21544
+        },
+        {
+          "type": "moov",
+          "offset": 21584,
+          "bytes": 1104
+        }
+      ],
+      "moov_complete_in_first_4096_bytes": false,
+      "video_packets": 24,
+      "codec": "h264",
+      "duration": "2.000000"
+    },
+    {
+      "fixture": "front.mp4",
+      "sha256": "acac7ee2e1a674dcae0eff02a1e5909d599fda6de819cfc8bdcd5af0b8222c94",
+      "bytes": 22688,
+      "atoms": [
+        {
+          "type": "ftyp",
+          "offset": 0,
+          "bytes": 32
+        },
+        {
+          "type": "moov",
+          "offset": 32,
+          "bytes": 1104
+        },
+        {
+          "type": "free",
+          "offset": 1136,
+          "bytes": 8
+        },
+        {
+          "type": "mdat",
+          "offset": 1144,
+          "bytes": 21544
+        }
+      ],
+      "moov_complete_in_first_4096_bytes": true,
+      "video_packets": 24,
+      "codec": "h264",
+      "duration": "2.000000"
+    }
+  ]
+}

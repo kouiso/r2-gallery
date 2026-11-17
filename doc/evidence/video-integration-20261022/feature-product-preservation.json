@@ -1,0 +1,535 @@
+{
+  "compared_from_common_base": "3e82f57bcf9e3ac8d0d8c983ef662ef18f643258",
+  "all_series_changed_product_files_preserved": true,
+  "files": [
+    {
+      "path": "flutter/android/app/build.gradle.kts",
+      "series_blob": "538ae60faca705bd52601832c4241def38f47f56",
+      "integrated_blob": "538ae60faca705bd52601832c4241def38f47f56",
+      "identical": true
+    },
+    {
+      "path": "flutter/android/app/src/main/AndroidManifest.xml",
+      "series_blob": "fbb245e93db21ca4babbae0d9810f16403f5e50e",
+      "integrated_blob": "fbb245e93db21ca4babbae0d9810f16403f5e50e",
+      "identical": true
+    },
+    {
+      "path": "flutter/android/app/src/main/kotlin/app/r2gallery/r2_gallery/MainActivity.kt",
+      "series_blob": "8333ae1ea385d8913c1aa1e9928158cb6421fd55",
+      "integrated_blob": "8333ae1ea385d8913c1aa1e9928158cb6421fd55",
+      "identical": true
+    },
+    {
+      "path": "flutter/android/app/src/main/kotlin/app/r2gallery/r2_gallery/PlaybackBridge.kt",
+      "series_blob": "1d41afc49e73d4c024b70d2d6c2dd46c677a9043",
+      "integrated_blob": "1d41afc49e73d4c024b70d2d6c2dd46c677a9043",
+      "identical": true
+    },
+    {
+      "path": "flutter/android/app/src/main/kotlin/app/r2gallery/r2_gallery/PlaybackService.kt",
+      "series_blob": "f7c1aa4c35894771cf93d9f77216199b817bf34d",
+      "integrated_blob": "f7c1aa4c35894771cf93d9f77216199b817bf34d",
+      "identical": true
+    },
+    {
+      "path": "flutter/android/app/src/main/kotlin/app/r2gallery/r2_gallery/SharedEngine.kt",
+      "series_blob": "2754f65f84bd01ab6daa32b9f1585be61bfc14d5",
+      "integrated_blob": "2754f65f84bd01ab6daa32b9f1585be61bfc14d5",
+      "identical": true
+    },
+    {
+      "path": "flutter/android/app/src/main/res/xml/backup_rules.xml",
+      "series_blob": "d23f8856c89ece1b6f9eaf7c50b4e91375275732",
+      "integrated_blob": "d23f8856c89ece1b6f9eaf7c50b4e91375275732",
+      "identical": true
+    },
+    {
+      "path": "flutter/android/app/src/main/res/xml/data_extraction_rules.xml",
+      "series_blob": "7ff018168cd73dc0da61db5ad52cd2a1369044db",
+      "integrated_blob": "7ff018168cd73dc0da61db5ad52cd2a1369044db",
+      "identical": true
+    },
+    {
+      "path": "flutter/assets/fonts/OFL.txt",
+      "series_blob": "056a3d887f78af8bac7709d9a6d762b06af246db",
+      "integrated_blob": "056a3d887f78af8bac7709d9a6d762b06af246db",
+      "identical": true
+    },
+    {
+      "path": "flutter/assets/fonts/R2GalleryJP-Bold.otf",
+      "series_blob": "0a6ece84f0bc091dedc54f3d72bf73480ec56a0f",
+      "integrated_blob": "0a6ece84f0bc091dedc54f3d72bf73480ec56a0f",
+      "identical": true
+    },
+    {
+      "path": "flutter/assets/fonts/R2GalleryJP-Regular.otf",
+      "series_blob": "ff5db7befcbd89bd531431457b73fe417b624b88",
+      "integrated_blob": "ff5db7befcbd89bd531431457b73fe417b624b88",
+      "identical": true
+    },
+    {
+      "path": "flutter/assets/fonts/manifest.json",
+      "series_blob": "d798927f14e56ed1245c1a2817e864c0dbb8296a",
+      "integrated_blob": "d798927f14e56ed1245c1a2817e864c0dbb8296a",
+      "identical": true
+    },
+    {
+      "path": "flutter/ios/Runner.xcodeproj/project.pbxproj",
+      "series_blob": "3d5dde771dae7623f56bac323f751b637b4414cc",
+      "integrated_blob": "3d5dde771dae7623f56bac323f751b637b4414cc",
+      "identical": true
+    },
+    {
+      "path": "flutter/ios/Runner/AppDelegate.swift",
+      "series_blob": "16d7890a2452e24a9259ec6a0ad6744ea09b4628",
+      "integrated_blob": "16d7890a2452e24a9259ec6a0ad6744ea09b4628",
+      "identical": true
+    },
+    {
+      "path": "flutter/ios/Runner/Info.plist",
+      "series_blob": "46f74a81100e911728894e7afcfe0ea815a239d2",
+      "integrated_blob": "46f74a81100e911728894e7afcfe0ea815a239d2",
+      "identical": true
+    },
+    {
+      "path": "flutter/ios/Runner/R2PlaybackBridge.swift",
+      "series_blob": "1cc875a0e6683ae34f073ee23abb2b323fa53a0d",
+      "integrated_blob": "1cc875a0e6683ae34f073ee23abb2b323fa53a0d",
+      "identical": true
+    },
+    {
+      "path": "flutter/ios/Runner/R2PrivateStorageBridge.swift",
+      "series_blob": "0a254d8104d2e9c0bca5c2c0dc8eec6b8bb9d7bf",
+      "integrated_blob": "0a254d8104d2e9c0bca5c2c0dc8eec6b8bb9d7bf",
+      "identical": true
+    },
+    {
+      "path": "flutter/lib/main.dart",
+      "series_blob": "764dd685665dca9f092b427c67262a240f4001d1",
+      "integrated_blob": "764dd685665dca9f092b427c67262a240f4001d1",
+      "identical": true
+    },
+    {
+      "path": "flutter/lib/src/grid/media_controller.dart",
+      "series_blob": "2d96dd2887196381bd49d46ddb3783f372b8fe25",
+      "integrated_blob": "2d96dd2887196381bd49d46ddb3783f372b8fe25",
+      "identical": true
+    },
+    {
+      "path": "flutter/lib/src/offline/offline_playback_files.dart",
+      "series_blob": "a0158c41de2e7a26cb7391e29493da52f917e118",
+      "integrated_blob": "a0158c41de2e7a26cb7391e29493da52f917e118",
+      "identical": true
+    },
+    {
+      "path": "flutter/lib/src/offline/offline_screen.dart",
+      "series_blob": "e7c829842f7d3dc78144d49990ef937ecae49d3f",
+      "integrated_blob": "e7c829842f7d3dc78144d49990ef937ecae49d3f",
+      "identical": true
+    },
+    {
+      "path": "flutter/lib/src/offline/offline_store.dart",
+      "series_blob": "ca62fa570773194cdd42a890fc0da77a6ff6abd4",
+      "integrated_blob": "ca62fa570773194cdd42a890fc0da77a6ff6abd4",
+      "identical": true
+    },
+    {
+      "path": "flutter/lib/src/playback/mobile_playback.dart",
+      "series_blob": "506512f728628b29cad9bea25b41e090085f4dd4",
+      "integrated_blob": "506512f728628b29cad9bea25b41e090085f4dd4",
+      "identical": true
+    },
+    {
+      "path": "flutter/lib/src/playback/playback_menu.dart",
+      "series_blob": "8e7c53f581fcc9b5070c6f961c8e2b48c7c8ba57",
+      "integrated_blob": "8e7c53f581fcc9b5070c6f961c8e2b48c7c8ba57",
+      "identical": true
+    },
+    {
+      "path": "flutter/lib/src/playback/playback_session.dart",
+      "series_blob": "ca897509d80592bb7964884e7410965df503c4f3",
+      "integrated_blob": "ca897509d80592bb7964884e7410965df503c4f3",
+      "identical": true
+    },
+    {
+      "path": "flutter/lib/src/playback/player_platform_tap.dart",
+      "series_blob": "fc1201ad9931a62e326a834c03c7c63ce9eae24f",
+      "integrated_blob": "fc1201ad9931a62e326a834c03c7c63ce9eae24f",
+      "identical": true
+    },
+    {
+      "path": "flutter/lib/src/state/app_state.dart",
+      "series_blob": "b7326b2e16ccfb344348149a6b9e126890d78900",
+      "integrated_blob": "b7326b2e16ccfb344348149a6b9e126890d78900",
+      "identical": true
+    },
+    {
+      "path": "flutter/lib/src/store/kv.dart",
+      "series_blob": "7d12fbeeea154339b5925537a14ae57c5b66619e",
+      "integrated_blob": "7d12fbeeea154339b5925537a14ae57c5b66619e",
+      "identical": true
+    },
+    {
+      "path": "flutter/lib/src/store/private_storage.dart",
+      "series_blob": "babec01eca009d4231fa52142606d14c47b0c385",
+      "integrated_blob": "babec01eca009d4231fa52142606d14c47b0c385",
+      "identical": true
+    },
+    {
+      "path": "flutter/lib/src/transfer/transfer_queue.dart",
+      "series_blob": "50532d56107e0dfa9ff10fd69ec5528d13010e1b",
+      "integrated_blob": "50532d56107e0dfa9ff10fd69ec5528d13010e1b",
+      "identical": true
+    },
+    {
+      "path": "flutter/lib/src/ui/theme.dart",
+      "series_blob": "a75b7d45f21fee51610638de640f75d02cd15434",
+      "integrated_blob": "a75b7d45f21fee51610638de640f75d02cd15434",
+      "identical": true
+    },
+    {
+      "path": "flutter/lib/src/ui/video_view.dart",
+      "series_blob": "f49152ca1f5b4a777ab66a9ac70eef842961a5b5",
+      "integrated_blob": "f49152ca1f5b4a777ab66a9ac70eef842961a5b5",
+      "identical": true
+    },
+    {
+      "path": "flutter/lib/src/ui/viewer_footer.dart",
+      "series_blob": "64345a8320dc4db301c49f88fa0753d10c7444fa",
+      "integrated_blob": "64345a8320dc4db301c49f88fa0753d10c7444fa",
+      "identical": true
+    },
+    {
+      "path": "flutter/lib/src/ui/viewer_screen.dart",
+      "series_blob": "d64e10523c0f09325bba1aded0367d162b35c642",
+      "integrated_blob": "d64e10523c0f09325bba1aded0367d162b35c642",
+      "identical": true
+    },
+    {
+      "path": "flutter/lib/src/viewer/device_export.dart",
+      "series_blob": "bfc8b968572fcb0bb15b924fd4e7599da01a86c0",
+      "integrated_blob": "bfc8b968572fcb0bb15b924fd4e7599da01a86c0",
+      "identical": true
+    },
+    {
+      "path": "flutter/lib/src/viewer/player_system.dart",
+      "series_blob": "30f3b0ad04221a2770836a99ea2c41f3f7659b0d",
+      "integrated_blob": "30f3b0ad04221a2770836a99ea2c41f3f7659b0d",
+      "identical": true
+    },
+    {
+      "path": "flutter/lib/src/viewer/screen_awake.dart",
+      "series_blob": "e7aa757f01837b5f51e558cd767b56c928a0e654",
+      "integrated_blob": "e7aa757f01837b5f51e558cd767b56c928a0e654",
+      "identical": true
+    },
+    {
+      "path": "flutter/lib/src/viewer/screen_awake_driver.dart",
+      "series_blob": "3bc76802168ebee43f44702e6d260f270ec98bcd",
+      "integrated_blob": "3bc76802168ebee43f44702e6d260f270ec98bcd",
+      "identical": true
+    },
+    {
+      "path": "flutter/lib/src/viewer/screen_awake_native.dart",
+      "series_blob": "ac36a261b6b8487dc5c8a7d6b1eb5fc4c98ec016",
+      "integrated_blob": "ac36a261b6b8487dc5c8a7d6b1eb5fc4c98ec016",
+      "identical": true
+    },
+    {
+      "path": "flutter/lib/src/viewer/screen_awake_web.dart",
+      "series_blob": "400cd8103835863fa1f5ad4edfc579a71cd095b6",
+      "integrated_blob": "400cd8103835863fa1f5ad4edfc579a71cd095b6",
+      "identical": true
+    },
+    {
+      "path": "flutter/lib/src/webdl/web_transfer.dart",
+      "series_blob": "3fe963a6018c1688b774bc3cbf0003d831b4a591",
+      "integrated_blob": "3fe963a6018c1688b774bc3cbf0003d831b4a591",
+      "identical": true
+    },
+    {
+      "path": "flutter/pubspec.lock",
+      "series_blob": "9ade3965b64cbf56a999fea1643a5f8e4d9611e7",
+      "integrated_blob": "9ade3965b64cbf56a999fea1643a5f8e4d9611e7",
+      "identical": true
+    },
+    {
+      "path": "flutter/pubspec.yaml",
+      "series_blob": "499215815368be076c2d46afcfaa528b144326e6",
+      "integrated_blob": "499215815368be076c2d46afcfaa528b144326e6",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/CHANGELOG.md",
+      "series_blob": "1768fdcd1bb02dc7e9196accce56dd945ba01935",
+      "integrated_blob": "1768fdcd1bb02dc7e9196accce56dd945ba01935",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/LICENSE",
+      "series_blob": "29b709dac6c7a8ce696d35c375f603afd808d205",
+      "integrated_blob": "29b709dac6c7a8ce696d35c375f603afd808d205",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/R2_PATCH.md",
+      "series_blob": "aaf1cd85f3496312e6c0bc42ed96ccb4627f389f",
+      "integrated_blob": "aaf1cd85f3496312e6c0bc42ed96ccb4627f389f",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/README.md",
+      "series_blob": "1325daf0acfa7b61ce4269d554cf1670e05c4819",
+      "integrated_blob": "1325daf0acfa7b61ce4269d554cf1670e05c4819",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation.podspec",
+      "series_blob": "3c2ddd29b2cf78c9f6b8d2741b070443f34e692d",
+      "integrated_blob": "3c2ddd29b2cf78c9f6b8d2741b070443f34e692d",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Package.swift",
+      "series_blob": "b4e053ec9cd5efe58043d5de228902d8838aaaaa",
+      "integrated_blob": "b4e053ec9cd5efe58043d5de228902d8838aaaaa",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation/NativeVideoViewFactory.swift",
+      "series_blob": "f5dbaddd084329abee9bab65285f0c1f8ccd8c8e",
+      "integrated_blob": "f5dbaddd084329abee9bab65285f0c1f8ccd8c8e",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation/Resources/PrivacyInfo.xcprivacy",
+      "series_blob": "a34b7e2e60ccbccdcafcf9d8a0b1d902b9a6f430",
+      "integrated_blob": "a34b7e2e60ccbccdcafcf9d8a0b1d902b9a6f430",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation/VideoPlayerPlugin.swift",
+      "series_blob": "9f7d844b8e7b32e53d6b61fb4f27758aa0b75f26",
+      "integrated_blob": "9f7d844b8e7b32e53d6b61fb4f27758aa0b75f26",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation/VideoPlayerPluginMessages.g.swift",
+      "series_blob": "31dade36ed5052457bc1cf0f01d2986046259989",
+      "integrated_blob": "31dade36ed5052457bc1cf0f01d2986046259989",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_ios/FVPNativeVideoView.m",
+      "series_blob": "606183241c8f5e4bf72fd58b09b6d7d4a6e755bd",
+      "integrated_blob": "606183241c8f5e4bf72fd58b09b6d7d4a6e755bd",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_ios/include/FVPEmpty.h",
+      "series_blob": "c63b19fd5827f7f3346636a15a71bf44592ebd58",
+      "integrated_blob": "c63b19fd5827f7f3346636a15a71bf44592ebd58",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_macos/FVPCoreVideoDisplayLink.m",
+      "series_blob": "f6b4241bba8a784830f039e92b4f1c6efc4f7021",
+      "integrated_blob": "f6b4241bba8a784830f039e92b4f1c6efc4f7021",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_macos/FVPNativeVideoView.m",
+      "series_blob": "ec2a2a986552dce878e181c4addb2adb613822d4",
+      "integrated_blob": "ec2a2a986552dce878e181c4addb2adb613822d4",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_macos/include/FVPEmpty.h",
+      "series_blob": "c63b19fd5827f7f3346636a15a71bf44592ebd58",
+      "integrated_blob": "c63b19fd5827f7f3346636a15a71bf44592ebd58",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/AVAssetTrackUtils.m",
+      "series_blob": "8e66ba65190933f8f8b67c581e64d12b53cd75e7",
+      "integrated_blob": "8e66ba65190933f8f8b67c581e64d12b53cd75e7",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/FVPAVFactory.m",
+      "series_blob": "d87a7c46c1b1c888500bbf591a674595a4d48694",
+      "integrated_blob": "d87a7c46c1b1c888500bbf591a674595a4d48694",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/FVPCADisplayLink.m",
+      "series_blob": "ef5e96dc7d85fabad71c9e5a81645b6bb365e912",
+      "integrated_blob": "ef5e96dc7d85fabad71c9e5a81645b6bb365e912",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/FVPEventBridge.m",
+      "series_blob": "ba8fd756e4f09e5e6fd2fba0b729e781d1d3b07d",
+      "integrated_blob": "ba8fd756e4f09e5e6fd2fba0b729e781d1d3b07d",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/FVPFrameUpdater.m",
+      "series_blob": "745010c8bcba700d5199b3f708bb06f6ff4ead78",
+      "integrated_blob": "745010c8bcba700d5199b3f708bb06f6ff4ead78",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/FVPTextureBasedVideoPlayer.m",
+      "series_blob": "18da0ca8b38403243ca358ed8a9d7f611022f925",
+      "integrated_blob": "18da0ca8b38403243ca358ed8a9d7f611022f925",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/FVPVideoPlayer.m",
+      "series_blob": "27bf445d94a08e4f15f7f4c59c5967d4ac51ad69",
+      "integrated_blob": "27bf445d94a08e4f15f7f4c59c5967d4ac51ad69",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/FVPViewProvider.m",
+      "series_blob": "d9ac02d1beeba929088821d4ae6ec2615a2fd896",
+      "integrated_blob": "d9ac02d1beeba929088821d4ae6ec2615a2fd896",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/VideoPlayerInstanceMessages.g.m",
+      "series_blob": "7e0b9eff7beecd7e3fb6bdc9cb12fffe060d78ab",
+      "integrated_blob": "7e0b9eff7beecd7e3fb6bdc9cb12fffe060d78ab",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/AVAssetTrackUtils.h",
+      "series_blob": "91c9960892d2ec4b31e2790deafc912301781c02",
+      "integrated_blob": "91c9960892d2ec4b31e2790deafc912301781c02",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/FVPAVFactory.h",
+      "series_blob": "6e80b8a5b67fd84595efed419d48bf3aefce2baf",
+      "integrated_blob": "6e80b8a5b67fd84595efed419d48bf3aefce2baf",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/FVPAssetProvider.h",
+      "series_blob": "24758fe06eea328b4abcdd62d601cec2f12e100f",
+      "integrated_blob": "24758fe06eea328b4abcdd62d601cec2f12e100f",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/FVPDisplayLink.h",
+      "series_blob": "3e4835b24aea442e512d1c922975a618769c6396",
+      "integrated_blob": "3e4835b24aea442e512d1c922975a618769c6396",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/FVPEventBridge.h",
+      "series_blob": "4205e89037e8935aeda68892bc79e7ee3c40c04b",
+      "integrated_blob": "4205e89037e8935aeda68892bc79e7ee3c40c04b",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/FVPFrameUpdater.h",
+      "series_blob": "684b6a5d3750767ef01fb8a28293cc1c3edbb890",
+      "integrated_blob": "684b6a5d3750767ef01fb8a28293cc1c3edbb890",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/FVPNativeVideoView.h",
+      "series_blob": "23aabe08214f06c287bb6bdeeca89df909f3a595",
+      "integrated_blob": "23aabe08214f06c287bb6bdeeca89df909f3a595",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/FVPTextureBasedVideoPlayer.h",
+      "series_blob": "d449e1fe6dd2ef9cfc578e612a33fc08e7b5172b",
+      "integrated_blob": "d449e1fe6dd2ef9cfc578e612a33fc08e7b5172b",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/FVPTextureBasedVideoPlayer_Test.h",
+      "series_blob": "cb51d28b542e49d4c5e543681a671f3857460548",
+      "integrated_blob": "cb51d28b542e49d4c5e543681a671f3857460548",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/FVPVideoEventListener.h",
+      "series_blob": "4787b1111dbebc73ebd1c44a377a3f8e007057d2",
+      "integrated_blob": "4787b1111dbebc73ebd1c44a377a3f8e007057d2",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/FVPVideoPlayer.h",
+      "series_blob": "be10a3317e97974d63eacf0cfb52bc88d4243c40",
+      "integrated_blob": "be10a3317e97974d63eacf0cfb52bc88d4243c40",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/FVPVideoPlayer_Internal.h",
+      "series_blob": "6f86b7d0e3ef2c06289fe1900788ec645190b729",
+      "integrated_blob": "6f86b7d0e3ef2c06289fe1900788ec645190b729",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/FVPViewProvider.h",
+      "series_blob": "88689025d491c20df8cdd255895614934b523d89",
+      "integrated_blob": "88689025d491c20df8cdd255895614934b523d89",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/VideoPlayerInstanceMessages.g.h",
+      "series_blob": "1ffdf551c1591a57bd2297c72ef280b13476d4db",
+      "integrated_blob": "1ffdf551c1591a57bd2297c72ef280b13476d4db",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/lib/src/avfoundation_video_player.dart",
+      "series_blob": "c98edfc15ec8940ab0704606228aa9afe2100c34",
+      "integrated_blob": "c98edfc15ec8940ab0704606228aa9afe2100c34",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/lib/src/video_player_instance_messages.g.dart",
+      "series_blob": "334f0ee70fc7f021155508043edf666c0e4f4599",
+      "integrated_blob": "334f0ee70fc7f021155508043edf666c0e4f4599",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/lib/src/video_player_plugin_messages.g.dart",
+      "series_blob": "0e3a6c3a9aadce49cf924915c34407af347a6b83",
+      "integrated_blob": "0e3a6c3a9aadce49cf924915c34407af347a6b83",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/lib/video_player_avfoundation.dart",
+      "series_blob": "21801913133f5ffa58e66da1944ce6c52aae208d",
+      "integrated_blob": "21801913133f5ffa58e66da1944ce6c52aae208d",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/pubspec.yaml",
+      "series_blob": "9a101dd2af0c9064545bad1e4ec1fdaf98ac0e4e",
+      "integrated_blob": "9a101dd2af0c9064545bad1e4ec1fdaf98ac0e4e",
+      "identical": true
+    },
+    {
+      "path": "native_plugins/video_player_avfoundation/upstream-files.json",
+      "series_blob": "e4694cb4ef4be51511f30befff797dcb1afadf39",
+      "integrated_blob": "e4694cb4ef4be51511f30befff797dcb1afadf39",
+      "identical": true
+    },
+    {
+      "path": "worker/src/routes/media.ts",
+      "series_blob": "0b02b6c512a493958e810f2c6a930f7e4d6dc1cb",
+      "integrated_blob": "0b02b6c512a493958e810f2c6a930f7e4d6dc1cb",
+      "identical": true
+    }
+  ],
+  "scope": "Series changed Flutter lib, Android/iOS native/config, plugin, assets, pubspec/lock and Worker non-test source files; test merge checked separately"
+}

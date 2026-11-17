@@ -1,0 +1,20 @@
+{
+  "name": "regression-tests",
+  "cwd": "/workspace/r2-validation-0738bee/flutter",
+  "argv": [
+    "flutter",
+    "test",
+    "--no-pub",
+    "--reporter",
+    "expanded",
+    "test/screen_awake_test.dart",
+    "test/offline_privacy_test.dart",
+    "test/grid_test.dart",
+    "test/video_view_test.dart",
+    "test/footer_ux_test.dart",
+    "--dart-define=FOOTER_EVIDENCE_DIR=/workspace/r2-video-fix-evidence/footer-after"
+  ],
+  "utc": "2026-10-22T16:11:29.794360+00:00",
+  "exit": 0,
+  "seconds": 23.43
+}

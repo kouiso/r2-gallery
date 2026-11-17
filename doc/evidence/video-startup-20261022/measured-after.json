@@ -1,0 +1,19 @@
+{
+  "name": "measured-after",
+  "cwd": "/workspace/r2-validation-0738bee/flutter",
+  "argv": [
+    "flutter",
+    "test",
+    "--no-pub",
+    "--concurrency=1",
+    "--reporter",
+    "expanded",
+    "--dart-define=STARTUP_EVIDENCE_DIR=/workspace/r2-video-startup-evidence/probes",
+    "--dart-define=STARTUP_EVIDENCE_VARIANT=after",
+    "test/video_startup_probe_test.dart",
+    "test/offline_video_startup_probe_test.dart"
+  ],
+  "utc": "2026-10-22T18:33:25.776093+00:00",
+  "exit": 0,
+  "seconds": 22.68
+}

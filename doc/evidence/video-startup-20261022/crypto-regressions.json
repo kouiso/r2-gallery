@@ -1,0 +1,18 @@
+{
+  "name": "crypto-regressions",
+  "cwd": "/workspace/r2-validation-0738bee/flutter",
+  "argv": [
+    "flutter",
+    "test",
+    "--no-pub",
+    "--concurrency=1",
+    "--reporter",
+    "expanded",
+    "test/offline_store_test.dart",
+    "test/offline_privacy_test.dart",
+    "test/private_storage_policy_test.dart"
+  ],
+  "utc": "2026-10-22T18:28:21.141150+00:00",
+  "exit": 0,
+  "seconds": 27.69
+}

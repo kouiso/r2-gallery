@@ -1,0 +1,14 @@
+{
+  "name": "web-release",
+  "cwd": "/workspace/r2-validation-0738bee/flutter",
+  "argv": [
+    "flutter",
+    "build",
+    "web",
+    "--release",
+    "--no-pub"
+  ],
+  "utc": "2026-10-22T18:45:56.400030+00:00",
+  "exit": 0,
+  "seconds": 131.9
+}

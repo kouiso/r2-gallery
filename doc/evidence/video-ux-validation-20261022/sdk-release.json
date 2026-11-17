@@ -1,0 +1,10 @@
+{
+  "hash": "ee80f08bbf97172ec030b8751ceab557177a34a6",
+  "channel": "stable",
+  "version": "3.44.6",
+  "dart_sdk_version": "3.12.2",
+  "dart_sdk_arch": "x64",
+  "release_date": "2026-07-09T18:35:32.476978Z",
+  "archive": "stable/linux/flutter_linux_3.44.6-stable.tar.xz",
+  "sha256": "a6320fd72e9a2690c08e2a6a70874a30cb120dee7c78f49d2c628bd7c9e20525"
+}

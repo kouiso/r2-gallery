@@ -3,6 +3,7 @@ package app.r2gallery.r2_gallery
 import android.Manifest
 import android.content.ContentValues
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.media.AudioManager
 import android.media.MediaScannerConnection
 import android.os.Build
@@ -17,6 +18,7 @@ import android.view.WindowManager
 import android.webkit.CookieManager
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
 import io.flutter.embedding.android.FlutterFragmentActivity
 import java.io.File
 import kotlin.math.roundToInt
@@ -32,7 +34,8 @@ class MainActivity : FlutterFragmentActivity() {
             pendingWritePermission?.invoke(granted)
             pendingWritePermission = null
         }
-
+    private var playerBrightnessBefore: Float? = null
+    private var playerForeground = false
     // 転送中に最近使ったアプリの一覧から消されても Dart 側の取り込み・アップロードを続けるため、
     // エンジンは画面より長く生かす。次に開いた画面は同じエンジンにつなぎ直す
     // （新しいエンジンで2つ目の Dart を起こすと、台帳から同じ転送を二重に走らせてしまう）
@@ -53,6 +56,7 @@ class MainActivity : FlutterFragmentActivity() {
         if (SharedEngine.secureWindow) {
             window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
+        // 「端末に保存」。書き込み許可のダイアログと裏スレッドでのコピーをこの口で行う
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app.r2gallery/export")
             .setMethodCallHandler { call, result ->
                 val path = call.argument<String>("path")
@@ -90,6 +94,15 @@ class MainActivity : FlutterFragmentActivity() {
                 val audio = getSystemService(AudioManager::class.java)
                 val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
                 when (call.method) {
+                    "setKeepScreenOn" -> {
+                        val keep = call.arguments == true && playerForeground
+                        if (keep) {
+                            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                        } else {
+                            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                        }
+                        result.success(keep)
+                    }
                     "getVolume" -> result.success(
                         if (max > 0) audio.getStreamVolume(AudioManager.STREAM_MUSIC).toDouble() / max else null,
                     )
@@ -123,6 +136,7 @@ class MainActivity : FlutterFragmentActivity() {
                             result.success(null)
                         } else {
                             val lp = window.attributes
+                            if (playerBrightnessBefore == null) playerBrightnessBefore = lp.screenBrightness
                             lp.screenBrightness = v.toFloat()
                             window.attributes = lp
                             result.success(v)
@@ -130,8 +144,10 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                     "resetBrightness" -> {
                         val lp = window.attributes
-                        lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                        lp.screenBrightness = playerBrightnessBefore
+                            ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
                         window.attributes = lp
+                        playerBrightnessBefore = null
                         result.success(null)
                     }
                     else -> result.notImplemented()
@@ -171,6 +187,35 @@ class MainActivity : FlutterFragmentActivity() {
             }
         // アップロード・オフライン保存を裏でも続けるためのサービスと、回線の回復の知らせ
         TransferBridge.register(this, flutterEngine.dartExecutor.binaryMessenger)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        playerForeground = true
+    }
+
+    override fun onPause() {
+        playerForeground = false
+        // 電源ボタン・他アプリへの移動を妨げず、Dart の通知が遅れても窓の保持を外す。
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        super.onPause()
+    }
+
+    override fun onPictureInPictureModeChanged(inPip: Boolean, configuration: Configuration) {
+        super.onPictureInPictureModeChanged(inPip, configuration)
+        // 閉じた時点で画面が STARTED 以上なら「元に戻す」、そうでなければ ×。時間差は使わない
+        val restoring = PipPolicy.restoring(lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
+        PlaybackBridge.pipChanged(inPip, if (inPip) null else restoring)
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        PlaybackBridge.userLeaveHint(this)
+    }
+
+    override fun onStop() {
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        super.onStop()
     }
 
     override fun onDestroy() {

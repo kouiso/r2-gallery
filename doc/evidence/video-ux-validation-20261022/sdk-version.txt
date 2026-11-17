@@ -1,0 +1,21 @@
+UTC: 2026-10-22T15:52:10.807573+00:00
+CWD: /workspace/r2-validation-0738bee/flutter
+ARGV: ["flutter", "--version", "--machine"]
+
+{
+  "frameworkVersion": "3.44.6",
+  "channel": "stable",
+  "repositoryUrl": "https://github.com/flutter/flutter.git",
+  "frameworkRevision": "ee80f08bbf97172ec030b8751ceab557177a34a6",
+  "frameworkCommitDate": "2026-07-08 15:02:06 -0700",
+  "engineRevision": "83675ed27633283e7fc296c8bca22e841224c096",
+  "engineCommitDate": "2026-06-30 16:59:03.000Z",
+  "engineContentHash": "d3a3293399556a85388faf8c6f0723a7a5597aa8",
+  "engineBuildDate": "2026-06-30 11:58:16.871",
+  "dartSdkVersion": "3.12.2",
+  "devToolsVersion": "2.57.0",
+  "flutterVersion": "3.44.6",
+  "flutterRoot": "/tmp/r2-validation/sdk/flutter"
+}
+
+EXIT: 0

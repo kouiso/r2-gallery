@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'src/state/app_state.dart';
+import 'src/playback/mobile_playback.dart';
 import 'src/state/pairing.dart';
 import 'src/store/lock_platform.dart';
 import 'src/ui/app_lock_layer.dart';
@@ -13,8 +14,14 @@ import 'src/ui/home_shell.dart';
 import 'src/ui/startup_banner.dart';
 import 'src/ui/theme.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  AppTypography.registerLicense();
+  try {
+    await MobilePlayback.initialize();
+  } catch (_) {
+    debugPrint('mobile playback setup unavailable');
+  }
   runApp(const R2GalleryApp());
 }
 

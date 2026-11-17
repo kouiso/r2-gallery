@@ -1,0 +1,19 @@
+UTC: 2026-10-22T19:03:40.442836+00:00
+CWD: /workspace/r2-validation-0738bee/flutter
+ARGV: ["flutter", "build", "web", "--release", "--no-pub"]
+
+Compiling lib/main.dart for the Web...
+Wasm dry run findings:
+Found incompatibilities with WebAssembly.
+
+package:get_thumbnail_video/video_thumbnail_web.dart 2:1 - dart:html unsupported (0)
+
+Consider addressing these issues to enable wasm builds. See docs for more info: https://docs.flutter.dev/platform-integration/web/wasm
+
+Use --no-wasm-dry-run to disable these warnings.
+Font asset "CupertinoIcons.ttf" was tree-shaken, reducing it from 257628 to 1472 bytes (99.4% reduction). Tree-shaking can be disabled by providing the --no-tree-shake-icons flag when building your app.
+Font asset "MaterialIcons-Regular.otf" was tree-shaken, reducing it from 1645184 to 15492 bytes (99.1% reduction). Tree-shaking can be disabled by providing the --no-tree-shake-icons flag when building your app.
+Compiling lib/main.dart for the Web...                            151.7s
+✓ Built build/web
+
+EXIT: 0

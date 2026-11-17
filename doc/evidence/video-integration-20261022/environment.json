@@ -1,0 +1,36 @@
+{
+  "utc": "2026-10-22T19:01:30.197936+00:00",
+  "flutter": {
+    "frameworkVersion": "3.44.6",
+    "channel": "stable",
+    "repositoryUrl": "https://github.com/flutter/flutter.git",
+    "frameworkRevision": "ee80f08bbf97172ec030b8751ceab557177a34a6",
+    "frameworkCommitDate": "2026-07-08 15:02:06 -0700",
+    "engineRevision": "83675ed27633283e7fc296c8bca22e841224c096",
+    "engineCommitDate": "2026-06-30 16:59:03.000Z",
+    "engineContentHash": "d3a3293399556a85388faf8c6f0723a7a5597aa8",
+    "engineBuildDate": "2026-06-30 11:58:16.871",
+    "dartSdkVersion": "3.12.2",
+    "devToolsVersion": "2.57.0",
+    "flutterVersion": "3.44.6"
+  },
+  "node": "v24.19.0",
+  "lockfiles": {
+    "flutter/pubspec.lock": {
+      "sha256": "6310628ae9142d84ecfd4f10ad56014b22f8996753f5dc682001623e66552066",
+      "matches_preserved_series": true,
+      "matches_main": false,
+      "main_sha256": "d43527637a598b6761531634190b9b4cbff1968b60798816e6933c589dc79889"
+    },
+    "pnpm-lock.yaml": {
+      "sha256": "20d670ff513e32c69475815f02ae22ad278b557ae890bda1849209d9d9804c05",
+      "matches_preserved_series": true,
+      "matches_main": true,
+      "main_sha256": "20d670ff513e32c69475815f02ae22ad278b557ae890bda1849209d9d9804c05"
+    }
+  },
+  "native_sdk_installation": "HELD: explicit user approval pending; not attempted",
+  "native_build": "NOT RUN",
+  "physical_device": "NOT RUN",
+  "dependency_note": "Integration retains the series lockfiles including its mobile playback dependencies; no new dependency resolution or updates."
+}

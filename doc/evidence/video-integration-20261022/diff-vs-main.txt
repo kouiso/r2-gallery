@@ -1,0 +1,584 @@
+doc/evidence/mobile-playback-20261022/README.md    | 107 +++
+ doc/evidence/mobile-playback-20261022/SHA256SUMS   |  30 +
+ .../mobile-playback-20261022/logs/ai-rules.json    |  12 +
+ .../mobile-playback-20261022/logs/ai-rules.txt     |   7 +
+ .../logs/analyze-final-clean.json                  |  12 +
+ .../logs/analyze-final-clean.txt                   |  16 +
+ .../logs/android-release-attempt.json              |  14 +
+ .../logs/android-release-attempt.txt               |   7 +
+ .../logs/committed-secrets.json                    |  12 +
+ .../logs/committed-secrets.txt                     |  15 +
+ .../mobile-playback-20261022/logs/fast-staged.json |  12 +
+ .../mobile-playback-20261022/logs/fast-staged.txt  |  98 +++
+ .../mobile-playback-20261022/logs/fast.json        |  12 +
+ .../mobile-playback-20261022/logs/fast.txt         | 112 +++
+ .../logs/flutter-full.json                         |  15 +
+ .../mobile-playback-20261022/logs/flutter-full.txt | 698 ++++++++++++++++++
+ .../logs/push-implementation.json                  |  14 +
+ .../logs/push-implementation.txt                   |  13 +
+ .../logs/remote-implementation.json                |  14 +
+ .../logs/remote-implementation.txt                 |   8 +
+ .../mobile-playback-20261022/logs/sdk-network.json |  23 +
+ .../mobile-playback-20261022/logs/sdk-network.txt  |  11 +
+ .../logs/upstream-audit.json                       |  11 +
+ .../logs/upstream-audit.txt                        |  18 +
+ .../mobile-playback-20261022/logs/web-release.json |  14 +
+ .../mobile-playback-20261022/logs/web-release.txt  |  19 +
+ .../native-configuration.json                      |  22 +
+ .../new-ui-glyph-coverage.json                     |  20 +
+ .../screens/playback-menu-1.3.png                  | Bin 0 -> 52504 bytes
+ .../screens/playback-menu-2.0.png                  | Bin 0 -> 57817 bytes
+ .../sdk-network-summary.json                       |  35 +
+ doc/evidence/private-offline-20261022/README.md    |  96 +++
+ doc/evidence/private-storage-20261022/README.md    |  98 +++
+ doc/evidence/private-storage-20261022/SHA256SUMS   |  20 +
+ .../private-storage-20261022/glyph-coverage.json   |  19 +
+ .../private-storage-20261022/logs/ai-rules.json    |  12 +
+ .../private-storage-20261022/logs/ai-rules.txt     |   7 +
+ .../logs/analyze-clean.json                        |  12 +
+ .../logs/analyze-clean.txt                         |  16 +
+ .../logs/analyze-commit.json                       |  12 +
+ .../logs/analyze-commit.txt                        |  16 +
+ .../private-storage-20261022/logs/fast.json        |  12 +
+ .../private-storage-20261022/logs/fast.txt         |  98 +++
+ .../private-storage-20261022/logs/full-serial.json |  16 +
+ .../private-storage-20261022/logs/full-serial.txt  | 733 +++++++++++++++++++
+ .../logs/guarded-storage-tests.json                |  20 +
+ .../logs/guarded-storage-tests.txt                 |  43 ++
+ .../logs/native-static-audit.json                  |  11 +
+ .../logs/native-static-audit.txt                   |  54 ++
+ .../private-storage-20261022/logs/web-final.json   |  14 +
+ .../private-storage-20261022/logs/web-final.txt    |  19 +
+ .../screens/unsupported-storage.png                | Bin 0 -> 21955 bytes
+ .../verification-history.json                      |  53 ++
+ doc/evidence/video-startup-20261022/README.md      | 109 +++
+ doc/evidence/video-startup-20261022/SHA256SUMS     |  43 ++
+ doc/evidence/video-startup-20261022/ai-rules.json  |  12 +
+ doc/evidence/video-startup-20261022/ai-rules.txt   |   7 +
+ .../video-startup-20261022/analyze-crypto.json     |  12 +
+ .../video-startup-20261022/analyze-crypto.txt      |  16 +
+ .../video-startup-20261022/baseline-audit.json     |  13 +
+ .../video-startup-20261022/comparison.json         |  63 ++
+ .../video-startup-20261022/crypto-regressions.json |  18 +
+ .../video-startup-20261022/crypto-regressions.txt  |  45 ++
+ .../video-startup-20261022/environment.json        |  25 +
+ doc/evidence/video-startup-20261022/fast.json      |  12 +
+ doc/evidence/video-startup-20261022/fast.txt       | 101 +++
+ .../video-startup-20261022/faststart-fixture.json  |  23 +
+ .../video-startup-20261022/faststart-fixture.txt   |   6 +
+ .../fixtures/container-layout.json                 |  68 ++
+ .../video-startup-20261022/fixtures/front.mp4      | Bin 0 -> 22688 bytes
+ .../fixtures/front.mp4.ffprobe.json                | 407 +++++++++++
+ .../video-startup-20261022/fixtures/tail.mp4       | Bin 0 -> 22688 bytes
+ .../fixtures/tail.mp4.ffprobe.json                 | 408 +++++++++++
+ doc/evidence/video-startup-20261022/full.json      |  15 +
+ doc/evidence/video-startup-20261022/full.txt       | 749 +++++++++++++++++++
+ .../video-startup-20261022/generate-mp4.json       |  30 +
+ .../video-startup-20261022/generate-mp4.txt        |   6 +
+ .../video-startup-20261022/local-worker-probe.mjs  | 171 +++++
+ .../local-worker-results.json                      | 343 +++++++++
+ .../video-startup-20261022/main-overlap.json       |  56 ++
+ .../video-startup-20261022/measured-after.json     |  19 +
+ .../video-startup-20261022/measured-after.txt      |  12 +
+ .../video-startup-20261022/measured-before.json    |  19 +
+ .../video-startup-20261022/measured-before.txt     |  12 +
+ .../probe-source-hashes.json                       |   4 +
+ .../probes/after-contended.json                    | 212 ++++++
+ .../probes/after-independent.json                  | 212 ++++++
+ .../probes/after-offline.json                      |  72 ++
+ .../probes/before-contended.json                   | 248 +++++++
+ .../probes/before-independent.json                 | 248 +++++++
+ .../probes/before-offline.json                     |  72 ++
+ .../video-startup-20261022/web-release.json        |  14 +
+ .../video-startup-20261022/web-release.txt         |  19 +
+ .../video-startup-20261022/worker-after.txt        |  47 ++
+ doc/evidence/video-startup-20261022/worker-all.txt | 108 +++
+ .../video-startup-20261022/worker-before.txt       | 217 ++++++
+ .../video-startup-20261022/worker-evidence.md      |  89 +++
+ doc/evidence/video-ux-20261022/README.md           | 119 +++
+ doc/evidence/video-ux-20261022/ai-rules.txt        |   1 +
+ doc/evidence/video-ux-20261022/ci-contracts.txt    |  16 +
+ .../video-ux-20261022/fast-before-fixture-fix.txt  | 112 +++
+ doc/evidence/video-ux-20261022/fast.txt            |  88 +++
+ .../flutter-manifest-after-publish.txt             |  11 +
+ .../video-ux-20261022/font-assets-validation.txt   |  15 +
+ doc/evidence/video-ux-20261022/japanese-font.md    |  57 ++
+ .../video-ux-20261022/playback-platform-plan.md    |  80 +++
+ doc/evidence/video-ux-20261022/screen-awake.md     |  87 +++
+ .../video-ux-validation-20261022/README.md         |  89 +++
+ .../video-ux-validation-20261022/SHA256SUMS        |  65 ++
+ .../ai-rules-final.json                            |  12 +
+ .../ai-rules-final.txt                             |   7 +
+ .../analyze-new-lints-fixed.json                   |  12 +
+ .../analyze-new-lints-fixed.txt                    |  16 +
+ .../analyzer-delta.json                            |  45 ++
+ .../baseline-analyze.txt                           |  16 +
+ .../browser-startup.txt                            |   4 +
+ .../build-apk-unavailable.txt                      |   7 +
+ .../build-web-final.json                           |  14 +
+ .../build-web-final.txt                            |  19 +
+ .../ci-fast-pinned.json                            |  12 +
+ .../ci-fast-pinned.txt                             |  97 +++
+ .../diff-check-final.json                          |  12 +
+ .../diff-check-final.txt                           |   6 +
+ .../video-ux-validation-20261022/flutter-full.json |  16 +
+ .../video-ux-validation-20261022/flutter-full.txt  | 666 +++++++++++++++++
+ .../font-after/after-japanese-1.0.png              | Bin 0 -> 46786 bytes
+ .../font-after/after-japanese-2.0.png              | Bin 0 -> 88462 bytes
+ .../font-assets-final.json                         |  11 +
+ .../font-assets-final.txt                          |  21 +
+ .../footer-after/landscape-01-list.png             | Bin 0 -> 19843 bytes
+ .../footer-after/landscape-02-video.png            | Bin 0 -> 19739 bytes
+ .../footer-after/landscape-03-adjustments.png      | Bin 0 -> 23511 bytes
+ .../footer-after/landscape-04-locked.png           | Bin 0 -> 4178 bytes
+ .../footer-after/landscape-05-info.png             | Bin 0 -> 20186 bytes
+ .../footer-after/landscape-06-return.png           | Bin 0 -> 19843 bytes
+ .../footer-after/narrow-1.3-01-list.png            | Bin 0 -> 19963 bytes
+ .../footer-after/narrow-1.3-02-video.png           | Bin 0 -> 20110 bytes
+ .../footer-after/narrow-1.3-03-adjustments.png     | Bin 0 -> 31425 bytes
+ .../footer-after/narrow-1.3-04-locked.png          | Bin 0 -> 4576 bytes
+ .../footer-after/narrow-1.3-05-info.png            | Bin 0 -> 20846 bytes
+ .../footer-after/narrow-1.3-06-return.png          | Bin 0 -> 19963 bytes
+ .../footer-after/narrow-2.0-01-list.png            | Bin 0 -> 20983 bytes
+ .../footer-after/narrow-2.0-02-video.png           | Bin 0 -> 26931 bytes
+ .../footer-after/narrow-2.0-03-adjustments.png     | Bin 0 -> 34232 bytes
+ .../footer-after/narrow-2.0-04-locked.png          | Bin 0 -> 4576 bytes
+ .../footer-after/narrow-2.0-05-info.png            | Bin 0 -> 30758 bytes
+ .../footer-after/narrow-2.0-06-return.png          | Bin 0 -> 20983 bytes
+ .../footer-before/landscape-01-list.png            | Bin 0 -> 19843 bytes
+ .../footer-before/landscape-02-video.png           | Bin 0 -> 15227 bytes
+ .../footer-before/landscape-03-adjustments.png     | Bin 0 -> 19045 bytes
+ .../footer-before/landscape-04-locked.png          | Bin 0 -> 4178 bytes
+ .../footer-before/landscape-05-info.png            | Bin 0 -> 20186 bytes
+ .../footer-before/landscape-06-return.png          | Bin 0 -> 19843 bytes
+ .../footer-before/narrow-1.3-01-list.png           | Bin 0 -> 19963 bytes
+ .../footer-before/narrow-1.3-02-video.png          | Bin 0 -> 15500 bytes
+ .../footer-before/narrow-1.3-03-adjustments.png    | Bin 0 -> 26905 bytes
+ .../footer-before/narrow-1.3-04-locked.png         | Bin 0 -> 4576 bytes
+ .../footer-before/narrow-1.3-05-info.png           | Bin 0 -> 20846 bytes
+ .../footer-before/narrow-1.3-06-return.png         | Bin 0 -> 19963 bytes
+ .../footer-before/narrow-2.0-01-list.png           | Bin 0 -> 20983 bytes
+ .../footer-before/narrow-2.0-02-video.png          | Bin 0 -> 18711 bytes
+ .../footer-before/narrow-2.0-03-adjustments.png    | Bin 0 -> 25768 bytes
+ .../footer-before/narrow-2.0-04-locked.png         | Bin 0 -> 4576 bytes
+ .../footer-before/narrow-2.0-05-info.png           | Bin 0 -> 28260 bytes
+ .../footer-before/narrow-2.0-06-return.png         | Bin 0 -> 20983 bytes
+ .../footer-style-regression-before.txt             | 108 +++
+ .../local-web-assets.json                          |  65 ++
+ .../regression-tests.json                          |  20 +
+ .../regression-tests.txt                           |  99 +++
+ .../video-ux-validation-20261022/sdk-integrity.txt |   4 +
+ .../video-ux-validation-20261022/sdk-release.json  |  10 +
+ .../video-ux-validation-20261022/sdk-version.txt   |  21 +
+ .../tested-source.json                             |  16 +
+ doc/feature-parity.md                              |  19 +-
+ flutter/android/app/build.gradle.kts               |   1 +
+ flutter/android/app/src/main/AndroidManifest.xml   |  16 +-
+ .../app/r2gallery/r2_gallery/MainActivity.kt       | 185 ++---
+ .../app/r2gallery/r2_gallery/PlaybackBridge.kt     | 184 +++++
+ .../app/r2gallery/r2_gallery/PlaybackService.kt    | 155 ++++
+ .../app/r2gallery/r2_gallery/SharedEngine.kt       |   8 +-
+ .../android/app/src/main/res/xml/backup_rules.xml  |  13 +
+ .../app/src/main/res/xml/data_extraction_rules.xml |  26 +
+ flutter/assets/fonts/OFL.txt                       |  97 +++
+ flutter/assets/fonts/R2GalleryJP-Bold.otf          | Bin 0 -> 4419896 bytes
+ flutter/assets/fonts/R2GalleryJP-Regular.otf       | Bin 0 -> 4306852 bytes
+ flutter/assets/fonts/manifest.json                 |  22 +
+ flutter/ios/Runner.xcodeproj/project.pbxproj       |   8 +
+ flutter/ios/Runner/AppDelegate.swift               |  21 +
+ flutter/ios/Runner/Info.plist                      |   8 +
+ flutter/ios/Runner/R2PlaybackBridge.swift          | 230 ++++++
+ flutter/ios/Runner/R2PrivateStorageBridge.swift    |  74 ++
+ flutter/lib/main.dart                              |   9 +-
+ flutter/lib/src/grid/media_controller.dart         |  63 +-
+ .../lib/src/offline/offline_playback_files.dart    |  76 ++
+ flutter/lib/src/offline/offline_screen.dart        | 418 +++++++++--
+ flutter/lib/src/offline/offline_store.dart         | 161 +++--
+ flutter/lib/src/playback/mobile_playback.dart      | 278 +++++++
+ flutter/lib/src/playback/playback_menu.dart        | 101 +++
+ flutter/lib/src/playback/playback_session.dart     | 449 ++++++++++++
+ flutter/lib/src/playback/player_platform_tap.dart  |  82 +++
+ flutter/lib/src/state/app_state.dart               | 252 +++++--
+ flutter/lib/src/store/kv.dart                      |  12 +-
+ flutter/lib/src/store/private_storage.dart         |  60 ++
+ flutter/lib/src/transfer/transfer_queue.dart       |  55 +-
+ flutter/lib/src/ui/theme.dart                      |  55 +-
+ flutter/lib/src/ui/video_view.dart                 | 573 ++++++++++-----
+ flutter/lib/src/ui/viewer_footer.dart              | 143 ++++
+ flutter/lib/src/ui/viewer_screen.dart              | 265 ++++---
+ flutter/lib/src/viewer/device_export.dart          |  82 +--
+ flutter/lib/src/viewer/player_system.dart          |   8 +-
+ flutter/lib/src/viewer/screen_awake.dart           | 237 ++++++
+ flutter/lib/src/viewer/screen_awake_driver.dart    |  14 +
+ flutter/lib/src/viewer/screen_awake_native.dart    |  46 ++
+ flutter/lib/src/viewer/screen_awake_web.dart       | 113 +++
+ flutter/lib/src/webdl/web_transfer.dart            |   5 +-
+ flutter/pubspec.lock                               |  19 +-
+ flutter/pubspec.yaml                               |  20 +-
+ flutter/test/background_playback_budget_test.dart  |  43 ++
+ flutter/test/footer_ux_test.dart                   | 225 ++++++
+ flutter/test/foreground_settlement_test.dart       | 146 ++++
+ flutter/test/grid_test.dart                        |  63 +-
+ flutter/test/japanese_font_test.dart               |  78 ++
+ flutter/test/mobile_playback_port_test.dart        | 166 +++++
+ flutter/test/mobile_playback_widget_test.dart      | 193 +++++
+ flutter/test/offline_playback_files_test.dart      |  49 ++
+ flutter/test/offline_privacy_test.dart             | 401 +++++++++++
+ flutter/test/offline_store_test.dart               | 126 ++++
+ flutter/test/offline_video_startup_probe_test.dart | 102 +++
+ flutter/test/playback_session_test.dart            | 337 +++++++++
+ flutter/test/player_platform_tap_test.dart         |  70 ++
+ flutter/test/private_export_boundary_test.dart     |  43 ++
+ flutter/test/private_kv_policy_test.dart           |  52 ++
+ flutter/test/private_offline_app_test.dart         | 205 ++++++
+ flutter/test/private_storage_policy_test.dart      | 131 ++++
+ flutter/test/private_storage_ui_test.dart          |  82 +++
+ flutter/test/screen_awake_test.dart                | 371 ++++++++++
+ flutter/test/support/fake_playback.dart            |  39 +
+ flutter/test/transfers_ui_test.dart                |  20 +-
+ flutter/test/video_startup_probe_test.dart         | 258 +++++++
+ flutter/test/video_view_test.dart                  | 276 ++++++-
+ flutter/test/viewer_test.dart                      | 293 +++++---
+ .../video_player_avfoundation/CHANGELOG.md         | 312 ++++++++
+ native_plugins/video_player_avfoundation/LICENSE   |  25 +
+ .../video_player_avfoundation/R2_PATCH.md          |  13 +
+ native_plugins/video_player_avfoundation/README.md |  15 +
+ .../darwin/video_player_avfoundation.podspec       |  32 +
+ .../darwin/video_player_avfoundation/Package.swift |  57 ++
+ .../NativeVideoViewFactory.swift                   |  66 ++
+ .../Resources/PrivacyInfo.xcprivacy                |  14 +
+ .../VideoPlayerPlugin.swift                        | 335 +++++++++
+ .../VideoPlayerPluginMessages.g.swift              | 464 ++++++++++++
+ .../FVPNativeVideoView.m                           |  38 +
+ .../include/FVPEmpty.h                             |   6 +
+ .../FVPCoreVideoDisplayLink.m                      |  99 +++
+ .../FVPNativeVideoView.m                           |  25 +
+ .../include/FVPEmpty.h                             |   6 +
+ .../AVAssetTrackUtils.m                            |  48 ++
+ .../video_player_avfoundation_objc/FVPAVFactory.m  | 163 +++++
+ .../FVPCADisplayLink.m                             |  84 +++
+ .../FVPEventBridge.m                               | 122 ++++
+ .../FVPFrameUpdater.m                              |  19 +
+ .../FVPTextureBasedVideoPlayer.m                   | 222 ++++++
+ .../FVPVideoPlayer.m                               | 694 ++++++++++++++++++
+ .../FVPViewProvider.m                              |  38 +
+ .../VideoPlayerInstanceMessages.g.m                | 797 +++++++++++++++++++++
+ .../AVAssetTrackUtils.h                            |  15 +
+ .../video_player_avfoundation_objc/FVPAVFactory.h  | 114 +++
+ .../FVPAssetProvider.h                             |  34 +
+ .../FVPDisplayLink.h                               |  55 ++
+ .../FVPEventBridge.h                               |  26 +
+ .../FVPFrameUpdater.h                              |  36 +
+ .../FVPNativeVideoView.h                           |  27 +
+ .../FVPTextureBasedVideoPlayer.h                   |  35 +
+ .../FVPTextureBasedVideoPlayer_Test.h              |  29 +
+ .../FVPVideoEventListener.h                        |  36 +
+ .../FVPVideoPlayer.h                               |  47 ++
+ .../FVPVideoPlayer_Internal.h                      |  40 ++
+ .../FVPViewProvider.h                              |  35 +
+ .../VideoPlayerInstanceMessages.g.h                | 127 ++++
+ .../lib/src/avfoundation_video_player.dart         | 463 ++++++++++++
+ .../lib/src/video_player_instance_messages.g.dart  | 629 ++++++++++++++++
+ .../lib/src/video_player_plugin_messages.g.dart    | 364 ++++++++++
+ .../lib/video_player_avfoundation.dart             |   5 +
+ .../video_player_avfoundation/pubspec.yaml         |  39 +
+ .../video_player_avfoundation/upstream-files.json  |  49 ++
+ tools/fonts/prepare-japanese-font.py               |  81 +++
+ tools/fonts/verify-japanese-font.py                |  68 ++
+ tools/verify-private-storage.py                    |  52 ++
+ tools/verify-video-player-fork.py                  |  26 +
+ worker/src/media_startup.test.ts                   | 197 +++++
+ worker/src/routes/media.ts                         |  73 +-
+ 291 files changed, 23230 insertions(+), 838 deletions(-)
+
+A	doc/evidence/mobile-playback-20261022/README.md
+A	doc/evidence/mobile-playback-20261022/SHA256SUMS
+A	doc/evidence/mobile-playback-20261022/logs/ai-rules.json
+A	doc/evidence/mobile-playback-20261022/logs/ai-rules.txt
+A	doc/evidence/mobile-playback-20261022/logs/analyze-final-clean.json
+A	doc/evidence/mobile-playback-20261022/logs/analyze-final-clean.txt
+A	doc/evidence/mobile-playback-20261022/logs/android-release-attempt.json
+A	doc/evidence/mobile-playback-20261022/logs/android-release-attempt.txt
+A	doc/evidence/mobile-playback-20261022/logs/committed-secrets.json
+A	doc/evidence/mobile-playback-20261022/logs/committed-secrets.txt
+A	doc/evidence/mobile-playback-20261022/logs/fast-staged.json
+A	doc/evidence/mobile-playback-20261022/logs/fast-staged.txt
+A	doc/evidence/mobile-playback-20261022/logs/fast.json
+A	doc/evidence/mobile-playback-20261022/logs/fast.txt
+A	doc/evidence/mobile-playback-20261022/logs/flutter-full.json
+A	doc/evidence/mobile-playback-20261022/logs/flutter-full.txt
+A	doc/evidence/mobile-playback-20261022/logs/push-implementation.json
+A	doc/evidence/mobile-playback-20261022/logs/push-implementation.txt
+A	doc/evidence/mobile-playback-20261022/logs/remote-implementation.json
+A	doc/evidence/mobile-playback-20261022/logs/remote-implementation.txt
+A	doc/evidence/mobile-playback-20261022/logs/sdk-network.json
+A	doc/evidence/mobile-playback-20261022/logs/sdk-network.txt
+A	doc/evidence/mobile-playback-20261022/logs/upstream-audit.json
+A	doc/evidence/mobile-playback-20261022/logs/upstream-audit.txt
+A	doc/evidence/mobile-playback-20261022/logs/web-release.json
+A	doc/evidence/mobile-playback-20261022/logs/web-release.txt
+A	doc/evidence/mobile-playback-20261022/native-configuration.json
+A	doc/evidence/mobile-playback-20261022/new-ui-glyph-coverage.json
+A	doc/evidence/mobile-playback-20261022/screens/playback-menu-1.3.png
+A	doc/evidence/mobile-playback-20261022/screens/playback-menu-2.0.png
+A	doc/evidence/mobile-playback-20261022/sdk-network-summary.json
+A	doc/evidence/private-offline-20261022/README.md
+A	doc/evidence/private-storage-20261022/README.md
+A	doc/evidence/private-storage-20261022/SHA256SUMS
+A	doc/evidence/private-storage-20261022/glyph-coverage.json
+A	doc/evidence/private-storage-20261022/logs/ai-rules.json
+A	doc/evidence/private-storage-20261022/logs/ai-rules.txt
+A	doc/evidence/private-storage-20261022/logs/analyze-clean.json
+A	doc/evidence/private-storage-20261022/logs/analyze-clean.txt
+A	doc/evidence/private-storage-20261022/logs/analyze-commit.json
+A	doc/evidence/private-storage-20261022/logs/analyze-commit.txt
+A	doc/evidence/private-storage-20261022/logs/fast.json
+A	doc/evidence/private-storage-20261022/logs/fast.txt
+A	doc/evidence/private-storage-20261022/logs/full-serial.json
+A	doc/evidence/private-storage-20261022/logs/full-serial.txt
+A	doc/evidence/private-storage-20261022/logs/guarded-storage-tests.json
+A	doc/evidence/private-storage-20261022/logs/guarded-storage-tests.txt
+A	doc/evidence/private-storage-20261022/logs/native-static-audit.json
+A	doc/evidence/private-storage-20261022/logs/native-static-audit.txt
+A	doc/evidence/private-storage-20261022/logs/web-final.json
+A	doc/evidence/private-storage-20261022/logs/web-final.txt
+A	doc/evidence/private-storage-20261022/screens/unsupported-storage.png
+A	doc/evidence/private-storage-20261022/verification-history.json
+A	doc/evidence/video-startup-20261022/README.md
+A	doc/evidence/video-startup-20261022/SHA256SUMS
+A	doc/evidence/video-startup-20261022/ai-rules.json
+A	doc/evidence/video-startup-20261022/ai-rules.txt
+A	doc/evidence/video-startup-20261022/analyze-crypto.json
+A	doc/evidence/video-startup-20261022/analyze-crypto.txt
+A	doc/evidence/video-startup-20261022/baseline-audit.json
+A	doc/evidence/video-startup-20261022/comparison.json
+A	doc/evidence/video-startup-20261022/crypto-regressions.json
+A	doc/evidence/video-startup-20261022/crypto-regressions.txt
+A	doc/evidence/video-startup-20261022/environment.json
+A	doc/evidence/video-startup-20261022/fast.json
+A	doc/evidence/video-startup-20261022/fast.txt
+A	doc/evidence/video-startup-20261022/faststart-fixture.json
+A	doc/evidence/video-startup-20261022/faststart-fixture.txt
+A	doc/evidence/video-startup-20261022/fixtures/container-layout.json
+A	doc/evidence/video-startup-20261022/fixtures/front.mp4
+A	doc/evidence/video-startup-20261022/fixtures/front.mp4.ffprobe.json
+A	doc/evidence/video-startup-20261022/fixtures/tail.mp4
+A	doc/evidence/video-startup-20261022/fixtures/tail.mp4.ffprobe.json
+A	doc/evidence/video-startup-20261022/full.json
+A	doc/evidence/video-startup-20261022/full.txt
+A	doc/evidence/video-startup-20261022/generate-mp4.json
+A	doc/evidence/video-startup-20261022/generate-mp4.txt
+A	doc/evidence/video-startup-20261022/local-worker-probe.mjs
+A	doc/evidence/video-startup-20261022/local-worker-results.json
+A	doc/evidence/video-startup-20261022/main-overlap.json
+A	doc/evidence/video-startup-20261022/measured-after.json
+A	doc/evidence/video-startup-20261022/measured-after.txt
+A	doc/evidence/video-startup-20261022/measured-before.json
+A	doc/evidence/video-startup-20261022/measured-before.txt
+A	doc/evidence/video-startup-20261022/probe-source-hashes.json
+A	doc/evidence/video-startup-20261022/probes/after-contended.json
+A	doc/evidence/video-startup-20261022/probes/after-independent.json
+A	doc/evidence/video-startup-20261022/probes/after-offline.json
+A	doc/evidence/video-startup-20261022/probes/before-contended.json
+A	doc/evidence/video-startup-20261022/probes/before-independent.json
+A	doc/evidence/video-startup-20261022/probes/before-offline.json
+A	doc/evidence/video-startup-20261022/web-release.json
+A	doc/evidence/video-startup-20261022/web-release.txt
+A	doc/evidence/video-startup-20261022/worker-after.txt
+A	doc/evidence/video-startup-20261022/worker-all.txt
+A	doc/evidence/video-startup-20261022/worker-before.txt
+A	doc/evidence/video-startup-20261022/worker-evidence.md
+A	doc/evidence/video-ux-20261022/README.md
+A	doc/evidence/video-ux-20261022/ai-rules.txt
+A	doc/evidence/video-ux-20261022/ci-contracts.txt
+A	doc/evidence/video-ux-20261022/fast-before-fixture-fix.txt
+A	doc/evidence/video-ux-20261022/fast.txt
+A	doc/evidence/video-ux-20261022/flutter-manifest-after-publish.txt
+A	doc/evidence/video-ux-20261022/font-assets-validation.txt
+A	doc/evidence/video-ux-20261022/japanese-font.md
+A	doc/evidence/video-ux-20261022/playback-platform-plan.md
+A	doc/evidence/video-ux-20261022/screen-awake.md
+A	doc/evidence/video-ux-validation-20261022/README.md
+A	doc/evidence/video-ux-validation-20261022/SHA256SUMS
+A	doc/evidence/video-ux-validation-20261022/ai-rules-final.json
+A	doc/evidence/video-ux-validation-20261022/ai-rules-final.txt
+A	doc/evidence/video-ux-validation-20261022/analyze-new-lints-fixed.json
+A	doc/evidence/video-ux-validation-20261022/analyze-new-lints-fixed.txt
+A	doc/evidence/video-ux-validation-20261022/analyzer-delta.json
+A	doc/evidence/video-ux-validation-20261022/baseline-analyze.txt
+A	doc/evidence/video-ux-validation-20261022/browser-startup.txt
+A	doc/evidence/video-ux-validation-20261022/build-apk-unavailable.txt
+A	doc/evidence/video-ux-validation-20261022/build-web-final.json
+A	doc/evidence/video-ux-validation-20261022/build-web-final.txt
+A	doc/evidence/video-ux-validation-20261022/ci-fast-pinned.json
+A	doc/evidence/video-ux-validation-20261022/ci-fast-pinned.txt
+A	doc/evidence/video-ux-validation-20261022/diff-check-final.json
+A	doc/evidence/video-ux-validation-20261022/diff-check-final.txt
+A	doc/evidence/video-ux-validation-20261022/flutter-full.json
+A	doc/evidence/video-ux-validation-20261022/flutter-full.txt
+A	doc/evidence/video-ux-validation-20261022/font-after/after-japanese-1.0.png
+A	doc/evidence/video-ux-validation-20261022/font-after/after-japanese-2.0.png
+A	doc/evidence/video-ux-validation-20261022/font-assets-final.json
+A	doc/evidence/video-ux-validation-20261022/font-assets-final.txt
+A	doc/evidence/video-ux-validation-20261022/footer-after/landscape-01-list.png
+A	doc/evidence/video-ux-validation-20261022/footer-after/landscape-02-video.png
+A	doc/evidence/video-ux-validation-20261022/footer-after/landscape-03-adjustments.png
+A	doc/evidence/video-ux-validation-20261022/footer-after/landscape-04-locked.png
+A	doc/evidence/video-ux-validation-20261022/footer-after/landscape-05-info.png
+A	doc/evidence/video-ux-validation-20261022/footer-after/landscape-06-return.png
+A	doc/evidence/video-ux-validation-20261022/footer-after/narrow-1.3-01-list.png
+A	doc/evidence/video-ux-validation-20261022/footer-after/narrow-1.3-02-video.png
+A	doc/evidence/video-ux-validation-20261022/footer-after/narrow-1.3-03-adjustments.png
+A	doc/evidence/video-ux-validation-20261022/footer-after/narrow-1.3-04-locked.png
+A	doc/evidence/video-ux-validation-20261022/footer-after/narrow-1.3-05-info.png
+A	doc/evidence/video-ux-validation-20261022/footer-after/narrow-1.3-06-return.png
+A	doc/evidence/video-ux-validation-20261022/footer-after/narrow-2.0-01-list.png
+A	doc/evidence/video-ux-validation-20261022/footer-after/narrow-2.0-02-video.png
+A	doc/evidence/video-ux-validation-20261022/footer-after/narrow-2.0-03-adjustments.png
+A	doc/evidence/video-ux-validation-20261022/footer-after/narrow-2.0-04-locked.png
+A	doc/evidence/video-ux-validation-20261022/footer-after/narrow-2.0-05-info.png
+A	doc/evidence/video-ux-validation-20261022/footer-after/narrow-2.0-06-return.png
+A	doc/evidence/video-ux-validation-20261022/footer-before/landscape-01-list.png
+A	doc/evidence/video-ux-validation-20261022/footer-before/landscape-02-video.png
+A	doc/evidence/video-ux-validation-20261022/footer-before/landscape-03-adjustments.png
+A	doc/evidence/video-ux-validation-20261022/footer-before/landscape-04-locked.png
+A	doc/evidence/video-ux-validation-20261022/footer-before/landscape-05-info.png
+A	doc/evidence/video-ux-validation-20261022/footer-before/landscape-06-return.png
+A	doc/evidence/video-ux-validation-20261022/footer-before/narrow-1.3-01-list.png
+A	doc/evidence/video-ux-validation-20261022/footer-before/narrow-1.3-02-video.png
+A	doc/evidence/video-ux-validation-20261022/footer-before/narrow-1.3-03-adjustments.png
+A	doc/evidence/video-ux-validation-20261022/footer-before/narrow-1.3-04-locked.png
+A	doc/evidence/video-ux-validation-20261022/footer-before/narrow-1.3-05-info.png
+A	doc/evidence/video-ux-validation-20261022/footer-before/narrow-1.3-06-return.png
+A	doc/evidence/video-ux-validation-20261022/footer-before/narrow-2.0-01-list.png
+A	doc/evidence/video-ux-validation-20261022/footer-before/narrow-2.0-02-video.png
+A	doc/evidence/video-ux-validation-20261022/footer-before/narrow-2.0-03-adjustments.png
+A	doc/evidence/video-ux-validation-20261022/footer-before/narrow-2.0-04-locked.png
+A	doc/evidence/video-ux-validation-20261022/footer-before/narrow-2.0-05-info.png
+A	doc/evidence/video-ux-validation-20261022/footer-before/narrow-2.0-06-return.png
+A	doc/evidence/video-ux-validation-20261022/footer-style-regression-before.txt
+A	doc/evidence/video-ux-validation-20261022/local-web-assets.json
+A	doc/evidence/video-ux-validation-20261022/regression-tests.json
+A	doc/evidence/video-ux-validation-20261022/regression-tests.txt
+A	doc/evidence/video-ux-validation-20261022/sdk-integrity.txt
+A	doc/evidence/video-ux-validation-20261022/sdk-release.json
+A	doc/evidence/video-ux-validation-20261022/sdk-version.txt
+A	doc/evidence/video-ux-validation-20261022/tested-source.json
+M	doc/feature-parity.md
+M	flutter/android/app/build.gradle.kts
+M	flutter/android/app/src/main/AndroidManifest.xml
+M	flutter/android/app/src/main/kotlin/app/r2gallery/r2_gallery/MainActivity.kt
+A	flutter/android/app/src/main/kotlin/app/r2gallery/r2_gallery/PlaybackBridge.kt
+A	flutter/android/app/src/main/kotlin/app/r2gallery/r2_gallery/PlaybackService.kt
+M	flutter/android/app/src/main/kotlin/app/r2gallery/r2_gallery/SharedEngine.kt
+A	flutter/android/app/src/main/res/xml/backup_rules.xml
+A	flutter/android/app/src/main/res/xml/data_extraction_rules.xml
+A	flutter/assets/fonts/OFL.txt
+A	flutter/assets/fonts/R2GalleryJP-Bold.otf
+A	flutter/assets/fonts/R2GalleryJP-Regular.otf
+A	flutter/assets/fonts/manifest.json
+M	flutter/ios/Runner.xcodeproj/project.pbxproj
+M	flutter/ios/Runner/AppDelegate.swift
+M	flutter/ios/Runner/Info.plist
+A	flutter/ios/Runner/R2PlaybackBridge.swift
+A	flutter/ios/Runner/R2PrivateStorageBridge.swift
+M	flutter/lib/main.dart
+M	flutter/lib/src/grid/media_controller.dart
+A	flutter/lib/src/offline/offline_playback_files.dart
+M	flutter/lib/src/offline/offline_screen.dart
+M	flutter/lib/src/offline/offline_store.dart
+A	flutter/lib/src/playback/mobile_playback.dart
+A	flutter/lib/src/playback/playback_menu.dart
+A	flutter/lib/src/playback/playback_session.dart
+A	flutter/lib/src/playback/player_platform_tap.dart
+M	flutter/lib/src/state/app_state.dart
+M	flutter/lib/src/store/kv.dart
+A	flutter/lib/src/store/private_storage.dart
+M	flutter/lib/src/transfer/transfer_queue.dart
+M	flutter/lib/src/ui/theme.dart
+M	flutter/lib/src/ui/video_view.dart
+A	flutter/lib/src/ui/viewer_footer.dart
+M	flutter/lib/src/ui/viewer_screen.dart
+M	flutter/lib/src/viewer/device_export.dart
+M	flutter/lib/src/viewer/player_system.dart
+A	flutter/lib/src/viewer/screen_awake.dart
+A	flutter/lib/src/viewer/screen_awake_driver.dart
+A	flutter/lib/src/viewer/screen_awake_native.dart
+A	flutter/lib/src/viewer/screen_awake_web.dart
+M	flutter/lib/src/webdl/web_transfer.dart
+M	flutter/pubspec.lock
+M	flutter/pubspec.yaml
+A	flutter/test/background_playback_budget_test.dart
+A	flutter/test/footer_ux_test.dart
+A	flutter/test/foreground_settlement_test.dart
+M	flutter/test/grid_test.dart
+A	flutter/test/japanese_font_test.dart
+A	flutter/test/mobile_playback_port_test.dart
+A	flutter/test/mobile_playback_widget_test.dart
+A	flutter/test/offline_playback_files_test.dart
+A	flutter/test/offline_privacy_test.dart
+M	flutter/test/offline_store_test.dart
+A	flutter/test/offline_video_startup_probe_test.dart
+A	flutter/test/playback_session_test.dart
+A	flutter/test/player_platform_tap_test.dart
+A	flutter/test/private_export_boundary_test.dart
+A	flutter/test/private_kv_policy_test.dart
+A	flutter/test/private_offline_app_test.dart
+A	flutter/test/private_storage_policy_test.dart
+A	flutter/test/private_storage_ui_test.dart
+A	flutter/test/screen_awake_test.dart
+A	flutter/test/support/fake_playback.dart
+M	flutter/test/transfers_ui_test.dart
+A	flutter/test/video_startup_probe_test.dart
+M	flutter/test/video_view_test.dart
+M	flutter/test/viewer_test.dart
+A	native_plugins/video_player_avfoundation/CHANGELOG.md
+A	native_plugins/video_player_avfoundation/LICENSE
+A	native_plugins/video_player_avfoundation/R2_PATCH.md
+A	native_plugins/video_player_avfoundation/README.md
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation.podspec
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Package.swift
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation/NativeVideoViewFactory.swift
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation/Resources/PrivacyInfo.xcprivacy
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation/VideoPlayerPlugin.swift
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation/VideoPlayerPluginMessages.g.swift
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_ios/FVPNativeVideoView.m
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_ios/include/FVPEmpty.h
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_macos/FVPCoreVideoDisplayLink.m
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_macos/FVPNativeVideoView.m
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_macos/include/FVPEmpty.h
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/AVAssetTrackUtils.m
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/FVPAVFactory.m
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/FVPCADisplayLink.m
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/FVPEventBridge.m
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/FVPFrameUpdater.m
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/FVPTextureBasedVideoPlayer.m
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/FVPVideoPlayer.m
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/FVPViewProvider.m
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/VideoPlayerInstanceMessages.g.m
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/AVAssetTrackUtils.h
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/FVPAVFactory.h
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/FVPAssetProvider.h
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/FVPDisplayLink.h
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/FVPEventBridge.h
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/FVPFrameUpdater.h
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/FVPNativeVideoView.h
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/FVPTextureBasedVideoPlayer.h
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/FVPTextureBasedVideoPlayer_Test.h
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/FVPVideoEventListener.h
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/FVPVideoPlayer.h
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/FVPVideoPlayer_Internal.h
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/FVPViewProvider.h
+A	native_plugins/video_player_avfoundation/darwin/video_player_avfoundation/Sources/video_player_avfoundation_objc/include/video_player_avfoundation_objc/VideoPlayerInstanceMessages.g.h
+A	native_plugins/video_player_avfoundation/lib/src/avfoundation_video_player.dart
+A	native_plugins/video_player_avfoundation/lib/src/video_player_instance_messages.g.dart
+A	native_plugins/video_player_avfoundation/lib/src/video_player_plugin_messages.g.dart
+A	native_plugins/video_player_avfoundation/lib/video_player_avfoundation.dart
+A	native_plugins/video_player_avfoundation/pubspec.yaml
+A	native_plugins/video_player_avfoundation/upstream-files.json
+A	tools/fonts/prepare-japanese-font.py
+A	tools/fonts/verify-japanese-font.py
+A	tools/verify-private-storage.py
+A	tools/verify-video-player-fork.py
+A	worker/src/media_startup.test.ts
+M	worker/src/routes/media.ts

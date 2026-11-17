@@ -1,0 +1,15 @@
+PASS R2GalleryJP-Regular.otf: sha256=63563be433f3f9be61a826a7acd3155a4998e60bf9c956e763c527d9cc86c110, bytes=4306852, mapped=14392
+PASS source Japanese face: Noto Sans CJK JP Regular
+PASS requested coverage: 14391 source-supported JIS/kana/punctuation/Latin codepoints
+PASS original JP outlines preserved: 骨直令辺門葛辻道週返写真動画明音量保存ひらがなカタカナｶﾀｶﾅABCabc0123
+PASS family=R2 Gallery JP, style=Regular, weight=400, OFL metadata
+PASS Japanese/default shaping retained; Chinese/Korean LangSys removed; glyph_count=16044
+PASS source-supported Japanese variation sequences retained: 14504
+PASS R2GalleryJP-Bold.otf: sha256=7a33dd400cd6ea38f9ee836ee8573a03d78ec25a71b08ebd23967683bc5976bd, bytes=4419896, mapped=14392
+PASS source Japanese face: Noto Sans CJK JP Bold
+PASS requested coverage: 14391 source-supported JIS/kana/punctuation/Latin codepoints
+PASS original JP outlines preserved: 骨直令辺門葛辻道週返写真動画明音量保存ひらがなカタカナｶﾀｶﾅABCabc0123
+PASS family=R2 Gallery JP, style=Bold, weight=700, OFL metadata
+PASS Japanese/default shaping retained; Chinese/Korean LangSys removed; glyph_count=16044
+PASS source-supported Japanese variation sequences retained: 14504
+PASS font asset verification; Flutter rendering/screenshots/Android/Web runtime remain NOT RUN

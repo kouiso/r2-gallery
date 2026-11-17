@@ -17,7 +17,8 @@ appId: app.r2gallery
     visible: "(一時停止|再生が終了しました(\\s.*)?)"
     timeout: 30000
 - assertNotVisible: "再生できませんでした"
-- tapOn: "閉じる"
+# 戻るボタンの表記は「閉じる」から「一覧に戻る」へ意図的に変わった（viewer_screen.dart の tooltip）。旧名のままだと見つからない
+- tapOn: "一覧に戻る"
 - extendedWaitUntil:
     visible: "seed-photo.jpg"
     timeout: 15000

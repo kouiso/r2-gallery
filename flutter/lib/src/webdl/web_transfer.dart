@@ -4,12 +4,12 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../api/client.dart';
 import '../api/models.dart';
 import '../state/pairing.dart';
 import '../store/kv.dart';
+import '../store/private_storage.dart';
 import '../transfer/transfer_queue.dart' show LedgerStore;
 import 'detected.dart';
 import 'hls.dart';
@@ -169,8 +169,7 @@ class WebTransferQueue extends ChangeNotifier {
   static const maxKeyAttempts = 9;
 
   /// アプリが消えても残る一時ファイルの置き場。OS の一時領域は再起動で消されることがあるため。
-  static Future<Directory> defaultStageDir() async =>
-      Directory('${(await getApplicationSupportDirectory()).path}/web-stage');
+  static Future<Directory> defaultStageDir() => privatePersistentDirectory('web-stage');
 
   /// いまの接続。行がどの接続の物かを見るのに使う
   final Connection? Function() _connOf;

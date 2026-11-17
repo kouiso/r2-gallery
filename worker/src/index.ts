@@ -188,19 +188,19 @@ app.post("/v1/:lib/objects/check", (c) =>
 );
 
 app.put("/v1/:lib/objects", (c) =>
-  handlePutObject(c.req.raw, c.env, c.req.param("lib"), new URL(c.req.url)),
+  handlePutObject(c.req.raw, c.env, c.req.param("lib"), new URL(c.req.url), ctxOf(c)),
 );
 app.post("/v1/:lib/objects/multipart", (c) =>
-  handleMultipartInit(c.req.raw, c.env, c.req.param("lib")),
+  handleMultipartInit(c.req.raw, c.env, c.req.param("lib"), ctxOf(c)),
 );
 app.put("/v1/:lib/objects/multipart/part", (c) =>
   handleMultipartPart(c.req.raw, c.env, c.req.param("lib"), new URL(c.req.url)),
 );
 app.post("/v1/:lib/objects/multipart/complete", (c) =>
-  handleMultipartDone(c.req.raw, c.env, c.req.param("lib"), "complete"),
+  handleMultipartDone(c.req.raw, c.env, c.req.param("lib"), "complete", ctxOf(c)),
 );
 app.post("/v1/:lib/objects/multipart/abort", (c) =>
-  handleMultipartDone(c.req.raw, c.env, c.req.param("lib"), "abort"),
+  handleMultipartDone(c.req.raw, c.env, c.req.param("lib"), "abort", ctxOf(c)),
 );
 app.put("/v1/:lib/thumb", (c) =>
   handleThumb(c.req.raw, c.env, c.req.param("lib"), new URL(c.req.url)),

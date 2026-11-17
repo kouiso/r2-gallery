@@ -272,6 +272,19 @@ void main() {
       expect(await Kv.get(Keys.pinHash), 'x');
     });
 
+    test('画面ロックで守る設定が切れている間は旧PINを残す', () async {
+      // 消すと解除手段が無くなり、保護だけが消えるので認証スキップになる（#29）
+      _seededValues = {
+        Keys.pinHash: 'x',
+        Keys.pinSalt: '00',
+        Keys.deviceLock: '0',
+      };
+      final app = await _connected(auth: _FakeAuth());
+      expect(app.hasPin, isTrue);
+      expect(await Kv.get(Keys.pinHash), 'x');
+      expect(app.canLock, isTrue);
+    });
+
     test('web は端末認証が使えてもPINを消さない', () async {
       _seededValues = {Keys.pinHash: 'x', Keys.pinSalt: '00'};
       final app =

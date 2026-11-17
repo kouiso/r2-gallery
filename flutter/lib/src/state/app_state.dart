@@ -481,9 +481,13 @@ class AppState extends ChangeNotifier {
   Future<void> refreshDeviceLockAvailable() async {
     final prev = deviceLockProbe;
     DeviceLockProbe next;
+    // 照会が実際に成功したか。キャッシュされた「前に使えた」だけでは
+    // PIN の消去を許さない（消した後に端末認証が本当に使えないと入れなくなる）
+    var probed = false;
     try {
       final ok = await deviceAuth.isAvailable().timeout(_authProbeBudget);
       next = ok ? DeviceLockProbe.available : DeviceLockProbe.unavailable;
+      probed = true;
     } on Exception catch (e) {
       debugPrint('device lock probe failed: $e');
       next = prev == DeviceLockProbe.available
@@ -494,16 +498,28 @@ class AppState extends ChangeNotifier {
       deviceLockProbe = next;
       notifyListeners();
     }
-    // 旧PIN利用者の移行（#29）: 端末認証が使えると確かめられた時だけ保存値を消す。
-    // 確かめられない間は残す。消してしまうと画面ロック未設定の利用者が入れなくなる
-    if (!_isWeb && deviceLockProbe == DeviceLockProbe.available && hasPin) {
+    // 旧PIN利用者の移行（#29）: 今回の照会で端末認証が使えると確かめられ、
+    // 画面ロックで守る設定が残っている時だけ保存値を消す。
+    // 確かめられない間は残す — 消してしまうと利用者が入れなくなる
+    if (probed &&
+        deviceLockProbe == DeviceLockProbe.available &&
+        deviceLockEnabled &&
+        !_isWeb &&
+        hasPin) {
       try {
         await PinLock.removePin();
         hasPin = false;
         notifyListeners();
       } on Exception catch (e) {
-        // 消せなかった時は残す。保護を弱める側には倒れない
         debugPrint('pin migration failed: $e');
+        // 途中まで消えた可能性があるので保存値に合わせる。
+        // ハッシュが消えていれば PIN はもう検証できず、残っていればまだ使える
+        try {
+          hasPin = await PinLock.hasPin();
+          notifyListeners();
+        } on Exception {
+          // 読めなければ現状維持。次の照会でまた確かめる
+        }
       }
     }
   }

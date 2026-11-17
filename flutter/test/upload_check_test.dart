@@ -272,6 +272,7 @@ void main() {
         List<UploadSource> sources,
         {_Hasher? hasher,
         bool readOnly = false,
+        Future<Uint8List> Function(Uint8List bytes)? jpegConverter,
         void Function(_CheckApi)? configureApi}) async {
       final api = _CheckApi(checker);
       configureApi?.call(api);
@@ -282,7 +283,8 @@ void main() {
             builder: (ctx) => TextButton(
               onPressed: () => result = confirmAndUpload(
                   ctx, app, 'lib', sources,
-                  hasher: (hasher ?? _Hasher()).call),
+                  hasher: (hasher ?? _Hasher()).call,
+                  jpegConverter: jpegConverter),
               child: const Text('open'),
             ),
           ),
@@ -413,6 +415,35 @@ void main() {
       await pressUpload(tester);
       expect(app.uploads.single.map((s) => s.name), ['b.jpg']);
       expect(find.text('一覧に出ない形式 1件を除きました'), findsOneWidget);
+    });
+
+    testWidgets('HEIC は JPEG に変えてから上がる', (tester) async {
+      final app = await openSheet(
+          tester, _Checker({}), [_src('a.heic', 'raw-heic')],
+          jpegConverter: (bytes) async => utf8.encode('jpeg-bytes'));
+      await pressUpload(tester);
+      final up = app.uploads.single;
+      expect(up.map((s) => s.name), ['a.jpg']);
+      expect(up.single.mime, 'image/jpeg');
+      expect(up.single.size, utf8.encode('jpeg-bytes').length);
+      expect(find.text('一覧に出ない形式'), findsNothing);
+    });
+
+    testWidgets('HEIC の変換に失敗した物だけは除く', (tester) async {
+      final app = await openSheet(
+          tester,
+          _Checker({}),
+          [_src('a.heic', 'raw-heic'), _src('b.jpg', 'y')],
+          jpegConverter: (bytes) async => throw Exception('decode failed'));
+      await pressUpload(tester);
+      expect(app.uploads.single.map((s) => s.name), ['b.jpg']);
+      expect(find.text('一覧に出ない形式 1件を除きました'), findsOneWidget);
+    });
+
+    testWidgets('拡張子の無い名前は MIME から拡張子を足す', (tester) async {
+      final app = await openSheet(tester, _Checker({}), [_src('noext', 'z')]);
+      await pressUpload(tester);
+      expect(app.uploads.single.map((s) => s.name), ['noext.jpg']);
     });
 
     testWidgets('全部が一覧に出ない形式ならシートを出さずに知らせる', (tester) async {

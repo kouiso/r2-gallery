@@ -874,15 +874,18 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 旧呼び出しとの型互換用。既定bridgeは共有領域への書き出しを拒否する。
   late DeviceExporter deviceExporter = DeviceExporter(api: api);
 
-  bool get deviceExportSupported => false;
+  bool get deviceExportSupported => deviceExporter.supported;
 
-  /// 外部への書き出しの廃止はオーナー承認待ちで、承認まで旧保存導線からも既定で拒否する。
+  /// 「端末に保存」。古い Android では保存許可のダイアログが出て裏へ回るので、登録の所だけ外部画面として包む。
+  /// 失敗は DeviceExportError / ApiError で返し、呼び出し側が文言を出す。
   Future<void> exportToDevice(MediaItem item, {String? lib}) {
-    return Future.error(const DeviceExportError(
-        '外部への書き出しは利用できません。オフライン保存を使ってください'));
+    final l = item.lib ?? lib ?? activeLib;
+    if (l == null) {
+      return Future.error(const DeviceExportError('ライブラリが未選択です'));
+    }
+    return deviceExporter.export(item, l, guardSave: runExternal);
   }
 
   @override

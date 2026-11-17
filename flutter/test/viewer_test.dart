@@ -370,14 +370,13 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('V1: 外部書き出しを出さず、情報/アルバムへ/ゴミ箱へを保つ',
+  testWidgets('V1: 情報/アルバムへ/ゴミ箱へを保ち、オフライン保存は口が無ければ出さない',
       (tester) async {
     await _open(tester, _app(_Api()), [_img('a.jpg')]);
-    for (final l in ['情報', 'アルバムへ', 'ゴミ箱へ']) {
+    for (final l in ['情報', '端末に保存', 'アルバムへ', 'ゴミ箱へ']) {
       expect(find.text(l), findsOneWidget, reason: l);
     }
     expect(find.text('オフライン保存'), findsNothing);
-    expect(find.text('端末に保存'), findsNothing);
   });
 
   testWidgets('V1: オフライン保存の口を渡すとボタンが出て、保存後は「保存済み」になる', (tester) async {
@@ -648,35 +647,54 @@ void main() {
     expect(find.text('アルバムへの追加に失敗しました'), findsOneWidget);
   });
 
-  testWidgets('X1: 保存はアプリ内だけで、外部への書き出しを出さない', (tester) async {
+  testWidgets('X1: 端末に保存で共有領域へ書き出し、アプリ内オフライン保存も併存する', (tester) async {
     final api = _Api();
     final store = _Store();
     final app = _app(api, store: store)..offlineOn = true;
     await _open(tester, app, [_img('2026/a.jpg')]);
-    expect(find.text('端末に保存'), findsNothing);
+    expect(find.text('端末に保存'), findsOneWidget);
     expect(find.text('オフライン保存'), findsOneWidget);
-    expect(store.saved, isEmpty);
-    expect(api.downloads, isEmpty);
+    await tester.tap(find.byTooltip('端末に保存'));
+    await tester.pump();
+    // 書き出しは実ファイルI/O を伴うので、FakeAsync の外で進める
+    for (var i = 0; i < 100 && store.saved.isEmpty; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+      await tester.pump();
+    }
+    expect(api.downloads, ['https://w.example/m/2026/a.jpg']);
+    expect(store.saved.single.name, 'a.jpg');
+    expect(store.saved.single.mime, 'image/jpeg');
+    expect(store.saved.single.body, 'bytes-of-https://w.example/m/2026/a.jpg');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    // finally の temp 削除まで実I/O で進めてから描画を待つ
+    for (var i = 0; i < 20 && find.text('保存中…').evaluate().isNotEmpty; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+      await tester.pump();
+    }
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('端末に保存しました'), findsOneWidget);
   });
 
-  test('X1: 古い外部保存APIも画像/動画/その他をダウンロードせず拒否する', () async {
+  test('X1: 端末に保存APIは画像/動画をダウンロードして共有領域へ書き出し、非対応形式は断る', () async {
     final api = _Api();
     final store = _Store();
     final app = _app(api, store: store);
-    for (final type in ['image', 'video', 'file']) {
-      await expectLater(
-        app.exportToDevice(MediaItem(key: '$type.bin', type: type,
-            url: 'https://fixture.invalid/$type')),
-        throwsA(isA<DeviceExportError>().having((e) => e.message, 'message',
-            '外部への書き出しは利用できません。オフライン保存を使ってください')),
-      );
-    }
-    expect(app.deviceExportSupported, isFalse);
-    expect(api.downloads, isEmpty);
-    expect(store.saved, isEmpty);
-    expect(PlatformMediaStore().supported, isFalse);
-    await expectLater(PlatformMediaStore().save('/never-read', 'x.jpg', 'image/jpeg'),
-        throwsA(isA<DeviceExportError>()));
+    await app.exportToDevice(MediaItem(key: 'a.jpg', type: 'image',
+        url: 'https://fixture.invalid/a.jpg'));
+    await app.exportToDevice(MediaItem(key: 'b.mp4', type: 'video',
+        url: 'https://fixture.invalid/b.mp4'));
+    expect(api.downloads, ['https://fixture.invalid/a.jpg', 'https://fixture.invalid/b.mp4']);
+    expect(store.saved.map((s) => s.name), ['a.jpg', 'b.mp4']);
+    await expectLater(
+      app.exportToDevice(MediaItem(key: 'c.bin', type: 'file',
+          url: 'https://fixture.invalid/c')),
+      throwsA(isA<DeviceExportError>().having((e) => e.message, 'message',
+          'この形式は端末に保存できません')),
+    );
+    expect(store.saved, hasLength(2));
+    expect(app.deviceExportSupported, isTrue);
+    expect(PlatformMediaStore().supported, isTrue);
   });
 
   testWidgets('保存待ちは保存済みと区別し、暗号化保存の通知後だけ確定する', (tester) async {

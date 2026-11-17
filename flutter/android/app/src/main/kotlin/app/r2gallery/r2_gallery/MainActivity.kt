@@ -1,20 +1,39 @@
 package app.r2gallery.r2_gallery
 
+import android.Manifest
+import android.content.ContentValues
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.media.AudioManager
+import android.media.MediaScannerConnection
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
+import android.provider.MediaStore
 import android.provider.Settings
 import android.view.WindowManager
 import android.webkit.CookieManager
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import io.flutter.embedding.android.FlutterFragmentActivity
+import java.io.File
 import kotlin.math.roundToInt
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 // local_auth の BiometricPrompt は FragmentActivity にしか載せられない
 class MainActivity : FlutterFragmentActivity() {
+    // Android 9 以下で「端末に保存」の書き込み許可を尋ねた結果の受け口
+    private var pendingWritePermission: ((Boolean) -> Unit)? = null
+    private val writePermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            pendingWritePermission?.invoke(granted)
+            pendingWritePermission = null
+        }
     private var playerBrightnessBefore: Float? = null
     private var playerForeground = false
     // 転送中に最近使ったアプリの一覧から消されても Dart 側の取り込み・アップロードを続けるため、
@@ -37,10 +56,38 @@ class MainActivity : FlutterFragmentActivity() {
         if (SharedEngine.secureWindow) {
             window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
-        // 古いDartコードから呼ばれても、アプリ専用の保存を共有領域へ書き出さない。
+        // 「端末に保存」。書き込み許可のダイアログと裏スレッドでのコピーをこの口で行う
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app.r2gallery/export")
-            .setMethodCallHandler { _, result ->
-                result.error("private_storage_only", "外部への書き出しは利用できません", null)
+            .setMethodCallHandler { call, result ->
+                val path = call.argument<String>("path")
+                val name = call.argument<String>("name")
+                val mime = call.argument<String>("mime")
+                if (call.method != "save" || path == null || name == null || mime == null) {
+                    result.notImplemented()
+                    return@setMethodCallHandler
+                }
+                withWritePermission { granted ->
+                    if (!granted) {
+                        result.error("denied", "ストレージへのアクセスが許可されていません", null)
+                        return@withWritePermission
+                    }
+                    // 大きい動画のコピーで画面を固めないよう、書き込みは裏のスレッドで行う
+                    Thread {
+                        val err = try {
+                            saveToMediaStore(File(path), name, mime)
+                            null
+                        } catch (e: Exception) {
+                            e
+                        }
+                        Handler(Looper.getMainLooper()).post {
+                            if (err == null) {
+                                result.success(null)
+                            } else {
+                                result.error("failed", "端末への保存に失敗しました", err.toString())
+                            }
+                        }
+                    }.start()
+                }
             }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app.r2gallery/player")
             .setMethodCallHandler { call, result ->
@@ -194,5 +241,78 @@ class MainActivity : FlutterFragmentActivity() {
             Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC
     } catch (e: Settings.SettingNotFoundException) {
         false
+    }
+
+    private fun withWritePermission(then: (Boolean) -> Unit) {
+        if (Build.VERSION.SDK_INT >= 29 ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            then(true)
+            return
+        }
+        // 尋ねている最中に重ねて呼ばれたら、先の問い合わせの答えを待たずに断る（応答を取りこぼさない）
+        if (pendingWritePermission != null) {
+            then(false)
+            return
+        }
+        pendingWritePermission = then
+        writePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+    }
+
+    // KMP 版 MediaExporter と同じ置き場（Pictures/R2Gallery・Movies/R2Gallery）
+    private fun saveToMediaStore(src: File, displayName: String, mime: String) {
+        val isVideo = mime.startsWith("video/")
+        val resolver = contentResolver
+        val collection = if (isVideo) {
+            if (Build.VERSION.SDK_INT >= 29) {
+                MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+            } else {
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+            }
+        } else {
+            if (Build.VERSION.SDK_INT >= 29) {
+                MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+            } else {
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+            }
+        }
+        val dirName = if (isVideo) Environment.DIRECTORY_MOVIES else Environment.DIRECTORY_PICTURES
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+            put(MediaStore.MediaColumns.MIME_TYPE, mime)
+            if (Build.VERSION.SDK_INT >= 29) {
+                put(MediaStore.MediaColumns.RELATIVE_PATH, "$dirName/R2Gallery")
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            } else {
+                // 従来の置き場を明示する。insert だけだとギャラリーの走査対象から外れることがある
+                val dir = File(Environment.getExternalStoragePublicDirectory(dirName), "R2Gallery")
+                dir.mkdirs()
+                put(MediaStore.MediaColumns.DATA, File(dir, displayName).absolutePath)
+            }
+        }
+        val uri = resolver.insert(collection, values)
+            ?: throw IllegalStateException("MediaStore insert returned null")
+        try {
+            val out = resolver.openOutputStream(uri)
+                ?: throw IllegalStateException("MediaStore output stream unavailable")
+            out.use { o -> src.inputStream().use { it.copyTo(o, 1 shl 20) } }
+            if (Build.VERSION.SDK_INT >= 29) {
+                val done = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
+                resolver.update(uri, done, null, null)
+            } else {
+                // IS_PENDING が無い版は走査を明示して呼ぶ
+                MediaScannerConnection.scanFile(
+                    this,
+                    arrayOf(values.getAsString(MediaStore.MediaColumns.DATA)),
+                    arrayOf(mime),
+                    null,
+                )
+            }
+        } catch (e: Exception) {
+            // 書き込み途中で失敗した時に、中身の無い行をギャラリーへ残さない
+            resolver.delete(uri, null, null)
+            throw e
+        }
     }
 }

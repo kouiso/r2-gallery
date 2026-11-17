@@ -12,6 +12,7 @@ import '../api/review_meta.dart';
 import '../state/app_state.dart';
 import '../state/write_guard.dart';
 import '../grid/day_label.dart';
+import '../viewer/device_export.dart';
 import '../viewer/viewer_format.dart';
 import 'media_tile.dart';
 import 'theme.dart';
@@ -170,6 +171,7 @@ class _ViewerScreenState extends State<ViewerScreen>
   bool _chrome = true;
   bool _busy = false;
   bool _saveRequested = false;
+  bool _exporting = false;
   bool _saved = false;
   // 情報シートは開いた後に講評が届いても描き直せるよう、通知で渡す（#113）
   final _review = ValueNotifier<ReviewLoad>(const ReviewLoad.loading());
@@ -697,8 +699,32 @@ class _ViewerScreenState extends State<ViewerScreen>
   bool get _offlinePending => _saveRequested ||
       (widget.offline?.isPending?.call(_libOf(_item), _item) ?? false);
 
+  Future<void> _exportToDevice() async {
+    if (_exporting) return;
+    final item = _item;
+    setState(() => _exporting = true);
+    try {
+      await widget.app.exportToDevice(item, lib: _libOf(item));
+      if (!mounted) return;
+      _flash('端末に保存しました');
+    } on Exception catch (e) {
+      if (!mounted) return;
+      final msg = e is DeviceExportError
+          ? e.message
+          : '端末への保存に失敗しました';
+      await _alert(msg);
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
   List<ViewerFooterAction> _footerActions() => [
       ViewerFooterAction(icon: Icons.info_outline, label: '情報', onTap: _showInfo),
+      if (widget.app.deviceExportSupported)
+        ViewerFooterAction(
+            icon: Icons.save_alt,
+            label: _exporting ? '保存中…' : '端末に保存',
+            onTap: _exporting || _busy ? null : _exportToDevice),
       if (widget.offline != null)
         _saved
             ? ViewerFooterAction(

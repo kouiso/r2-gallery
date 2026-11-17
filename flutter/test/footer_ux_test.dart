@@ -130,8 +130,7 @@ void main() {
       final controls = find.byKey(const ValueKey('video-controls'));
       final footerRect = footer.evaluate().isEmpty ? null : tester.getRect(footer);
       final controlsRect = controls.evaluate().isEmpty ? null : tester.getRect(controls);
-      final labels = ['情報', 'オフライン保存', 'アルバムへ', 'ゴミ箱へ'];
-      final externalAbsent = find.text('端末に保存').evaluate().isEmpty;
+      final labels = ['情報', '端末に保存', 'オフライン保存', 'アルバムへ', 'ゴミ箱へ'];
       final buttons = <String, Rect>{};
       for (final label in labels) {
         final button = find.byTooltip(label);
@@ -195,7 +194,6 @@ void main() {
       // 同じ harness を基点で動かした時にも前後比較用の画像を撮り終えてから差分を検出する。
       expect(hasBackLabel, isTrue);
       expect(hasAdjustments, isTrue);
-      expect(externalAbsent, isTrue);
       expect(clippedLabels, isEmpty);
       expect(buttons.keys, unorderedEquals(labels));
       for (final rect in [...buttons.values, unlockRect]) {

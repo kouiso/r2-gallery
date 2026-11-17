@@ -208,9 +208,14 @@ class _LockGateState extends State<LockGate> {
 /// 「今すぐロック」。ロックできない時は黙って無反応にせず理由と次の手を出す。
 void lockNowOrExplain(BuildContext context, AppState app) {
   if (app.lockNow()) return;
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-    content: Text(app.deviceLockEnabled
-        ? 'この端末に画面ロックがありません。設定でPINを設定するとロックできます'
-        : '画面ロックが切れています。設定でONにするかPINを設定してください'),
-  ));
+  // 端末側は OS の画面ロックへ案内する。PIN の新設は web だけの動線（#29）
+  final hint = app.isWeb
+      ? (app.deviceLockEnabled
+          ? 'この端末に画面ロックがありません。設定でPINを設定するとロックできます'
+          : '画面ロックが切れています。設定でONにするかPINを設定してください')
+      : (app.deviceLockEnabled
+          ? 'この端末に画面ロックがありません。端末の設定で画面ロックを有効にしてください'
+          : '画面ロックが切れています。設定でONにしてください');
+  ScaffoldMessenger.of(context)
+      .showSnackBar(SnackBar(content: Text(hint)));
 }

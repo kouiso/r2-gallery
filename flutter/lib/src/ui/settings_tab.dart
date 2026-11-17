@@ -198,7 +198,9 @@ class _SettingsTabState extends State<SettingsTab> {
             subtitle: Text(
                 canToggleDeviceLock || app.deviceLockEnabled
                     ? '開くとき指紋・顔・PINを求めます'
-                    : 'この端末では画面ロックを使えません。PINで保護できます',
+                    : app.isWeb
+                        ? 'この端末では画面ロックを使えません。PINで保護できます'
+                        : '端末の設定で画面ロックを有効にしてください',
                 style: AppText.caption.copyWith(
                     color: AppColors.textDim)),
             value: app.deviceLockEnabled && canToggleDeviceLock,
@@ -221,17 +223,21 @@ class _SettingsTabState extends State<SettingsTab> {
             title: const Text('今すぐロック'),
             onTap: () => lockNowOrExplain(context, app),
           ),
-          ListTile(
-            leading: const Icon(Icons.pin_outlined, color: AppColors.accent),
-            title: Text(app.hasPin ? 'PINを変更' : 'PINを設定'),
-            subtitle: Text('画面ロックの代わりに、PINでも解除できます',
-                style: AppText.caption.copyWith(color: AppColors.textDim)),
-            trailing: app.hasPin
-                ? TextButton(
-                    onPressed: _removePin, child: const Text('解除'))
-                : null,
-            onTap: () => _editPin(isNew: !app.hasPin),
-          ),
+          // アプリ独自PINは web だけに残す（#29）。端末側は画面ロックへ移行済み
+          if (app.isWeb)
+            ListTile(
+              leading:
+                  const Icon(Icons.pin_outlined, color: AppColors.accent),
+              title: Text(app.hasPin ? 'PINを変更' : 'PINを設定'),
+              subtitle: Text('画面ロックの代わりに、PINでも解除できます',
+                  style:
+                      AppText.caption.copyWith(color: AppColors.textDim)),
+              trailing: app.hasPin
+                  ? TextButton(
+                      onPressed: _removePin, child: const Text('解除'))
+                  : null,
+              onTap: () => _editPin(isNew: !app.hasPin),
+            ),
         ]),
         // オフライン保存は接続なしでも見る・消すので、接続の有無に関わらず出す。
         // Web など非対応の環境では中身が空になるので見出しごと出さない

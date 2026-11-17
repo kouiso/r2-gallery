@@ -246,6 +246,53 @@ void main() {
       expect(withPin.lockNow(), isTrue);
     });
 
+    test('旧PINは端末認証が使えると確かめられてから消える（#29の移行）', () async {
+      _seededValues = {Keys.pinHash: 'x', Keys.pinSalt: '00'};
+      final app = await _connected(auth: _FakeAuth());
+      expect(app.hasPin, isFalse);
+      expect(await Kv.get(Keys.pinHash), isNull);
+      // 消えた後も端末認証だけでロックは効く
+      expect(app.locked, isTrue);
+      expect(app.canLock, isTrue);
+    });
+
+    test('端末認証が使えない間は旧PINを残してロックアウトを防ぐ', () async {
+      _seededValues = {Keys.pinHash: 'x', Keys.pinSalt: '00'};
+      final app = await _connected(auth: _FakeAuth(available: false));
+      expect(app.hasPin, isTrue);
+      expect(await Kv.get(Keys.pinHash), 'x');
+      expect(app.canLock, isTrue);
+    });
+
+    test('問い合わせが失敗した間も旧PINは消さない', () async {
+      _seededValues = {Keys.pinHash: 'x', Keys.pinSalt: '00'};
+      final app =
+          await _connected(auth: _FakeAuth()..probeThrows = true);
+      expect(app.hasPin, isTrue);
+      expect(await Kv.get(Keys.pinHash), 'x');
+    });
+
+    test('画面ロックで守る設定が切れている間は旧PINを残す', () async {
+      // 消すと解除手段が無くなり、保護だけが消えるので認証スキップになる（#29）
+      _seededValues = {
+        Keys.pinHash: 'x',
+        Keys.pinSalt: '00',
+        Keys.deviceLock: '0',
+      };
+      final app = await _connected(auth: _FakeAuth());
+      expect(app.hasPin, isTrue);
+      expect(await Kv.get(Keys.pinHash), 'x');
+      expect(app.canLock, isTrue);
+    });
+
+    test('web は端末認証が使えてもPINを消さない', () async {
+      _seededValues = {Keys.pinHash: 'x', Keys.pinSalt: '00'};
+      final app =
+          await _connected(auth: _FakeAuth(), isWeb: true);
+      expect(app.hasPin, isTrue);
+      expect(await Kv.get(Keys.pinHash), 'x');
+    });
+
     test('猶予を超えてバックグラウンドにいたら再ロックする', () async {
       final clock = _FakeClock();
       final app = await _connected(auth: _FakeAuth(), clock: clock);
@@ -379,14 +426,27 @@ void main() {
       expect(app.locked, isFalse);
     });
 
-    testWidgets('PIN がある端末では PIN 入力も並べる', (tester) async {
+    testWidgets('端末認証が使えない端末では残った PIN 入力が出る', (tester) async {
+      // 移行できなかった旧PIN利用者（#29）。消すと入れなくなるので残す
+      _seededValues = {Keys.pinHash: 'x', Keys.pinSalt: '00'};
+      final app =
+          await _connected(auth: _FakeAuth(available: false));
+      await tester.pumpWidget(MaterialApp(home: LockGate(app: app)));
+      await tester.pumpAndSettle();
+
+      expect(find.text('PINで解除'), findsOneWidget);
+    });
+
+    testWidgets('端末認証が使える端末では旧PINは移行され PIN 入力は出ない',
+        (tester) async {
       _seededValues = {Keys.pinHash: 'x', Keys.pinSalt: '00'};
       final app = await _connected(auth: _FakeAuth());
+      expect(app.hasPin, isFalse);
       await tester.pumpWidget(MaterialApp(home: LockGate(app: app)));
       await tester.pumpAndSettle();
 
       expect(find.text('ロックを解除'), findsOneWidget);
-      expect(find.text('PINで解除'), findsOneWidget);
+      expect(find.text('PINで解除'), findsNothing);
     });
 
     testWidgets('「今すぐロック」は PIN が無くてもホームに常に出る', (tester) async {

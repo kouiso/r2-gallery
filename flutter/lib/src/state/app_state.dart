@@ -59,6 +59,9 @@ class AppState extends ChangeNotifier {
   final LockClock _clock;
   final bool _isWeb;
 
+  /// 端末認証が使えず PIN だけで守る環境（web）。設定画面の出し分けに使う。
+  bool get isWeb => _isWeb;
+
   /// 埋め込みの接続先で繋げなかった時に接続画面で理由を出すための印。
   bool bakedProbeFailed = false;
 
@@ -490,6 +493,18 @@ class AppState extends ChangeNotifier {
     if (next != prev) {
       deviceLockProbe = next;
       notifyListeners();
+    }
+    // 旧PIN利用者の移行（#29）: 端末認証が使えると確かめられた時だけ保存値を消す。
+    // 確かめられない間は残す。消してしまうと画面ロック未設定の利用者が入れなくなる
+    if (!_isWeb && deviceLockProbe == DeviceLockProbe.available && hasPin) {
+      try {
+        await PinLock.removePin();
+        hasPin = false;
+        notifyListeners();
+      } on Exception catch (e) {
+        // 消せなかった時は残す。保護を弱める側には倒れない
+        debugPrint('pin migration failed: $e');
+      }
     }
   }
 

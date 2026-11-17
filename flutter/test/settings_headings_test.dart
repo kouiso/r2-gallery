@@ -40,14 +40,14 @@ class _NoOfflineApp extends AppState {
   bool get offlineSupported => false;
 }
 
-AppState _mk({bool offline = true, ApiClient? api}) {
+AppState _mk({bool offline = true, ApiClient? api, bool isWeb = false}) {
   if (!offline) {
     return _NoOfflineApp(
       api: api ?? ApiClient(),
       bakedEndpoint: '',
       bakedToken: '',
       deviceAuth: _NoAuth(),
-      isWeb: false,
+      isWeb: isWeb,
     );
   }
   return AppState(
@@ -55,7 +55,7 @@ AppState _mk({bool offline = true, ApiClient? api}) {
     bakedEndpoint: '',
     bakedToken: '',
     deviceAuth: _NoAuth(),
-    isWeb: false,
+    isWeb: isWeb,
   );
 }
 
@@ -102,7 +102,6 @@ void main() {
       '開くとき指紋・顔・PINを求めます',
       '再ロックまでの時間',
       '今すぐロック',
-      'PINを設定',
       '端末に暗号化して保存中',
       '一覧',
       'オフライン保存をすべて削除',
@@ -118,7 +117,7 @@ void main() {
     // 接続 / ロック / オフライン保存 / このアプリについて
     expect(find.byType(SettingsGroup), findsNWidgets(4));
     expect(find.byType(Card), findsNWidgets(4));
-    // ロックは4行 → 線は3本
+    // ロックは3行（PINの行は web だけ #29）→ 線は2本
     expect(
       find.descendant(
         of: find.ancestor(
@@ -127,8 +126,21 @@ void main() {
         ),
         matching: find.byType(Divider),
       ),
-      findsNWidgets(3),
+      findsNWidgets(2),
     );
+  });
+
+  testWidgets('端末側の設定に PIN の新設・変更・解除は出ない（#29）', (t) async {
+    await _pump(t, _mk());
+    expect(find.text('PINを設定'), findsNothing);
+    expect(find.text('PINを変更'), findsNothing);
+    expect(find.byIcon(Icons.pin_outlined), findsNothing);
+  });
+
+  testWidgets('web には PIN の設定・解除の行が残る（端末認証が無いため #29）',
+      (t) async {
+    await _pump(t, _mk(isWeb: true));
+    expect(find.text('PINを設定'), findsOneWidget);
   });
 
   testWidgets('非対応環境ではオフライン保存の見出しも行も出さない', (t) async {

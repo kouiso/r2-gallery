@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:r2_gallery/src/state/app_state.dart';
 import 'package:r2_gallery/src/store/device_auth.dart';
@@ -55,6 +56,12 @@ Future<void> _dispose(AppState app, _Auth auth) async {
 }
 
 void main() {
+  // main 側の PIN→端末ロック移行（旧PIN利用者の保存値を消す処理）が
+  // secure storage の MethodChannel を触る。test() には binding が無いので立て、
+  // ストアは空のまま受け答えさせる。
+  TestWidgetsFlutterBinding.ensureInitialized();
+  FlutterSecureStorage.setMockInitialValues({});
+
   test('復帰判定中の再離脱・再復帰も同じFutureで最新のロック判定まで待つ', () async {
     final clock = _Clock();
     final auth = _Auth()..releaseSecond = Completer<bool>();

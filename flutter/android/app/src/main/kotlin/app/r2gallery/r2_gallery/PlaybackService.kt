@@ -46,7 +46,7 @@ class PlaybackService : MediaSessionService() {
             val notification = NotificationCompat.Builder(this, CHANNEL)
                 .setSmallIcon(android.R.drawable.ic_media_play)
                 .setContentTitle("R2 Gallery")
-                .setContentText("再生を準備しています")
+                .setContentText("動画を再生中")
                 .setOngoing(true).build()
             if (Build.VERSION.SDK_INT >= 29) {
                 startForeground(43, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
@@ -140,8 +140,7 @@ class PlaybackService : MediaSessionService() {
         override fun getState(): State {
             val state = snapshot
             val item = MediaItem.Builder().setMediaId(state.session)
-                .setMediaMetadata(MediaMetadata.Builder().setTitle("R2 Gallery")
-                    .setArtist("非公開の動画").build()).build()
+                .setMediaMetadata(MediaMetadata.Builder().setTitle("動画を再生中").build()).build()
             val data = MediaItemData.Builder(state.session).setMediaItem(item)
                 .setDurationUs(state.duration * 1000).setIsSeekable(true).build()
             return State.Builder().setAvailableCommands(COMMANDS)

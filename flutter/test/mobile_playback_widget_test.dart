@@ -152,6 +152,45 @@ void main() {
     expect(video.disposed, isTrue);
   });
 
+  testWidgets('操作バーの金色小窓ボタンから小窓へ入る', (tester) async {
+    final port = FakePlaybackPort();
+    final owner = PlaybackCoordinator(port);
+    final video = FakeVideo();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAppTheme(),
+        home: Scaffold(
+          body: VideoView(
+            url: 'https://fixture.invalid/a.mp4',
+            controllerFactory: (_) => video,
+            playbackCoordinator: owner,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(video.value.isPlaying, isTrue);
+    final session = owner.current!;
+    expect(session.pipSupported, isTrue);
+    final button = find.byKey(const ValueKey('pip-button'));
+    expect(button, findsOneWidget);
+    // 金のアクセント色で描く（#197 の案）
+    final icon = tester.widget<Icon>(find.descendant(
+        of: button, matching: find.byType(Icon)));
+    expect(icon.color, AppColors.accent);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    expect(port.pipRequests, 1);
+    expect(session.pipPending, isTrue);
+    session.pipChanged(true);
+    await tester.pump();
+    expect(session.pip, isTrue);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    expect(video.disposed, isTrue);
+  });
+
   testWidgets('非表示ページはdecoder所有権を奪わず、再表示で位置を保つ', (tester) async {
     final owner = PlaybackCoordinator(FakePlaybackPort());
     final videos = <FakeVideo>[];

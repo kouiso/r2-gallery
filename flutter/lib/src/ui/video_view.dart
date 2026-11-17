@@ -6,6 +6,7 @@ import 'package:video_player/video_player.dart';
 import '../playback/mobile_playback.dart';
 import '../playback/playback_menu.dart';
 import '../playback/playback_session.dart';
+import '../playback/pip_menu_entry.dart';
 import '../viewer/level_gesture.dart';
 import '../viewer/player_system.dart';
 import '../viewer/screen_awake.dart';
@@ -1008,6 +1009,26 @@ class _VideoViewState extends State<VideoView>
                   height: 56,
                 ),
                 _controlButton('+10秒', Icons.forward_10, () => _skip(10)),
+                if (_session != null && _session!.pipSupported)
+                  Builder(builder: (ctx) {
+                    final messenger = ScaffoldMessenger.maybeOf(ctx);
+                    return SizedBox.square(
+                      dimension: 48,
+                      child: IconButton(
+                        key: const ValueKey('pip-button'),
+                        tooltip: '小窓で再生',
+                        padding: const EdgeInsets.all(4),
+                        icon: const Icon(
+                          Icons.picture_in_picture_alt,
+                          color: AppColors.accent,
+                        ),
+                        onPressed: _session!.closed
+                            ? null
+                            : () => unawaited(enterPipFromSurface(
+                                messenger, _session!, _surfaceKey)),
+                      ),
+                    );
+                  }),
                 SizedBox.square(
                   dimension: 48,
                   child: IconButton(
@@ -1031,7 +1052,8 @@ class _VideoViewState extends State<VideoView>
                   ),
               ];
               // 狭い端末や大きい文字では、ボタンが重ならないよう折り返す。
-              if (box.maxWidth < (_session == null ? 240 : 288)) {
+              // 小窓ボタン（48px）を含む操作バーは従来より広い幅が必要。
+              if (box.maxWidth < (_session == null ? 240 : 336)) {
                 return Wrap(alignment: WrapAlignment.center, children: buttons);
               }
               return Row(

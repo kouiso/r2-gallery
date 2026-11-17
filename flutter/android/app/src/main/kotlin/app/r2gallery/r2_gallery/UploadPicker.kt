@@ -111,6 +111,29 @@ class UploadPicker(private val activity: MainActivity) {
         result.success(File(path).usableSpace)
     }
 
+    private fun mediaStoreInfo(uri: Uri): Pair<String?, Long> {
+        val id = uri.lastPathSegment?.toLongOrNull() ?: return Pair(null, -1)
+        var c: Cursor? = null
+        try {
+            c = activity.contentResolver.query(
+                android.content.ContentUris.withAppendedId(
+                    android.provider.MediaStore.Files.getContentUri("external"), id,
+                ),
+                arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE),
+                null, null, null,
+            )
+            if (c != null && c.moveToFirst()) {
+                val n = if (c.isNull(0)) null else c.getString(0)
+                val s = if (c.isNull(1)) -1L else c.getLong(1)
+                return Pair(n, s)
+            }
+        } catch (_: Exception) {
+        } finally {
+            c?.close()
+        }
+        return Pair(null, -1)
+    }
+
     private fun describe(uri: Uri): Map<String, Any?> {
         var name: String? = null
         var size: Long = -1
@@ -127,6 +150,13 @@ class UploadPicker(private val activity: MainActivity) {
         } catch (_: Exception) {
         } finally {
             c?.close()
+        }
+        // picker URI は DISPLAY_NAME/SIZE を持たず末尾が media 番号になる機種がある。
+        // その時は Files 側へ問い直して実ファイル名と大きさを拾う（番号だけでは名も量も分からない）
+        if (name == null || size < 0) {
+            val info = mediaStoreInfo(uri)
+            if (name == null) name = info.first
+            if (size < 0) size = info.second
         }
         if (name == null) name = uri.lastPathSegment ?: "media"
         return mapOf(

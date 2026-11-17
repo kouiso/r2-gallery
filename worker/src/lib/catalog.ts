@@ -524,9 +524,15 @@ export async function loadCatalog(
   }
   let composed = await compose(env, lib);
   if (composed === "backlog") {
-    // 追記が溜まりすぎている。全部読む前に畳む
-    await rebuildCatalog(env, lib, bucket);
-    composed = (await compose(env, lib, true)) as Composed | null;
+    // WHY: 追記が上限を超えたまま一覧のたびに同期で全件畳み直すと、重い列挙が
+    //      応答を塞いで「一括アップロードの後は何も見れない」状態になる。
+    //      裏で畳ませて当て済みの索引を先に返す。追加分は畳みが済むと出る。
+    //      一覧に出ない間も本体は消えていない
+    background();
+    const snap = await fetchSnapshot(env, lib, mem.get(lib));
+    if (!snap) throw new Error("catalog_unavailable");
+    mem.set(lib, snap);
+    return toCatalog(snap);
   }
   const age = composed ? Date.now() - composed.state.startedAt : Infinity;
   if (!composed || maxAge === 0 || (opts.fresh === true && age > FRESH_MIN_INTERVAL_MS)) {

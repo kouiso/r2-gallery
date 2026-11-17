@@ -2198,6 +2198,39 @@ describe("一覧の索引", () => {
     }
   });
 
+  it("追記が上限を超えても、一覧は畳み直しを待たずに今ある物を返す", async () => {
+    expect((await putVia("backlog/old.png")).status).toBe(201);
+    await rebuildNow();
+    // 一括アップロード相当の追記（上限 600 超）を直接 META に書く
+    for (let i = 0; i < 650; i++) {
+      await env.META.put(
+        `.system/catalog/a/j/${String(Date.now() + i).padStart(15, "0")}-test${String(i).padStart(4, "0")}.json`,
+        JSON.stringify({ put: [[`backlog/new-${i}.png`, 4, Date.now(), `etag${i}`]] }),
+      );
+    }
+    resetCatalogMemory();
+    // 畳み直しが同期で走るなら全件列挙の失敗で一覧自体が落ちる
+    const list = vi.spyOn(env.LIB_A, "list").mockRejectedValue(new Error("r2 down"));
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const res = await direct(
+        "/v1/a/folders?recursive=1&sort=name&prefix=backlog%2F",
+        {},
+        cachedEnv(),
+      );
+      expect(res.status).toBe(200);
+      const keys = ((await res.json()) as Listing).items.map((i) => i.key);
+      expect(keys).toContain("backlog/old.png");
+    } finally {
+      list.mockRestore();
+      log.mockRestore();
+      // 後の試験の追記まで backlog にするので、ここで作った追記は全部消す
+      const leftover = await env.META.list({ prefix: ".system/catalog/a/j/" });
+      await env.META.delete(leftover.objects.map((o) => o.key));
+      resetCatalogMemory();
+    }
+  });
+
   it("戻す時にサムネの確認が落ちても、戻した事は成功で返り、一覧に出る", async () => {
     await rebuildNow();
     expect((await putVia("cat10/pic.png")).status).toBe(201);

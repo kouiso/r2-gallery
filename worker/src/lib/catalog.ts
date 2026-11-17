@@ -140,8 +140,9 @@ export async function journalBestEffort(
   // WHY: 追記が書けないと在る物が一覧から欠ける。応答の後に間をあけてやり直し、
   //      クライアントの送り直しを待たずに索引が揃うようにする
   if (!ctx) return;
-  // 書き直す間隔は設定で変えられる。テストは 0 にして待ちを通さない
-  const delays = (env.JOURNAL_RETRY_AFTER_MS ?? "1000,5000,30000")
+  // 書き直す間隔は設定で変えられる。テストは 0 にして待ちを通さない。
+  // 応答の後に走れる時間には上限があるので、間隔の合計はそれに収める
+  const delays = (env.JOURNAL_RETRY_AFTER_MS ?? "1000,5000,20000")
     .split(",")
     .map((s) => Number(s.trim()) || 0)
     .slice(0, 8);
@@ -161,14 +162,18 @@ export async function journalBestEffort(
   );
 }
 
-/** 409 で断った在る物も索引へ追記する。応答が届かずに送り直された物を一覧へ戻す。 */
+/**
+ * 409 で断った在る物も索引へ追記する。応答が届かずに送り直された物を一覧へ戻す。
+ * サムネの記録には触れない。409 は本体もサムネも置き換えていないので、
+ * unthumb を入れると在るサムネを消したことになって一覧からサムネが落ちる
+ */
 export async function journalExisting(
   env: Env,
   lib: string,
   obj: { key: string; size: number; uploaded: Date; etag: string },
   ctx?: Pick<ExecutionContext, "waitUntil">,
 ): Promise<void> {
-  await journalBestEffort(env, lib, { put: [rowOf(obj)], unthumb: [obj.key] }, ctx);
+  await journalBestEffort(env, lib, { put: [rowOf(obj)] }, ctx);
 }
 
 export const rowOf = (o: {

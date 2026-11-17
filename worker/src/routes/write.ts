@@ -24,13 +24,19 @@ type WaitUntil = Pick<ExecutionContext, "waitUntil">;
 const journalCreated = (env: Env, lib: string, obj: R2Object, ctx?: WaitUntil) =>
   journalBestEffort(env, lib, { put: [rowOf(obj)], unthumb: [obj.key] }, ctx);
 
-/** 409 で断る在る物を索引へ足す。初回の応答が届かず送り直された物を一覧へ戻す。 */
+/**
+ * 409 で断る在る物を索引へ足す。初回の応答が届かず送り直された物を一覧へ戻す。
+ * 追記の直前にもう一度確かめる。断りの確認と追記の間に消された物を、
+ * 遅い追記の勝ちで一覧に復活させないため（競合の窓は残るが、残りは作り直しで揃う）
+ */
 const journalBlocked = async (
   env: Env,
   lib: string,
-  existing: R2Object | null,
+  bucket: R2Bucket,
+  key: string,
   ctx?: WaitUntil,
 ) => {
+  const existing = await bucket.head(key);
   if (existing) await journalExisting(env, lib, existing, ctx);
 };
 
@@ -195,7 +201,7 @@ export async function handlePutObject(
   if (claimed !== undefined && !isSha256Hex(claimed)) throw new HttpError(400, "bad_sha256");
   const existing = await bucket.head(key);
   if (existing) {
-    await journalBlocked(env, lib, existing, ctx);
+    await journalBlocked(env, lib, bucket, key, ctx);
     throw new HttpError(409, "destination_exists");
   }
   let put: R2Object | null;
@@ -215,7 +221,7 @@ export async function handlePutObject(
     throw e;
   }
   if (!put) {
-    await journalBlocked(env, lib, await bucket.head(key), ctx);
+    await journalBlocked(env, lib, bucket, key, ctx);
     throw new HttpError(409, "destination_exists");
   }
   // 同名の削除済みの物のサムネが残っていると、新しい物に古い絵が出る
@@ -234,7 +240,7 @@ export async function handleMultipartInit(req: Request, env: Env, lib: string, c
   const key = assertUserKey(body.key);
   const existing = await bucket.head(key);
   if (existing) {
-    await journalBlocked(env, lib, existing, ctx);
+    await journalBlocked(env, lib, bucket, key, ctx);
     throw new HttpError(409, "destination_exists");
   }
   const contentType =
@@ -297,7 +303,7 @@ export async function handleMultipartDone(
   } catch (e) {
     // 完了の直前に同名が在った時（409）。応答を落として送り直された物を索引へ戻す
     if (e instanceof HttpError && e.status === 409) {
-      await journalBlocked(env, lib, await bucket.head(key), ctx);
+      await journalBlocked(env, lib, bucket, key, ctx);
     }
     throw e;
   }

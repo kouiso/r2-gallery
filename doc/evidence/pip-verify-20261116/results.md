@@ -1,10 +1,12 @@
 # PiP / 動画 UX 検証（エミュレータ実施） 2026-11-16
 
+- 対象コミット: `fix/video-ux-reapply-208` @ `9519d6f`（この証跡より後のレビュー対応コミットは含まない）
 - 端末: Android emulator `r2g-pip-35`（API 35, sdk_gphone64_arm64）
-- ビルド: `fix/video-ux-reapply-208` @ 9519d6f の debug APK（arm64）。
-  検証時のみ debug manifest に `usesCleartextTraffic=true` を一時追加
+- ビルド: debug APK（arm64）。検証時のみ debug manifest に `usesCleartextTraffic=true` を一時追加
   （ローカル wrangler がトンネル経由で http:// の署名URLを返すため。コミット対象外・検証後に revert 済み）。
 - バックエンド: ローカル wrangler dev（:8787）+ trycloudflare トンネル、ライブラリ Test A。
+- 検証方法: dumpsys・静止画スクショ・フレーム差分・logcat。**動画としての録画は行っていない**
+  （PR 本文「6 場面の録画はまだ」と齟齬がないよう明記。ここにあるのは静止画 + dumpsys の検証）。
 
 ## 結果
 
@@ -21,3 +23,7 @@
 - 明るさ・音量スライダーの実ドラッグ操作（UI描画のみ確認）
 - ロック中にPiPごと閉じる系の実機挙動（`exitPip`→`finish()` は単体テスト済み）
 - サブ画面（active:false）での自動PiP抑止はユニットテストで担保
+- **issue #4 の受け入れに必要な6場面の動画証跡は未取得**。このフォルダの証跡は静止画・dumpsys・
+  ログの集合であり、実機での受け入れ確認（Android実機 / iOSビルド）は未実施。
+- 場面5 の後追い修正（自然終了後も再ロック猶予タイマーを維持し、失効で小窓を閉じる）は
+  `pip_lock_budget_test.dart` のユニットテストで担保。エミュレータでの再確認は未実施。

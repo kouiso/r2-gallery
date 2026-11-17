@@ -207,6 +207,20 @@ class AppState extends ChangeNotifier {
   bool canReadOffline(String lib) => offlineAccessible &&
       (!_offlineLibrariesKnown || libraries.any((l) => l.id == lib));
 
+  /// 目録を読んだ接続の世代。接続先が変わると保存先も変わるので、世代ごとに読み直す。
+  int _primedOfflineConnection = -1;
+
+  // 目録は接続ごとに分かれている。繋ぎ直した時に読み直さないと、
+  // 保存済みの項目が未保存のまま出る。読み終えたら isOffline の答えが変わるので通知する
+  void _primeOfflineManifest() {
+    final gen = connectionGen;
+    if (gen == _primedOfflineConnection) return;
+    _primedOfflineConnection = gen;
+    unawaited(offline.count().then((_) {
+      if (gen == connectionGen) notifyListeners();
+    }, onError: (Object _) => debugPrint('offline manifest unavailable')));
+  }
+
   /// 一覧の先頭ページの控え。起動直後に回線を待たず最初の写真を出すため。
   final ListingCache listingCache;
 
@@ -649,6 +663,7 @@ class AppState extends ChangeNotifier {
   Future<void> _loadLibraries() async {
     final connection = api.conn;
     if (connection == null) return;
+    _primeOfflineManifest();
     final generation = ++_libraryGeneration;
     bool current() => generation == _libraryGeneration &&
         identical(connection, api.conn) && connected;

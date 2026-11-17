@@ -536,11 +536,15 @@ class PlaybackSession extends ChangeNotifier {
     _playPending = false;
     _resumePending = false;
     _interrupted = false;
-    _budgetTimer?.cancel();
     _pipExitTimer?.cancel();
     _clearAutoPipWait();
-    // 閉じない停止が走っている間に閉じる要求が来ても取りこぼさない。
-    if (closePip) _closePipRequested = true;
+    // 小窓を閉じない停止（小窓の中で自然終了）でも、最後のフレームは小窓に残る。
+    // 猶予の期限を過ぎても出しっぱなしにしないよう、タイマーは小窓を閉じる停止の時だけ止める
+    if (closePip) {
+      _budgetTimer?.cancel();
+      // 閉じない停止が走っている間に閉じる要求が来ても取りこぼさない。
+      _closePipRequested = true;
+    }
     return _stopRun ??= _stop().whenComplete(() {
       _stopRun = null;
       if (_closePipRequested) {

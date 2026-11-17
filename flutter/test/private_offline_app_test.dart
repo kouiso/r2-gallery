@@ -43,14 +43,23 @@ class _GatedLibraries extends ApiClient {
   }
 }
 
+class _LibApi extends ApiClient {
+  @override
+  Future<bool> probe(String endpoint, String token) async => true;
+  @override
+  Future<List<Library>> libraries() async =>
+      const [Library(id: 'lib', title: 'Fixture')];
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late Directory tmp;
   late OfflineStore root;
+  late MemKv kv;
   setUp(() async {
     FlutterSecureStorage.setMockInitialValues({});
     tmp = await Directory.systemTemp.createTemp('r2g-private-offline-');
-    final kv = MemKv();
+    kv = MemKv();
     kv.values[OfflineStore.dekKey] = base64Encode(Uint8List(32));
     root = OfflineStore(kv: kv, dir: () async => tmp);
   });
@@ -186,6 +195,30 @@ void main() {
     expect(api.calls, 0);
   });
 
+
+  test('再接続では接続先アカウントの目録を読み直して保存済み印が戻る', () async {
+    // セッション1: アカウントaでオフライン保存（目録は Kv へ書かれる）
+    final api1 = _LibApi()
+      ..setConnection(const Connection('https://fixture.invalid', 'fixture-a'));
+    final app1 = AppState(api: api1, offline: root, bakedEndpoint: '', bakedToken: '')
+      ..connected = true
+      ..libraries = const [Library(id: 'lib', title: 'Fixture')];
+    addTearDown(app1.dispose);
+    await save(app1.offline);
+
+    // セッション2: 目録キャッシュを持たない新しい保存先で起動・再接続
+    final root2 = OfflineStore(kv: kv, dir: () async => tmp);
+    final api2 = _LibApi();
+    final app2 = AppState(api: api2, offline: root2, bakedEndpoint: '', bakedToken: '');
+    addTearDown(app2.dispose);
+    expect(app2.isOffline('lib', 'a.jpg'), isFalse);
+    expect(await app2.connect('https://fixture.invalid', 'fixture-a'), isNull);
+    // _primeOfflineManifest の読み直し完了を待つ
+    for (var i = 0; i < 100 && !app2.isOffline('lib', 'a.jpg'); i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    expect(app2.isOffline('lib', 'a.jpg'), isTrue);
+  });
 
   test('一覧待ちでログアウトした接続は成功を返さず資格も復活しない', () async {
     final api = _GatedLibraries();

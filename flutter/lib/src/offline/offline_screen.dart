@@ -518,13 +518,25 @@ class _OfflineViewerState extends State<OfflineViewer>
     if (_session != null) { unawaited(_session!.stop()); } else { unawaited(_video?.pause()); }
   }
 
+  bool _pipSeen = false;
+
   void _onPlaybackChanged() {
     if (!mounted) return;
+    final inPip = _session?.pip ?? false;
+    // 自動で入る時はメニューを経由しないので、重なったシートが小窓に写らないよう畳む
+    if (inPip && !_pipSeen) _dismissOverlays();
+    _pipSeen = inPip;
     if (_session?.closed ?? false) {
       _error = '再生を終了しました';
       unawaited(_releasePlayback());
     }
     setState(() {});
+  }
+
+  void _dismissOverlays() {
+    final route = ModalRoute.of(context);
+    if (route == null) return;
+    Navigator.of(context).popUntil((r) => identical(r, route));
   }
 
   @override

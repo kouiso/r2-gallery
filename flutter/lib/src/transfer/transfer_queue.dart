@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
@@ -13,6 +14,7 @@ import '../store/kv.dart';
 import '../store/private_storage.dart';
 import '../webdl/media_name.dart';
 import 'transfer_api.dart';
+import 'transfer_ledger.dart';
 
 enum TransferStatus { queued, preparing, running, done, error, cancelled, paused }
 
@@ -112,6 +114,9 @@ class TransferTask {
   /// 前回の起動から引き継いだ行か。
   bool fromLedger = false;
 
+  /// 一覧から外した行。書く時に記録から消す判断に使う
+  bool _gone = false;
+
   int _gen = 0;
   CancelToken? _token;
   Stream<List<int>> Function()? _reader;
@@ -152,7 +157,6 @@ class TransferTask {
         if (itemKey != null) 'itemKey': itemKey,
         if (itemType != null) 'itemType': itemType,
         if (connEndpoint != null) 'connEndpoint': connEndpoint,
-        if (connToken != null) 'connToken': connToken,
         if (albumId != null) 'albumId': albumId,
         if (albumAdded) 'albumAdded': true,
         if (albumError != null) 'albumError': albumError,
@@ -184,7 +188,9 @@ class TransferQueue extends ChangeNotifier {
   TransferQueue({
     required this.api,
     required this.offline,
-    LedgerStore? ledger,
+    TransferLedger? ledger,
+    LedgerStore? legacyLedger,
+    SecretKv? secrets,
     Future<Directory> Function()? stageDir,
     this.makeThumb,
     this.parallel = 2,
@@ -197,7 +203,9 @@ class TransferQueue extends ChangeNotifier {
     this.requireDownloadAccount = false,
     this.canUseOfflineAccount,
     Connection? Function()? connOf,
-  })  : _ledger = ledger ?? const KvLedgerStore(),
+  })  : _ledger = ledger ?? FileTransferLedger(),
+        _legacyLedger = legacyLedger ?? const KvLedgerStore(),
+        _secrets = secrets ?? const KvSecretKv(),
         _stageDirFn = stageDir ?? _defaultStageDir,
         _persistOn = persist ?? !kIsWeb,
         _configured = configured ?? (() => true),
@@ -211,7 +219,13 @@ class TransferQueue extends ChangeNotifier {
   final Duration stagedDeleteTimeout;
   final int multipartThreshold;
   final int partSize;
-  final LedgerStore _ledger;
+  final TransferLedger _ledger;
+
+  /// 旧形式（1つの文字列に全行）の移し元。WebTransferQueue と共用
+  final LedgerStore _legacyLedger;
+
+  /// 接続ごとのトークンの置き場（行のファイルには書かない）
+  final SecretKv _secrets;
   final Future<Directory> Function() _stageDirFn;
   final bool _persistOn;
   final bool Function() _configured;
@@ -234,8 +248,18 @@ class TransferQueue extends ChangeNotifier {
   final Map<String, Timer> _waits = {};
   final _done = StreamController<TransferTask>.broadcast();
   final Completer<void> _restored = Completer<void>();
-  Future<void> _persistChain = Future.value();
   final Set<TransferTask> _completing = {};
+
+  /// 接続endpoint→トークン。行の記録には書かず、秘密置き場に1つだけ置く
+  final Map<String, String> _conns = {};
+  bool _connsDirty = false;
+
+  /// 記録へ書く頼みの番号と、まだ書いていない行
+  int _asked = 0;
+  int _written = 0;
+  final LinkedHashMap<String, TransferTask> _dirty = LinkedHashMap();
+  final List<({int at, Completer<void> done})> _waiters = [];
+  Future<void>? _ledgerLoop;
   Directory? _stage;
   int _seq = 0;
   int _lastNotifyMs = 0;
@@ -296,25 +320,77 @@ class TransferQueue extends ChangeNotifier {
 
   // ---------- 台帳 ----------
 
-  /// 書き込みは順番に。後から積んだ書き込みが常に最新の状態を持つ。
-  /// 完了の書き込み待ちの行（[_completing]）は、どの書き込みにも載せない。
-  /// 2 件が続けて終わった時、後の行の書き込みが前の行を「転送中」のまま書き戻さんようにするため
-  Future<void> _persist() {
+  /// 接続ごとのトークンの秘密置き場のキー
+  static const connsKey = Keys.transferConns;
+
+  /// 記録への書き込みは行を名指しで頼み、1本のループが1行ずつ書く。
+  /// 頼んだ時点ではなく書く時点の状態で「書く」か「消す」かを決めるので、
+  /// 古い頼みが新しい状態を書き戻すことはない（決めた事 3・4）
+  Future<void> _persistRows(Iterable<TransferTask> rows) {
     if (!_persistOn) return Future.value();
-    final snapshot = jsonEncode([
-      for (final t in _tasks)
-        // メモリ上の元（Web）は再起動で消えるので残しても戻せない
-        if (!_completing.contains(t) && t.status != TransferStatus.done && t.memory == null)
-          t.toLedger(),
-    ]);
-    return _persistChain = _persistChain.then((_) async {
-      try {
-        await _ledger.write(snapshot);
-      } on Exception catch (e) {
-        // 書けなくても今の転送は続ける。落とされた時に戻せる範囲が狭くなるだけ
-        debugPrint('transfer ledger not saved: $e');
+    for (final t in rows) {
+      _dirty[t.id] = t;
+    }
+    final at = ++_asked;
+    final done = Completer<void>();
+    _waiters.add((at: at, done: done));
+    _ledgerLoop ??= _drainLedger();
+    return done.future;
+  }
+
+  Future<void> _persist(TransferTask t) => _persistRows([t]);
+
+  Future<void> _drainLedger() async {
+    try {
+      while (_written < _asked) {
+        final upTo = _asked;
+        final batch = _dirty.values.toList();
+        _dirty.clear();
+        for (final t in batch) {
+          await _writeOrDrop(t);
+        }
+        _written = upTo;
+        for (var i = _waiters.length - 1; i >= 0; i--) {
+          if (_waiters[i].at <= upTo) {
+            _waiters[i].done.complete();
+            _waiters.removeAt(i);
+          }
+        }
       }
-    });
+    } finally {
+      _ledgerLoop = null;
+    }
+  }
+
+  Future<void> _writeOrDrop(TransferTask t) async {
+    try {
+      // 完了待ち・done・一覧から外した行・メモリ上の元の行は記録から消す
+      // （メモリ上の元は再起動で消えるので残しても戻せない）
+      if (t._gone ||
+          _completing.contains(t) ||
+          t.status == TransferStatus.done ||
+          t.memory != null) {
+        await _ledger.deleteRow(t.id);
+      } else {
+        await _ledger.writeRow(t.id, jsonEncode(t.toLedger()));
+      }
+    } catch (e) {
+      // 書けなくても今の転送は続ける。落とされた時に戻せる範囲が狭くなるだけ
+      debugPrint('transfer ledger not saved: $e');
+    }
+  }
+
+  /// 接続のトークンは行の記録に書かず、接続ごとの表として秘密置き場に1回だけ書く
+  Future<void> _rememberConn(Connection? c) async {
+    if (!_persistOn || c == null) return;
+    if (_conns[c.endpoint] == c.token) return;
+    _conns[c.endpoint] = c.token;
+    try {
+      await _secrets.set(connsKey, jsonEncode(_conns));
+      _connsDirty = false;
+    } catch (e) {
+      debugPrint('transfer conns not saved: $e');
+    }
   }
 
   /// 前回の起動の台帳を読み戻す。積む操作はこれが終わるまで待つ（id の重複を避ける）。
@@ -330,24 +406,69 @@ class TransferQueue extends ChangeNotifier {
     _pump();
   }
 
-  Future<void> _restoreLedger() async {
-    if (!_persistOn) return;
-    final raw = await _ledger.read();
-    final restored = <TransferTask>[];
-    if (raw != null) {
-      Object? decoded;
+  /// 旧形式（秘密置き場の1つの文字列）の行を、行ごとのファイルへ1回だけ移す。
+  /// ファイルが既にある id は新しい形を正として移さない（移す途中で落ちても二重にならない）
+  Future<void> _migrateLegacy() async {
+    String? raw;
+    try {
+      raw = await _legacyLedger.read();
+    } catch (e) {
+      debugPrint('transfer legacy ledger unreadable: $e');
+      return;
+    }
+    if (raw == null || raw == '[]') return;
+    Object? decoded;
+    try {
+      decoded = jsonDecode(raw);
+    } on FormatException catch (e) {
+      debugPrint('transfer legacy ledger unreadable: $e');
+      return;
+    }
+    if (decoded is! List) return;
+    final existing = {for (final r in await _ledger.readRows()) r['id']};
+    for (final e in decoded) {
+      if (e is! Map) continue;
+      final id = e['id'];
+      if (id is! String || existing.contains(id)) continue;
+      // 古い行に載っているトークンは接続の表へ移す。行は読み戻し時にトークンを外して書き直す
+      final ce = e['connEndpoint'], ct = e['connToken'];
+      if (ce is String && ct is String) { _conns[ce] = ct; _connsDirty = true; }
       try {
-        decoded = jsonDecode(raw);
-      } on FormatException catch (e) {
-        debugPrint('transfer ledger unreadable: $e');
-      }
-      if (decoded is List) {
-        for (final e in decoded) {
-          final t = await _fromLedger(e);
-          if (t != null) restored.add(t);
-        }
+        await _ledger.writeRow(id, jsonEncode(e));
+      } catch (err) {
+        debugPrint('transfer ledger migration row failed: $err');
       }
     }
+    try {
+      await _legacyLedger.write('[]');
+    } catch (e) {
+      debugPrint('transfer legacy ledger not cleared: $e');
+    }
+  }
+
+  Future<void> _restoreLedger() async {
+    if (!_persistOn) return;
+    try {
+      final raw = await _secrets.get(connsKey);
+      if (raw != null) {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) {
+          for (final e in decoded.entries) {
+            if (e.value is String) _conns[e.key] = e.value as String;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('transfer conns unreadable: $e');
+    }
+    await _migrateLegacy();
+    final restored = <TransferTask>[];
+    for (final e in await _ledger.readRows()) {
+      final t = await _fromLedger(e);
+      if (t != null) restored.add(t);
+    }
+    // ファイルには並びが無い。id は積んだ順に増えるので数の順で戻す
+    restored.sort((a, b) => _idNum(a.id).compareTo(_idNum(b.id)));
     _tasks.addAll(restored);
     // 台帳から外れた退避ファイルは誰も使わないので消す
     final keep = {for (final t in restored) ?t.stagedPath};
@@ -359,10 +480,29 @@ class TransferQueue extends ChangeNotifier {
     } on Exception catch (e) {
       debugPrint('transfer stage sweep skipped: $e');
     }
+    // どの行も使っていない接続は表から外す
+    final used = {for (final t in restored) ?t.connEndpoint};
+    if (_conns.keys.any((e) => !used.contains(e))) {
+      _conns.removeWhere((e, _) => !used.contains(e));
+      _connsDirty = true;
+    }
+    if (_connsDirty) {
+      try {
+        await _secrets.set(connsKey, jsonEncode(_conns));
+        _connsDirty = false;
+      } catch (e) {
+        debugPrint('transfer conns not saved: $e');
+      }
+    }
     for (final t in restored) {
       if (t.status == TransferStatus.preparing) _startStage(t);
     }
-    if (restored.isNotEmpty) await _persist();
+    if (restored.isNotEmpty) await _persistRows(restored);
+  }
+
+  static int _idNum(String id) {
+    final m = RegExp(r'^[ud](\d+)$').firstMatch(id);
+    return m == null ? 0 : int.parse(m.group(1)!);
   }
 
   Future<TransferTask?> _fromLedger(Object? e) async {
@@ -401,7 +541,15 @@ class TransferQueue extends ChangeNotifier {
     )..fromLedger = true;
     final connE = e['connEndpoint'], connT = e['connToken'];
     if (connE is String) t.connEndpoint = connE;
-    if (connT is String) t.connToken = connT;
+    if (connT is String) {
+      t.connToken = connT;
+      // 古い形の行はトークンを持っている。表へ移して行をトークン無しで書き直す
+      if (connE is String) { _conns[connE] = connT; _connsDirty = true; }
+      _dirty[t.id] = t;
+      _asked++;
+    } else if (connE is String) {
+      t.connToken = _conns[connE];
+    }
     final err = e['error'];
     if (status == TransferStatus.error && err is String) t.error = err;
     if (kind == 'down') {
@@ -464,6 +612,7 @@ class TransferQueue extends ChangeNotifier {
       {String? albumId}) async {
     await _restored.future;
     final conn = _connOf();
+    await _rememberConn(conn);
     final added = <TransferTask>[];
     for (final s in sources) {
       final t = TransferTask(
@@ -492,7 +641,7 @@ class TransferQueue extends ChangeNotifier {
       _tasks.add(t);
       added.add(t);
     }
-    await _persist();
+    await _persistRows(added);
     for (final t in added) {
       if (t.status == TransferStatus.preparing) _startStage(t);
     }
@@ -512,6 +661,7 @@ class TransferQueue extends ChangeNotifier {
           '${t.lib}\u0000${t.itemKey}',
     };
     final conn = _connOf();
+    await _rememberConn(conn);
     final added = <TransferTask>[];
     for (final it in items) {
       final l = it.lib ?? lib;
@@ -535,7 +685,7 @@ class TransferQueue extends ChangeNotifier {
       added.add(t);
     }
     if (added.isEmpty) return added;
-    await _persist();
+    unawaited(_persistRows(added));
     _changed();
     _pump();
     return added;
@@ -590,7 +740,7 @@ class TransferQueue extends ChangeNotifier {
         t.error = 'ファイルを端末に退避できませんでした（${e is FileSystemException ? e.message : e}）';
       }
     }
-    await _persist();
+    _persist(t);
   }
 
   // ---------- 実行 ----------
@@ -647,7 +797,7 @@ class TransferQueue extends ChangeNotifier {
       _completing.add(t);
       _changed();
       try {
-        await _persist();
+        _persist(t);
         // 退避ファイルは完了を報告する前に消し終える。先に done にすると、完了を見た側
         // （画面・テスト）が掃除の途中の退避ファイルを見てしまう。
         // 消し終えて done になるまで _completing に残す。外すと別の行の書き込みが
@@ -663,7 +813,7 @@ class TransferQueue extends ChangeNotifier {
     } catch (e) {
       if (token.isCancelled || !_owns(t, gen)) {
         // 止めた側（一時停止・取り消し）が状態を決めている
-        await _persist();
+        _persist(t);
         return;
       }
       if (e is _ConnSwitched) {
@@ -681,7 +831,7 @@ class TransferQueue extends ChangeNotifier {
         t.status = TransferStatus.error;
         t.error = _describe(e, upload: t.isUpload);
       }
-      await _persist();
+      _persist(t);
     }
   }
 
@@ -766,13 +916,13 @@ class TransferQueue extends ChangeNotifier {
         if (resumed && await _storedSame(t, token, key, size)) {
           await _abortSession(t);
           t.key = key;
-          await _persist();
+          _persist(t);
           return;
         }
         await _abortSession(t);
         t.key = null;
         t.loaded = 0;
-        await _persist();
+        _persist(t);
       }
     }
   }
@@ -790,7 +940,7 @@ class TransferQueue extends ChangeNotifier {
         _progress();
       });
       t.key = key;
-      await _persist();
+      _persist(t);
       return;
     }
     final existing = resumed ? t.uploadId : null;
@@ -804,7 +954,7 @@ class TransferQueue extends ChangeNotifier {
         if (e.status == 409 || e.status < 400) rethrow;
         await _abortSession(t);
         t.loaded = 0;
-        await _persist();
+        _persist(t);
       }
     }
     _checkCancelled(token);
@@ -813,7 +963,7 @@ class TransferQueue extends ChangeNotifier {
     t.key = key;
     t.uploadId = id;
     t.parts = [];
-    await _persist();
+    _persist(t);
     await _multipart(t, token, size);
   }
 
@@ -874,7 +1024,7 @@ class TransferQueue extends ChangeNotifier {
       // 確定したパートは止めても残す。再開ではここから先だけ送る
       t.parts = [...t.parts.where((p) => p.partNumber != part.partNumber), part];
       t.loaded = _confirmedBytes(t, size);
-      await _persist();
+      _persist(t);
       _changed();
     }
     _checkCancelled(token);
@@ -1010,7 +1160,7 @@ class TransferQueue extends ChangeNotifier {
     t.status = TransferStatus.paused;
     _waits.remove(id)?.cancel();
     t._token?.cancel('paused');
-    _persist();
+    _persist(t);
     _changed();
     _pump();
   }
@@ -1048,19 +1198,19 @@ class TransferQueue extends ChangeNotifier {
   /// 失敗の行も接続のたびに自動で積み直されるので一緒に止める。
   /// 行と退避したファイルは残すので、同じ送り先へ戻れば再開で続きから送れる
   void pauseUnsent() {
-    var touched = false;
+    final touched = <TransferTask>[];
     for (final t in _tasks.toList()) {
       if (t.active) {
         pause(t.id);
-        touched = true;
+        touched.add(t);
       } else if (t.status == TransferStatus.error) {
         t.status = TransferStatus.paused;
         _waits.remove(t.id)?.cancel();
-        touched = true;
+        touched.add(t);
       }
     }
-    if (touched) {
-      _persist();
+    if (touched.isNotEmpty) {
+      _persistRows(touched);
       _changed();
     }
   }
@@ -1080,7 +1230,7 @@ class TransferQueue extends ChangeNotifier {
     } else {
       t.status = TransferStatus.queued;
     }
-    _persist();
+    _persist(t);
     _changed();
     _pump();
   }
@@ -1100,7 +1250,8 @@ class TransferQueue extends ChangeNotifier {
     if (t._gen != gen) return;
     await _cleanup(t);
     _tasks.remove(t);
-    await _persist();
+    t._gone = true;
+    await _persist(t);
     _changed();
     _pump();
   }
@@ -1127,7 +1278,8 @@ class TransferQueue extends ChangeNotifier {
       return;
     }
     _tasks.remove(t);
-    _persist();
+    t._gone = true;
+    _persist(t);
     _changed();
   }
 
@@ -1138,9 +1290,10 @@ class TransferQueue extends ChangeNotifier {
     _tasks.removeWhere(removable);
     _changed();
     for (final t in gone) {
+      t._gone = true;
       await _cleanup(t);
     }
-    await _persist();
+    await _persistRows(gone);
   }
 
   /// 止まっている待ちを解いて流し直す（アプリへの復帰・接続の後）。
@@ -1166,7 +1319,7 @@ class TransferQueue extends ChangeNotifier {
     while (_workers.isNotEmpty || _stagers.isNotEmpty) {
       await Future.wait([..._workers.values, ..._stagers.values]);
     }
-    await _persistChain;
+    await _ledgerLoop;
   }
 
   @override

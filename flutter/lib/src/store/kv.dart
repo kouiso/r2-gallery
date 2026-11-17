@@ -56,4 +56,5 @@ class Keys {
   static const lockGraceMs = 'r2g.lockGraceMs';
   static const library = 'r2g.library';
   static const webHistory = 'r2g.webHistory';
+  static const transferConns = 'r2g.transferConns';
 }

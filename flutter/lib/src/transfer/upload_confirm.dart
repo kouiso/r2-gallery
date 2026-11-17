@@ -258,11 +258,13 @@ Future<UploadSource> _toListableSource(
         final jpg = await jpegConverter(bytes);
         final base = s.name.replaceFirst(
             RegExp(r'\.(heic|heif)$', caseSensitive: false), '');
+        // メモリ(bytes)で渡すと転送キューが端末へ退避せず、再起動で未完了の
+        // 送信が消える。reader で渡して普段どおり退避→台帳復旧に乗せる
         return UploadSource(
           name: '$base.jpg',
           size: jpg.length,
           mime: 'image/jpeg',
-          bytes: jpg,
+          reader: () => Stream.value(jpg),
         );
       } catch (_) {
         return s;
@@ -322,9 +324,13 @@ Future<int> confirmAndUpload(
   if (sources.isEmpty) return 0;
   // 一覧に出ない形式でも端末で直せる物は直して受け付ける。HEIC は iPhone の
   // 既定なので捨てるとアップロードが全部消える。直せん物だけ除く（#63・#164）
+  // 原本保存が目的なので、既定(1920x1080)で掛かる上限を潰して縮小させない
   final convert = jpegConverter ??
-      (bytes) => FlutterImageCompress.compressWithList(bytes,
-          format: CompressFormat.jpeg);
+      (bytes) => FlutterImageCompress.compressWithList(
+          bytes,
+          format: CompressFormat.jpeg,
+          minWidth: 1 << 30,
+          minHeight: 1 << 30);
   sources =
       await Future.wait(sources.map((s) => _toListableSource(s, convert)));
   if (!context.mounted) return 0;

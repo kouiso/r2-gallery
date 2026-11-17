@@ -565,6 +565,42 @@ void main() {
     }
   });
 
+    testWidgets('失敗の行だけの時は「終わった行を消す」を押せない', (tester) async {
+      final api = _StuckApi({'bad.jpg'});
+      late final TransferQueue q;
+      await tester.runAsync(() async {
+        q = TransferQueue(
+          api: api,
+          offline: OfflineStore(
+              kv: MemKv(), dir: () async => Directory('\${tmp.path}/off')),
+          ledger: MemLedger(),
+          stageDir: () async => Directory('\${tmp.path}/stage'),
+          persist: false,
+        );
+        await q.restore();
+        await q.enqueueUploads('lib', [_src('bad.jpg', 10, 'image/jpeg')]);
+        await until(() => q.tasks.single.status == TransferStatus.error);
+      });
+      final web = WebTransferQueue(api: ApiClient());
+      addTearDown(() {
+        q.dispose();
+        web.dispose();
+      });
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: TransfersSheetContent(queue: web, transfers: q),
+        ),
+      ));
+      await tester.pump();
+      final button = tester.widget<TextButton>(
+        find.ancestor(
+            of: find.text('終わった行を消す'), matching: find.byType(TextButton)),
+      );
+      expect(button.onPressed, isNull);
+      // 消せないので失敗の行は残ったまま
+      expect(q.tasks.single.status, TransferStatus.error);
+    });
+
   group('オフライン保存', () {
     testWidgets('選択して「オフライン保存」を押すとキューに積み、保存済みには印が付く', (tester) async {
       final kv = MemKv();

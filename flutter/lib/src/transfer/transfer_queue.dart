@@ -194,6 +194,8 @@ class TransferQueue extends ChangeNotifier {
     Future<Directory> Function()? stageDir,
     this.makeThumb,
     this.parallel = 2,
+    this.stageParallel = 2,
+    this.thumbTimeout = const Duration(seconds: 20),
     this.netRetryDelay = const Duration(seconds: 15),
     this.stagedDeleteTimeout = const Duration(seconds: 5),
     this.multipartThreshold = ApiClient.multipartThreshold,
@@ -215,6 +217,12 @@ class TransferQueue extends ChangeNotifier {
   final OfflineStore offline;
   final FileThumbMaker? makeThumb;
   final int parallel;
+
+  /// 端末への写しは同時にこの件数まで。5000件分の写しが一度に走らないように
+  final int stageParallel;
+
+  /// サムネ生成が長引く時に待つ上限。送り自体はサーバーに届いているので進める
+  final Duration thumbTimeout;
   final Duration netRetryDelay;
   final Duration stagedDeleteTimeout;
   final int multipartThreshold;
@@ -494,9 +502,7 @@ class TransferQueue extends ChangeNotifier {
         debugPrint('transfer conns not saved: $e');
       }
     }
-    for (final t in restored) {
-      if (t.status == TransferStatus.preparing) _startStage(t);
-    }
+    _pumpStage();
     if (restored.isNotEmpty) await _persistRows(restored);
   }
 
@@ -642,9 +648,7 @@ class TransferQueue extends ChangeNotifier {
       added.add(t);
     }
     await _persistRows(added);
-    for (final t in added) {
-      if (t.status == TransferStatus.preparing) _startStage(t);
-    }
+    _pumpStage();
     _changed();
     _pump();
     return added;
@@ -693,15 +697,26 @@ class TransferQueue extends ChangeNotifier {
 
   // ---------- 退避 ----------
 
-  void _startStage(TransferTask t) {
-    if (_stagers.containsKey(t.id)) return;
-    final f = _stageOne(t);
-    _stagers[t.id] = f;
-    f.whenComplete(() {
-      if (_stagers[t.id] == f) _stagers.remove(t.id);
-      _changed();
-      _pump();
-    });
+  /// 退避中の件数（テスト用）
+  @visibleForTesting
+  int get stagingCount => _stagers.length;
+
+  /// preparing の行を前から順に、同時 stageParallel 件まで写し始める。
+  /// 終わった所からまた埋めるので、同時に走るのはこの件数で頭打ちになる。
+  void _pumpStage() {
+    for (final t in _tasks) {
+      if (_stagers.length >= stageParallel) return;
+      if (t.status != TransferStatus.preparing) continue;
+      if (_stagers.containsKey(t.id)) continue;
+      final f = _stageOne(t);
+      _stagers[t.id] = f;
+      f.whenComplete(() {
+        if (_stagers[t.id] == f) _stagers.remove(t.id);
+        _changed();
+        _pumpStage();
+        _pump();
+      });
+    }
   }
 
   Future<void> _stageOne(TransferTask t) async {
@@ -1045,12 +1060,12 @@ class TransferQueue extends ChangeNotifier {
     if (!t.mime.startsWith('image/') && !t.mime.startsWith('video/')) return;
     // サムネが無くても保存自体は成功。一覧のバックフィルが後で補う
     try {
-      final thumb = await maker(File(path), t.mime);
+      final thumb = await maker(File(path), t.mime).timeout(thumbTimeout);
       // 生成中に止められた・接続先が替わったなら、新しい送り先へは上げない
       if (t._token?.isCancelled == true) return;
       if (!_forThisConn(t)) return;
       if (thumb != null && thumb.isNotEmpty) await api.putThumb(t.lib, key, thumb);
-    } on Exception catch (e) {
+    } catch (e) {
       debugPrint('upload thumb skipped: $e');
     }
   }
@@ -1226,7 +1241,7 @@ class TransferQueue extends ChangeNotifier {
   void _requeue(TransferTask t) {
     if (t.isUpload && t.stagedPath == null && t.memory == null) {
       t.status = TransferStatus.preparing;
-      _startStage(t);
+      _pumpStage();
     } else {
       t.status = TransferStatus.queued;
     }
@@ -1283,9 +1298,12 @@ class TransferQueue extends ChangeNotifier {
     _changed();
   }
 
-  /// 終わった行（完了・失敗・取り消し）をまとめて消す。失敗の行の退避ファイルも片付ける。
+  /// 終わった行（完了・取り消し）をまとめて消す。失敗の行とその退避ファイルは残す。
   Future<void> clearFinished() async {
-    bool removable(TransferTask t) => t.finished && !_completing.contains(t);
+    bool removable(TransferTask t) =>
+        (t.status == TransferStatus.done ||
+            t.status == TransferStatus.cancelled) &&
+        !_completing.contains(t);
     final gone = _tasks.where(removable).toList();
     _tasks.removeWhere(removable);
     _changed();

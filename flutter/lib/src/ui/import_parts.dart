@@ -396,9 +396,10 @@ class TransfersSheetContent extends StatelessWidget {
                     ),
                     TextButton(
                       onPressed: rows.any((r) =>
-                              r.status == TransferStatus.done ||
-                              r.status == TransferStatus.cancelled ||
-                              r.status == TransferStatus.error)
+                                  r.status == TransferStatus.done ||
+                                  r.status == TransferStatus.cancelled) ||
+                              queue.tasks.any((t) =>
+                                  t.status == WebTaskStatus.error)
                           ? () {
                               queue.clearFinished();
                               up?.clearFinished();

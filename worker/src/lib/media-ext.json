@@ -1,5 +1,5 @@
 {
-  "image": ["jpg", "jpeg", "png", "webp", "gif", "avif"],
+  "image": ["jpg", "jpeg", "png", "webp", "gif", "avif", "heic", "heif", "bmp"],
   "video": [
     "mp4",
     "webm",

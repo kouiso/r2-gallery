@@ -11,7 +11,7 @@ void main() {
   });
 
   test('表に無い形式は一覧に出ない名前として扱う', () {
-    for (final e in ['heic', 'heif', 'dng', 'bmp']) {
+    for (final e in ['dng', 'tiff', 'raw', 'svg']) {
       expect(hasListedExtension('a.$e'), isFalse, reason: e);
     }
   });

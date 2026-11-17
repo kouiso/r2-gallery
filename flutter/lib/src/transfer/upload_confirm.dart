@@ -1,8 +1,6 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -236,104 +234,14 @@ class _AlbumPick {
   final label = ValueNotifier<String>('なし');
 }
 
-/// 一覧に出ない形式の元を一覧に出る形へ直す。直せん物はそのまま返し、
-/// 呼び出し側の除外に任せる。
-/// - HEIC/HEIF: 端末のデコーダで JPEG に変える。bytes が無い元は読み込んで変える
-/// - 拡張子だけ欠けた名前: MIME から拡張子を足す（共有シート経由で名前が
-///   来ない経路用）
-/// 変換に失敗した物は触らず返す（落として誤った名前で上げる方が害がある）
-/// [jpegConverter] はテストの差し替え口。既定は端末のデコーダ
-Future<UploadSource> _toListableSource(
-  UploadSource s,
-  Future<Uint8List> Function(Uint8List bytes) jpegConverter,
-) async {
-  if (hasListedExtension(s.name)) return s;
-  final isHeic = s.mime == 'image/heic' ||
-      s.mime == 'image/heif' ||
-      RegExp(r'\.(heic|heif)$', caseSensitive: false).hasMatch(s.name);
-  if (isHeic) {
-    final bytes = await _readAllBytes(s);
-    if (bytes != null) {
-      try {
-        final jpg = await jpegConverter(bytes);
-        final base = s.name.replaceFirst(
-            RegExp(r'\.(heic|heif)$', caseSensitive: false), '');
-        // メモリ(bytes)で渡すと転送キューが端末へ退避せず、再起動で未完了の
-        // 送信が消える。reader で渡して普段どおり退避→台帳復旧に乗せる
-        return UploadSource(
-          name: '$base.jpg',
-          size: jpg.length,
-          mime: 'image/jpeg',
-          reader: () => Stream.value(jpg),
-        );
-      } catch (_) {
-        return s;
-      }
-    }
-    return s;
-  }
-  if (!s.name.contains('.')) {
-    final ext = extForMime(s.mime);
-    if (ext != null) {
-      return UploadSource(
-        name: s.name + ext,
-        size: s.size,
-        mime: s.mime,
-        path: s.path,
-        bytes: s.bytes,
-        reader: s.reader,
-        sha256: s.sha256,
-      );
-    }
-  }
-  return s;
-}
-
-Future<Uint8List?> _readAllBytes(UploadSource s) async {
-  if (s.bytes != null) return s.bytes;
-  final path = s.path;
-  if (path != null) {
-    try {
-      return await File(path).readAsBytes();
-    } catch (_) {
-      return null;
-    }
-  }
-  final reader = s.reader;
-  if (reader == null) return null;
-  final builder = BytesBuilder(copy: false);
-  try {
-    await for (final chunk in reader()) {
-      builder.add(chunk);
-    }
-  } catch (_) {
-    return null;
-  }
-  return builder.takeBytes();
-}
-
 /// 確認シートを出し、「アップロード」を押された時だけ積む。積んだ件数を返す。
 /// シートを開いた時点で重複の照合を裏で始め、同じ物はスキップを既定にする（#101）。
 /// 「アルバム」の欄で入れ先を選べる（#102）。新規は確定時に1回だけ作る。
 /// [hasher] はテストでどれを計算したか数えるための差し替え口。
-/// [jpegConverter] はテストで HEIC→JPEG を差し替える口。既定は端末のデコーダ
 Future<int> confirmAndUpload(
     BuildContext context, AppState app, String lib, List<UploadSource> sources,
-    {UploadHasher? hasher,
-    Future<Uint8List> Function(Uint8List bytes)? jpegConverter}) async {
+    {UploadHasher? hasher}) async {
   if (sources.isEmpty) return 0;
-  // 一覧に出ない形式でも端末で直せる物は直して受け付ける。HEIC は iPhone の
-  // 既定なので捨てるとアップロードが全部消える。直せん物だけ除く（#63・#164）
-  // 原本保存が目的なので、既定(1920x1080)で掛かる上限を潰して縮小させない
-  final convert = jpegConverter ??
-      (bytes) => FlutterImageCompress.compressWithList(
-          bytes,
-          format: CompressFormat.jpeg,
-          minWidth: 1 << 30,
-          minHeight: 1 << 30);
-  sources =
-      await Future.wait(sources.map((s) => _toListableSource(s, convert)));
-  if (!context.mounted) return 0;
   // 一覧が拾う拡張子以外は上げても一覧に一生出てこないので、確認の前に除く（#63）
   final rejected = sources.where((s) => !hasListedExtension(s.name)).length;
   if (rejected > 0) {

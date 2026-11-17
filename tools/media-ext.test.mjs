@@ -18,7 +18,7 @@ it("アプリは拡張子を手書きせず生成表だけを使う", () => {
   expect(src).not.toMatch(/jpe\?g|\|mp4\|/);
 });
 
-it("Worker の正規表現は表の全拡張子を拾い、表に無い形式（HEIC など）は拾わない", () => {
+it("Worker の正規表現は表の全拡張子を拾い、表に無い形式（DNG など）は拾わない", () => {
   for (const e of table.image) {
     expect(IMAGE_EXT.test(`a.${e.toUpperCase()}`)).toBe(true);
     expect(MEDIA_EXT.test(`a.${e}`)).toBe(true);
@@ -27,5 +27,5 @@ it("Worker の正規表現は表の全拡張子を拾い、表に無い形式（
     expect(VIDEO_EXT.test(`a.${e}`)).toBe(true);
     expect(MEDIA_EXT.test(`a.${e}`)).toBe(true);
   }
-  for (const e of ["heic", "heif", "dng", "bmp"]) expect(MEDIA_EXT.test(`a.${e}`)).toBe(false);
+  for (const e of ["dng", "tiff", "raw", "svg"]) expect(MEDIA_EXT.test(`a.${e}`)).toBe(false);
 });

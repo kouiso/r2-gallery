@@ -1,9 +1,13 @@
 runs-on: macos
 # One-time setup (e.g., install system tools, global CLIs).
+# One-time setup (e.g., install system tools, global CLIs).
 initialize:
   - name: install JDK 21 (capacitor-file-transfer toolchain) and pnpm deps
     run: |
-      brew install openjdk@21 pnpm
+      # openjdk@21 is keg-only: brew exits 1 at the link step when openjdk@17 is
+      # already installed, though the keg installs fine and JAVA_HOME uses the
+      # opt/ path directly. Accept "installed" over "linked"; real failures still fail.
+      brew install openjdk@21 pnpm || brew list openjdk@21 pnpm >/dev/null
       echo "JAVA_HOME=/opt/homebrew/opt/openjdk@21" >> $ENVRC
   - name: install Android SDK + required packages
     run: |
@@ -35,6 +39,7 @@ initialize:
           try { settings.dependencyResolutionManagement.repositories.all(gcsMirror) } catch (ignored) {}
       }
       EOF
+# Install project dependencies (runs during builds, surfaced to agent at session start).
 # Install project dependencies (runs during builds, surfaced to agent at session start).
   - name: install Flutter (flutter/ client toolchain)
     run: |

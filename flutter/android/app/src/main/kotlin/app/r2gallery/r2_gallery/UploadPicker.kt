@@ -37,6 +37,14 @@ class UploadPicker(private val activity: MainActivity) {
                 for (i in 0 until clip.itemCount) uris.add(clip.getItemAt(i).uri)
             }
             res.data?.data?.let { uris.add(it) }
+            // 持続権利を取れる環境では取っておく（再起動後も退避の写しが効く）
+            for (u in uris) {
+                try {
+                    activity.contentResolver.takePersistableUriPermission(
+                        u, Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                    )
+                } catch (_: Exception) {}
+            }
             val items = uris.map { describe(it) }
             Handler_main().post { out.success(items) }
         }
@@ -59,11 +67,14 @@ class UploadPicker(private val activity: MainActivity) {
             result.success(emptyList<Any>())
             return
         }
-        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+        // GET_CONTENT は機種によって写真ピッカーになり、返る URI が表示名を持たないことがある。
+        // OPEN_DOCUMENT は DocumentsUI を開き、表示名・大きさと持続する読み取り権利が取れる
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "*/*"
             putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("image/*", "video/*"))
             putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
         }
         pending = result
         try {

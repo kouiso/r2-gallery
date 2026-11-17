@@ -428,6 +428,7 @@ void main() {
     int stageParallel = 2,
     Duration thumbTimeout = const Duration(seconds: 20),
     Future<bool> Function(Uint8List bytes)? canDecode,
+    UriStager? uriStager,
   }) {
     final q = TransferQueue(
       api: ApiClientTransferApi(api),
@@ -445,6 +446,7 @@ void main() {
       stageParallel: stageParallel,
       thumbTimeout: thumbTimeout,
       canDecode: canDecode,
+      uriStager: uriStager ?? (uri, dest) => throw StateError('no stager'),
       configured: () => api.conn != null,
     );
     queues.add(q);
@@ -510,6 +512,48 @@ void main() {
       ]);
       await until(() => q.tasks.every((t) => t.status == TransferStatus.done));
       expect(w.objects.keys, containsAll(['夏 #1.jpg', '写真?.png']));
+    });
+
+    test('content:// の元は退避の口から写して上がり、台帳に URI を残す', () async {
+      final staged = <String>[];
+      final q = make(uriStager: (uri, dest) async {
+        expect(uri, 'content://media/1');
+        staged.add(dest);
+        await File(dest).writeAsBytes(bytesOf(500));
+      });
+      await q.restore();
+      await q.enqueueUploads('lib', [
+        UploadSource(
+            name: 'a.jpg',
+            size: 500,
+            mime: 'image/jpeg',
+            uri: 'content://media/1'),
+      ]);
+      await until(() => q.tasks.single.status == TransferStatus.done);
+      expect(staged, isNotEmpty);
+      expect(w.objects['a.jpg'], bytesOf(500));
+      expect(ledger.rows, isEmpty);
+    });
+
+    test('content:// の写しに失敗した行は失敗になり、次の起動で再選を促す', () async {
+      final q = make(uriStager: (uri, dest) async {
+        throw const FileSystemException('permission lost');
+      });
+      await q.restore();
+      await q.enqueueUploads('lib', [
+        UploadSource(
+            name: 'a.jpg',
+            size: 500,
+            mime: 'image/jpeg',
+            uri: 'content://media/1'),
+      ]);
+      await until(() => q.tasks.single.status == TransferStatus.error);
+      // 再起動をまたぐと content:// の権利は消えているので、戻せない失敗の行になる
+      final q2 = make();
+      await q2.restore();
+      await until(() => q2.tasks.isNotEmpty);
+      expect(q2.tasks.single.status, TransferStatus.error);
+      expect(q2.tasks.single.error, contains('もう一度ファイルを選んでください'));
     });
 
     test('アルバムを選んで上げると、確定したキーがそのアルバムに入る', () async {

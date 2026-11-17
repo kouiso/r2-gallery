@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../api/client.dart';
 import '../api/models.dart';
@@ -16,6 +17,7 @@ import '../upload/image_thumb.dart';
 import '../webdl/media_name.dart';
 import 'transfer_api.dart';
 import 'transfer_ledger.dart';
+import 'upload_picker.dart';
 
 enum TransferStatus { queued, preparing, running, done, error, cancelled, paused }
 
@@ -30,6 +32,9 @@ class UploadSource {
   final int size;
   final String mime;
   final String? path;
+
+  /// Android の content:// URI。写しを作らないピッカーの元。権利は画面が生きている間だけ
+  final String? uri;
   final Uint8List? bytes;
 
   /// パスで渡せない元（content:// など）を読む口。再起動後には読み直せない。
@@ -42,6 +47,7 @@ class UploadSource {
     required this.size,
     required this.mime,
     this.path,
+    this.uri,
     this.bytes,
     this.reader,
     this.sha256,
@@ -52,6 +58,7 @@ class UploadSource {
       size: size,
       mime: mime,
       path: path,
+      uri: uri,
       bytes: bytes,
       reader: reader,
       sha256: hash);
@@ -87,6 +94,10 @@ class TransferTask {
   List<UploadPart> parts = [];
   String? stagedPath;
   String? sourcePath;
+
+  /// Android の content:// の元。再起動すると読む権利が切れて戻せないので、
+  /// 台帳へ書いておき、戻せなかった時に「もう一度選んでください」の失敗行へする
+  String? sourceUri;
   Uint8List? memory;
 
   /// 重複確認で計算済みの中身のハッシュ。一括PUTの時だけ Worker へ添える。
@@ -161,6 +172,7 @@ class TransferTask {
         if (parts.isNotEmpty) 'parts': [for (final p in parts) p.toJson()],
         if (stagedPath != null) 'stagedPath': stagedPath,
         if (sourcePath != null) 'sourcePath': sourcePath,
+        if (sourceUri != null) 'sourceUri': sourceUri,
         'sha256': ?sha256,
         if (itemKey != null) 'itemKey': itemKey,
         if (itemType != null) 'itemType': itemType,
@@ -189,6 +201,9 @@ class KvLedgerStore implements LedgerStore {
 
 typedef FileThumbMaker = Future<Uint8List?> Function(File file, String mime);
 
+/// content:// の URI から退避先ファイルへ写す口。テストで差し替える
+typedef UriStager = Future<void> Function(String uri, String dest);
+
 /// 端末側の転送キュー。KMP 版 TransferQueue の考え方をそのまま持ってくる:
 /// 選んだファイルは最初にアプリ専用領域へ退避し、キー・uploadId・確定済みパートを台帳に残す。
 /// アプリが落とされても、次の起動で続きのパートから再開できる（バイト列は端末にしか無いので、サーバー側では救えない）。
@@ -203,6 +218,7 @@ class TransferQueue extends ChangeNotifier {
     this.makeThumb,
     this.parallel = 2,
     this.stageParallel = 2,
+    this.uriStager = _defaultUriStager,
     this.thumbTimeout = const Duration(seconds: 20),
     this.netRetryDelay = const Duration(seconds: 15),
     this.stagedDeleteTimeout = const Duration(seconds: 5),
@@ -229,6 +245,9 @@ class TransferQueue extends ChangeNotifier {
 
   /// 端末への写しは同時にこの件数まで。5000件分の写しが一度に走らないように
   final int stageParallel;
+
+  /// Android の content:// を退避先へ写す口（upload_picker channel）。テストでは差し替える
+  final UriStager uriStager;
 
   /// サムネ生成が長引く時に待つ上限。送り自体はサーバーに届いているので進める
   final Duration thumbTimeout;
@@ -303,6 +322,9 @@ class TransferQueue extends ChangeNotifier {
       t.active && (t.isUpload || _canSaveOffline(t)));
 
   static Future<Directory> _defaultStageDir() => privatePersistentDirectory('transfers');
+
+  static Future<void> _defaultUriStager(String uri, String dest) =>
+      UploadPickerChannel.instance.copyToFile(uri, dest);
 
   Future<Directory> _dir() async {
     final d = _stage ??= await _stageDirFn();
@@ -500,6 +522,20 @@ class TransferQueue extends ChangeNotifier {
     } on Exception catch (e) {
       debugPrint('transfer stage sweep skipped: $e');
     }
+    // 旧 file_picker の写しはピッカーの置き場に残り続ける。どの行も指さない物は消す（決めた事 12）
+    try {
+      if (!kIsWeb && Platform.isAndroid) {
+        final pd = Directory(
+            '${(await getTemporaryDirectory()).path}/file_picker');
+        if (await pd.exists()) {
+          await for (final f in pd.list()) {
+            if (f is File && !keep.contains(f.path)) await f.delete();
+          }
+        }
+      }
+    } on Exception catch (e) {
+      debugPrint('picker cache sweep skipped: $e');
+    }
     // どの行も使っていない接続は表から外す
     final used = {for (final t in restored) ?t.connEndpoint};
     if (_conns.keys.any((e) => !used.contains(e))) {
@@ -593,6 +629,8 @@ class TransferQueue extends ChangeNotifier {
     if (e['albumAdded'] == true) t.albumAdded = true;
     if (albumErr is String) t.albumError = albumErr;
     final staged = e['stagedPath'], source = e['sourcePath'];
+    final suri = e['sourceUri'];
+    if (suri is String) t.sourceUri = suri;
     final key = e['key'], uploadId = e['uploadId'], parts = e['parts'];
     var stagedOk = false;
     if (staged is String) {
@@ -617,6 +655,8 @@ class TransferQueue extends ChangeNotifier {
       if (status != TransferStatus.paused) t.status = TransferStatus.preparing;
       return t;
     }
+    // content:// の読む権利は画面と一緒に消える。起動をまたいだ行は元へ戻せないので
+    // 残しても積み直せない。失敗の行にして、もう一度選び直してもらう
     t.status = TransferStatus.error;
     t.error = lostSourceMessage;
     return t;
@@ -644,6 +684,7 @@ class TransferQueue extends ChangeNotifier {
         status: TransferStatus.preparing,
       )
         ..sourcePath = s.path
+        ..sourceUri = s.uri
         ..memory = s.bytes
         ..sha256 = s.sha256
         ..connEndpoint = conn?.endpoint
@@ -653,7 +694,7 @@ class TransferQueue extends ChangeNotifier {
       if (t.memory != null) {
         t.size = t.memory!.length;
         t.status = TransferStatus.queued;
-      } else if (t.sourcePath == null && t._reader == null) {
+      } else if (t.sourcePath == null && t.sourceUri == null && t._reader == null) {
         t.status = TransferStatus.error;
         t.error = 'ファイルを読み込めませんでした';
       }
@@ -736,11 +777,15 @@ class TransferQueue extends ChangeNotifier {
 
   Future<void> _stageOne(TransferTask t) async {
     final src = t.sourcePath;
+    final uri = t.sourceUri;
     final reader = t._reader;
-    if (src == null && reader == null) return;
+    if (src == null && uri == null && reader == null) return;
     try {
       final dest = File('${(await _dir()).path}/up-${t.id}.bin');
-      if (src != null) {
+      if (uri != null) {
+        // content:// の権利は画面が生きている間だけ。積んだ直後の退避で直に写す
+        await uriStager(uri, dest.path);
+      } else if (src != null) {
         await File(src).copy(dest.path);
       } else {
         final sink = dest.openWrite();
@@ -767,7 +812,10 @@ class TransferQueue extends ChangeNotifier {
     } on Exception catch (e) {
       if (t.status == TransferStatus.preparing) {
         t.status = TransferStatus.error;
-        t.error = 'ファイルを端末に退避できませんでした（${e is FileSystemException ? e.message : e}）';
+        // content:// の権利は戻せないので、URI からの退避失敗は再選を促す文言にする（決めた事 10）
+        t.error = t.sourceUri != null
+            ? lostSourceMessage
+            : 'ファイルを端末に退避できませんでした（${e is FileSystemException ? e.message : e}）';
       }
     }
     _persist(t);

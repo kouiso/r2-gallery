@@ -187,6 +187,8 @@ class MainActivity : FlutterFragmentActivity() {
             }
         // アップロード・オフライン保存を裏でも続けるためのサービスと、回線の回復の知らせ
         TransferBridge.register(this, flutterEngine.dartExecutor.binaryMessenger)
+        // 写真・動画の選択は file_picker の写しをやめ、URI だけを返すこの口へ
+        UploadPicker(this).register(flutterEngine.dartExecutor)
     }
 
     override fun onResume() {

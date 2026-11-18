@@ -249,7 +249,7 @@ void main() {
     expect(g.items, hasLength(4));
   });
 
-  test('サムネ取り込みは今の並び順で辿る', () async {
+  test('サムネ取り込みは保存できたキーだけを引き、並び順で一覧を辿らない', () async {
     final api = _SortingApi();
     final g = GalleryState(api, sort: SortMode.dateOld);
     g.items = [
@@ -262,7 +262,8 @@ void main() {
     ];
     g.backfillThumbs('a', makeThumb: (_) async => Uint8List.fromList([1]));
     await Future<void>.delayed(const Duration(milliseconds: 50));
+    // objectAt はキーを接頭辞にした 1 件引きで、並び順は要らない
     expect(api.calls, isNotEmpty);
-    expect(api.calls.every((c) => c.sort == 'old'), isTrue);
+    expect(api.calls.every((c) => c.sort == null), isTrue);
   });
 }

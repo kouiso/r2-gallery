@@ -29,12 +29,28 @@ class _PagedApi extends ApiClient {
   Future<void> putThumb(String libId, String key, Uint8List bytes) async {
     thumbPuts.add(key);
   }
+
+  @override
+  Future<MediaItem?> objectAt(String libId, String key) async {
+    // フェイクの folder は cursor を切らないので、実装ままでは終わらない。5 頁で打ち切る
+    String? cursor;
+    var hops = 0;
+    do {
+      final page = await folder(libId, prefix: key, cursor: cursor);
+      for (final it in page.items) {
+        if (it.key == key) return it;
+      }
+      cursor = page.cursor;
+    } while (cursor != null && ++hops < 5);
+    return null;
+  }
 }
 
 /// 1 ページ目に画像、2 ページ目にサムネ未保存の動画がある一覧。
-/// 動画のサムネを PUT すると、次に引いた行から thumbUrl が付く。
+/// 動画のサムネを PUT すると、objectAt で引いた行から thumbUrl が付く。
 class _ThreePageApi extends _PagedApi {
   bool videoStored = false;
+  final List<String> objectAtCalls = [];
 
   @override
   Future<FolderPage> folder(String libId,
@@ -44,15 +60,23 @@ class _ThreePageApi extends _PagedApi {
       return FolderPage(items: [_item('p1-0.jpg', 'image')], cursor: 'c1');
     }
     return FolderPage(items: [
-      videoStored
-          ? MediaItem(
-              key: 'p2-0.mp4',
-              type: 'video',
-              url: 'https://w.example/m/p2-0.mp4',
-              thumbUrl: 'https://w.example/t/p2-0.mp4')
-          : _item('p2-0.mp4', 'video', stored: false),
+      _item('p2-0.mp4', 'video', stored: false),
       _item('p2-1.jpg', 'image'),
     ], cursor: 'c2');
+  }
+
+  @override
+  Future<MediaItem?> objectAt(String libId, String key) async {
+    objectAtCalls.add(key);
+    if (key == 'p2-0.mp4' && videoStored) {
+      return MediaItem(
+          key: 'p2-0.mp4',
+          type: 'video',
+          url: 'https://w.example/m/p2-0.mp4',
+          thumbUrl: 'https://w.example/t/p2-0.mp4',
+          thumbStored: true);
+    }
+    return null;
   }
 
   @override
@@ -149,7 +173,10 @@ void main() {
       await settle();
 
       expect(api.thumbPuts, ['p2-0.mp4']);
-      // 先頭 1 ページに巻き戻らず、並びと続きの cursor はそのまま
+      // 先頭から取り直さず、保存できたキーごとに 1 件だけ引く
+      expect(api.folderCalls, 2);
+      expect(api.objectAtCalls, ['p2-0.mp4']);
+      // 並びと続きの cursor はそのまま
       expect(g.items.map((e) => e.key), ['p1-0.jpg', 'p2-0.mp4', 'p2-1.jpg']);
       expect(g.cursor, 'c2');
       expect(g.items[1].thumbUrl, 'https://w.example/t/p2-0.mp4');

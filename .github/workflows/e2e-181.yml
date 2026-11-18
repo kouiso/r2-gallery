@@ -111,8 +111,7 @@ jobs:
           arch: x86_64
           profile: pixel_6
           script: |
-            bash "$GITHUB_WORKSPACE/ci/.maestro-181/verify.sh" \
-              "$GITHUB_WORKSPACE/app" "$WORK"
+            bash "$GITHUB_WORKSPACE/ci/.maestro-181/verify.sh" "$GITHUB_WORKSPACE/app" "$WORK"
 
       - name: Summarize
         if: always()

@@ -4,8 +4,9 @@
 # 使い方: verify.sh <リポジトリ(app 側 checkout)> <作業ディレクトリ>
 set -uo pipefail
 
-APP=$1
-WORK=$2
+APP=${1:?}
+# ランナーの script 渡しで第2引数が落ちることがあるので job env の WORK に退避する
+WORK=${2:-${WORK:?}}
 REC=$WORK/rec
 RES=$WORK/results.md
 WLOG=$WORK/wrangler.log

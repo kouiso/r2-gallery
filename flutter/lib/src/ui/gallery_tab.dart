@@ -86,7 +86,7 @@ class _GalleryTabState extends State<GalleryTab> {
         .map((t) => t.id));
     widget.app.webQueue.addListener(_onImportsChanged);
     // ゴミ箱タブで戻した写真を、写真タブに戻った時に出す
-    // 読み込み中でも取り直す（refresh は世代番号で古い応答を捨てる）
+    // 読み込み中なら、終わった後に1回だけ取り直す
     _changeSub = widget.app.contentChanged
         .listen((lib) => _states[lib]?.softRefresh(lib));
   }

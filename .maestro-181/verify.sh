@@ -10,6 +10,7 @@ REC=$WORK/rec
 RES=$WORK/results.md
 WLOG=$WORK/wrangler.log
 PKG=app.r2gallery
+TOKEN=live-token
 mkdir -p "$REC"
 : > "$RES"
 
@@ -187,7 +188,7 @@ row "5" "ページ $P5B→$P5F（先頭へ戻ると減る・続きだと増え�
 rec_on s6
 P6B=$(pages)
 ( seq -w 6001 6500 | xargs -P4 -I{} curl -sf -X PUT \
-    -H "Authorization: Bearer live-token" -H "Content-Type: image/jpeg" \
+    -H "Authorization: Bearer $TOKEN" -H "Content-Type: image/jpeg" \
     -T "$WORK/seed.jpg" "http://127.0.0.1:8787/v1/a/objects?key=scroll/{}.jpg" -o /dev/null ) &
 UPID=$!
 # 上げながら下へ送り続ける（6500件→33ページ分。手順5までで ~30 取ってるので +4）
@@ -197,7 +198,7 @@ for _ in $(seq 1 80); do fling_up; done
 pullrefresh
 T0=$(date +%s); OK6=1
 for _ in $(seq 1 60); do
-  curl -s -H "Authorization: Bearer live-token" "http://127.0.0.1:8787/v1/a/folders?order=recent" | grep -q 'scroll/6500.jpg' && { OK6=0; break; }
+  curl -s -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:8787/v1/a/folders?order=recent" | grep -q 'scroll/6500.jpg' && { OK6=0; break; }
   sleep 1
 done
 shot s6_top

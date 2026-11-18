@@ -18,6 +18,12 @@ if (CHECK === 'uploaded') {
     trash.indexOf('seed-photo.jpg') >= 0;
 } else if (CHECK === 'restored') {
   ok = root.indexOf('seed-photo.jpg') >= 0 && trash.length === 0;
+} else if (CHECK === 'heic') {
+  var res = http.get(WORKER + '/v1/a/folders?prefix=', headers);
+  if (res.status !== 200) throw new Error('/v1/a/folders -> ' + res.status);
+  var items = json(res.body).items;
+  var heic = items.find(function (it) { return it.key === 'seed-photo.heic'; });
+  ok = !!heic && heic.thumbStored === true;
 } else {
   throw new Error('unknown CHECK: ' + CHECK);
 }

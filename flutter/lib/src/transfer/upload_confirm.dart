@@ -42,15 +42,6 @@ UploadSummary summarizeUpload(List<UploadSource> items) {
   );
 }
 
-/// 拡張子から MIME。HEIC はネット取り込みの表に無いので足す。
-String uploadMimeFor(String name) {
-  final m = mimeForName(name);
-  if (m != 'application/octet-stream') return m;
-  final lower = name.toLowerCase();
-  if (lower.endsWith('.heic') || lower.endsWith('.heif')) return 'image/heic';
-  return m;
-}
-
 /// アップロード確認シートの中身（KMP 版 UploadConfirmContent、design #37 画面06）。
 class UploadConfirmContent extends StatelessWidget {
   final UploadSummary summary;
@@ -178,6 +169,17 @@ class _PreviewRow extends StatelessWidget {
   Widget _thumb() {
     const box = 44.0;
     final isImage = source.mime.startsWith('image/');
+    // 読めない形式（HEIC を読めない端末など）や絵の無い物は同じ箱にする
+    final fallback = ColoredBox(
+      color: AppColors.surfaceHigh,
+      child: Icon(
+        source.mime.startsWith('video/')
+            ? Icons.play_circle_outline
+            : Icons.image_outlined,
+        color: AppColors.textDim,
+        size: 22,
+      ),
+    );
     Widget? img;
     if (isImage) {
       final bytes = source.bytes;
@@ -185,10 +187,18 @@ class _PreviewRow extends StatelessWidget {
       // 縮小して読む。原寸の写真を何枚も展開すると確認シートだけでメモリを食う
       if (bytes != null) {
         img = Image.memory(bytes,
-            width: box, height: box, fit: BoxFit.cover, cacheWidth: 132);
+            width: box,
+            height: box,
+            fit: BoxFit.cover,
+            cacheWidth: 132,
+            errorBuilder: (_, _, _) => fallback);
       } else if (path != null && !kIsWeb) {
         img = Image.file(File(path),
-            width: box, height: box, fit: BoxFit.cover, cacheWidth: 132);
+            width: box,
+            height: box,
+            fit: BoxFit.cover,
+            cacheWidth: 132,
+            errorBuilder: (_, _, _) => fallback);
       }
     }
     return ClipRRect(
@@ -196,17 +206,7 @@ class _PreviewRow extends StatelessWidget {
       child: SizedBox(
         width: box,
         height: box,
-        child: img ??
-            ColoredBox(
-              color: AppColors.surfaceHigh,
-              child: Icon(
-                source.mime.startsWith('video/')
-                    ? Icons.play_circle_outline
-                    : Icons.image_outlined,
-                color: AppColors.textDim,
-                size: 22,
-              ),
-            ),
+        child: img ?? fallback,
       ),
     );
   }
@@ -348,7 +348,7 @@ Future<int> pickAndConfirmUpload(
   if (files.isEmpty || !context.mounted) return 0;
   final sources = <UploadSource>[];
   for (final f in files) {
-    final mime = uploadMimeFor(f.name);
+    final mime = mimeForName(f.name);
     if (kIsWeb) {
       // Web は端末のファイル置き場が無いので、選んだ中身をそのまま持つ
       final bytes = await f.readAsBytes();

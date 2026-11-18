@@ -1,0 +1,22 @@
+appId: app.r2gallery
+# サムネの補完は一覧が取れてから裏で走るので、確認ごと流れを繰り返す
+retry:
+  maxRetries: 20
+  interval: 3000
+---
+# HEIC が一覧に出て、一覧の補完がサムネを作って開けること
+- launchApp
+- runFlow: common/dismiss-no-lock.yaml
+- runFlow: common/open-photo-tab.yaml
+- extendedWaitUntil:
+    visible: "seed-photo.heic"
+    timeout: 30000
+- runScript:
+    file: check.js
+    env:
+      CHECK: heic
+- assertTrue: ${output.check}
+- tapOn: "seed-photo.heic"
+- extendedWaitUntil:
+    visible: ".*件目 · seed-photo.heic"
+    timeout: 15000

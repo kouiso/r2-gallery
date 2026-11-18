@@ -29,3 +29,12 @@ it("Worker の正規表現は表の全拡張子を拾い、表に無い形式（
   }
   for (const e of ["dng", "tiff", "raw", "svg"]) expect(MEDIA_EXT.test(`a.${e}`)).toBe(false);
 });
+
+it("HEIC・HEIF・BMP は画像として一覧に出る", () => {
+  for (const e of ["heic", "heif", "bmp"]) {
+    expect(IMAGE_EXT.test(`IMG_1.${e}`)).toBe(true);
+    expect(IMAGE_EXT.test(`IMG_1.${e.toUpperCase()}`)).toBe(true);
+    expect(MEDIA_EXT.test(`a.${e}`)).toBe(true);
+    expect(VIDEO_EXT.test(`a.${e}`)).toBe(false);
+  }
+});

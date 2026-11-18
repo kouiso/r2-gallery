@@ -15,4 +15,13 @@ void main() {
       expect(hasListedExtension('a.$e'), isFalse, reason: e);
     }
   });
+
+  test('HEIC・HEIF・BMP は一覧に出る名前として扱う', () {
+    expect(hasListedExtension('IMG_1.heic'), isTrue);
+    expect(hasListedExtension('a.HEIF'), isTrue);
+    expect(hasListedExtension('scan.bmp'), isTrue);
+    expect(normalizeUploadName('IMG_1.HEIC', 'image/heic'), 'IMG_1.HEIC');
+    expect(normalizeUploadName('photo', 'image/heic'), 'photo.heic');
+    expect(normalizeUploadName('photo', 'image/bmp'), 'photo.bmp');
+  });
 }

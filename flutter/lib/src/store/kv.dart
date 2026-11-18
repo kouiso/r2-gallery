@@ -57,4 +57,7 @@ class Keys {
   static const library = 'r2g.library';
   static const webHistory = 'r2g.webHistory';
   static const transferConns = 'r2g.transferConns';
+
+  /// ピッカーを開いた時のライブラリ。アプリが落ちた後の選択は次の起動で拾い直すための控え
+  static const pendingPickLib = 'r2g.upload.pendingPickLib';
 }

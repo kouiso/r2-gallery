@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../albums/album_widgets.dart';
 import '../api/models.dart';
@@ -10,11 +11,13 @@ import '../duplicates/content_hash.dart';
 import '../duplicates/upload_check.dart';
 import '../duplicates/upload_check_panel.dart';
 import '../state/app_state.dart';
+import '../store/kv.dart';
 import '../ui/album_picker.dart';
 import '../ui/theme.dart';
 import '../webdl/media_name.dart';
 import 'transfer_queue.dart';
 import 'transfer_rows.dart';
+import 'upload_picker.dart';
 
 /// 確認シートに出す要約。名前は先頭から [previewCount] 件まで、残りは件数にまとめる（KMP 版 summarizeUpload）。
 class UploadSummary {
@@ -387,29 +390,72 @@ Future<int> confirmAndUpload(
 /// 端末のピッカーで写真・動画を選ばせ、確認シートを経てアップロードに積む。
 Future<int> pickAndConfirmUpload(
     BuildContext context, AppState app, String lib) async {
-  // ピッカーから戻るのは端末上は「裏から復帰」なので、包まんと「毎回ロック」で選ぶたびにロックされる
-  final files = await app
-      .runExternal(() => FilePicker.pickFiles(type: FileType.media));
-  if (files.isEmpty || !context.mounted) return 0;
-  final sources = <UploadSource>[];
-  for (final f in files) {
-    final mime = mimeForDeviceName(f.name);
-    if (kIsWeb) {
-      // Web は端末のファイル置き場が無いので、選んだ中身をそのまま持つ
-      final bytes = await f.readAsBytes();
-      sources.add(UploadSource(
-          name: f.name, size: bytes.length, mime: mime, bytes: bytes));
-      continue;
+  // ピッカーを開いている間にアプリが落ちると選択は戻らない。開く前にライブラリを控え、
+  // 次の起動でこのシートから選び直させる（#182 決めた事 13）。KV の無い環境では控えない
+  try {
+    await Kv.set(Keys.pendingPickLib, lib);
+  } catch (_) {}
+  try {
+    // Android は file_picker の全件写しをやめ、content:// の URI だけを返す口を使う
+    final androidPicked =
+        (!kIsWeb && Platform.isAndroid) ? await UploadPickerChannel.instance.pick() : null;
+    if (androidPicked != null) {
+      if (androidPicked.isEmpty || !context.mounted) return 0;
+      final sources = <UploadSource>[];
+      for (final m in androidPicked) {
+        final name = m['name'] as String? ?? 'media';
+        final size = m['size'];
+        sources.add(UploadSource(
+          name: name,
+          size: size is num ? size.toInt() : 0,
+          mime: mimeForDeviceName(name),
+          uri: m['uri'] as String?,
+        ));
+      }
+      // 退避先の空き − 512MB を超える一括は途中で尽きるので、積まずに理由を出す（決めた事 10）
+      final free = await UploadPickerChannel.instance
+          .freeBytes((await getApplicationSupportDirectory()).path);
+      if (free != null) {
+        final total = sources.fold<int>(0, (s, x) => s + (x.size > 0 ? x.size : 0));
+        if (total > free - 512 * 1024 * 1024) {
+          if (context.mounted) {
+            ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
+                content: Text('端末の空きが足りないため積めませんでした。空きを増やしてから選び直してください')));
+          }
+          return 0;
+        }
+      }
+      if (!context.mounted) return 0;
+      return confirmAndUpload(context, app, lib, sources);
     }
-    final path = f.path;
-    sources.add(UploadSource(
-      name: f.name,
-      size: f.lengthSync() ?? await f.length() ?? 0,
-      mime: mime,
-      path: path,
-      reader: path == null ? f.readAsByteStream : null,
-    ));
+    // ピッカーから戻るのは端末上は「裏から復帰」なので、包まんと「毎回ロック」で選ぶたびにロックされる
+    final files = await app
+        .runExternal(() => FilePicker.pickFiles(type: FileType.media));
+    if (files.isEmpty || !context.mounted) return 0;
+    final sources = <UploadSource>[];
+    for (final f in files) {
+      final mime = mimeForDeviceName(f.name);
+      if (kIsWeb) {
+        // Web は端末のファイル置き場が無いので、選んだ中身をそのまま持つ
+        final bytes = await f.readAsBytes();
+        sources.add(UploadSource(
+            name: f.name, size: bytes.length, mime: mime, bytes: bytes));
+        continue;
+      }
+      final path = f.path;
+      sources.add(UploadSource(
+        name: f.name,
+        size: f.lengthSync() ?? await f.length() ?? 0,
+        mime: mime,
+        path: path,
+        reader: path == null ? f.readAsByteStream : null,
+      ));
+    }
+    if (!context.mounted) return 0;
+    return confirmAndUpload(context, app, lib, sources);
+  } finally {
+    try {
+      await Kv.remove(Keys.pendingPickLib);
+    } catch (_) {}
   }
-  if (!context.mounted) return 0;
-  return confirmAndUpload(context, app, lib, sources);
 }

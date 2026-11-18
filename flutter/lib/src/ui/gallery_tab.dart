@@ -10,6 +10,7 @@ import '../grid/media_list_body.dart';
 import '../grid/state_views.dart';
 import '../state/app_state.dart';
 import '../state/write_guard.dart';
+import '../store/kv.dart';
 import '../upload/image_thumb.dart';
 import '../upload/thumbs.dart';
 import '../transfer/upload_confirm.dart';
@@ -89,6 +90,33 @@ class _GalleryTabState extends State<GalleryTab> {
     // 読み込み中なら、終わった後に1回だけ取り直す
     _changeSub = widget.app.contentChanged
         .listen((lib) => _states[lib]?.softRefresh(lib));
+    _resumeLostPick();
+  }
+
+  // ピッカーを開いている間にアプリが落ちると選択は戻らない。開いた時のライブラリを
+  // pendingPickLib に控えているので、次の起動で写真タブが出た後に1回だけ選び直させる。
+  // 控えが違うライブラリか無ければ何もしない（決めた事 13）
+  static bool _pickResumed = false;
+  void _resumeLostPick() {
+    if (_pickResumed) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (_pickResumed) return;
+      _pickResumed = true;
+      String? pending;
+      try {
+        pending = await Kv.get(Keys.pendingPickLib);
+      } catch (_) {
+        // テストなど KV が無い環境では再開しない
+        return;
+      }
+      if (pending == null || pending != widget.lib || !mounted) return;
+      try {
+        await Kv.remove(Keys.pendingPickLib);
+      } catch (_) {}
+      if (!mounted) return;
+      // 選択自体は消えているので、確認シートではなくピッカーから選び直す
+      await pickAndConfirmUpload(context, widget.app, widget.lib);
+    });
   }
 
   // 並び順・種別の絞り込みは Worker に渡して取り直す。端末側の処理だと読み込み済みの分にしか効かない

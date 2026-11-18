@@ -52,7 +52,8 @@ class MediaListBody extends StatelessWidget {
     return Column(
       children: [
         if (err != null)
-          ErrorBanner(message: err, onRetry: () => g.refresh(c.lib)),
+          // 続きの失敗なら読み進めた位置を保ったまま続きをやり直す（#181）
+          ErrorBanner(message: err, onRetry: () => g.retry(c.lib)),
         Expanded(
           child: MediaGrid(
             key: gridKey,

@@ -40,6 +40,9 @@ class _Api extends ApiClient {
   folderCalls = [];
   bool failFolder = false;
 
+  /// 続きページの取得を、入れた cursor につき1回だけ落とす（#181）
+  final Set<String> failMoreOnce = {};
+
   final List<(String, String)> trashed = [];
   final Set<String> failTrash = {};
   final List<(String, String)> restored = [];
@@ -67,6 +70,9 @@ class _Api extends ApiClient {
       sort: sort,
     ));
     if (failFolder) throw const ApiError(500, 'boom');
+    if (cursor != null && failMoreOnce.remove(cursor)) {
+      throw const ApiError(500, 'boom');
+    }
     if (cursor != null) return more[cursor] ?? const FolderPage(items: []);
     return pages[prefix] ?? const FolderPage(items: []);
   }
@@ -667,6 +673,65 @@ void main() {
       expect(tester.widget<MediaTile>(_tile('t1.jpg')).selected, isTrue);
       expect(tester.widget<MediaTile>(_tile('t2.jpg')).selected, isFalse);
       expect(find.byIcon(Icons.check), findsOneWidget);
+    });
+
+    _Api twoPages() {
+      final api = _Api({
+        '': FolderPage(
+          items: [for (var i = 0; i < 130; i++) _img('p$i.jpg', at: _daysAgo(0))],
+          cursor: 'c1',
+        ),
+      });
+      api.more['c1'] = FolderPage(
+        items: [for (var i = 0; i < 130; i++) _img('q$i.jpg', at: _daysAgo(0))],
+      );
+      return api;
+    }
+
+    testWidgets('続きを読み込んだ後に引っ張って取り直しても、末尾へ行けば続きを頼み直す', (tester) async {
+      final api = twoPages();
+      await _pumpShell(tester, _app(api));
+      expect(api.folderCalls.where((c) => c.cursor == 'c1'), hasLength(1));
+
+      // 先頭で引っ張って取り直す（先頭ページへ巻き戻る）
+      await tester.fling(
+        find.byType(CustomScrollView),
+        const Offset(0, 400),
+        1000,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.fling(find.byType(Scrollable).first, const Offset(0, -6000), 3000);
+      await tester.pumpAndSettle();
+
+      expect(api.folderCalls.where((c) => c.cursor == 'c1'), hasLength(2));
+    });
+
+    testWidgets('続きの取得に一度失敗しても、待ちが明ければ末尾に居たまま頼み直す', (tester) async {
+      final api = twoPages()..failMoreOnce.add('c1');
+      await _pumpShell(tester, _app(api));
+      expect(find.text('HTTP 500: boom'), findsOneWidget);
+      expect(api.folderCalls.where((c) => c.cursor == 'c1'), hasLength(1));
+
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pumpAndSettle();
+
+      expect(api.folderCalls.where((c) => c.cursor == 'c1'), hasLength(2));
+      expect(find.text('HTTP 500: boom'), findsNothing);
+    });
+
+    testWidgets('帯の再試行は、続きの失敗なら先頭へ戻さず続きを頼み直す', (tester) async {
+      final api = twoPages()..failMoreOnce.add('c1');
+      await _pumpShell(tester, _app(api));
+      expect(find.text('HTTP 500: boom'), findsOneWidget);
+      final firsts = api.folderCalls.where((c) => c.cursor == null).length;
+
+      await tester.tap(find.text('再試行'));
+      await tester.pumpAndSettle();
+
+      expect(api.folderCalls.where((c) => c.cursor == null), hasLength(firsts));
+      expect(api.folderCalls.where((c) => c.cursor == 'c1'), hasLength(2));
+      expect(find.text('HTTP 500: boom'), findsNothing);
     });
   });
 

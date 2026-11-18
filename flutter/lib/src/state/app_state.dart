@@ -25,6 +25,7 @@ import '../viewer/device_export.dart';
 import '../webdl/cookies.dart';
 import '../webdl/web_fetcher.dart';
 import '../webdl/web_transfer.dart';
+import 'load_more_backoff.dart';
 import 'write_guard.dart';
 import 'pairing.dart';
 import 'trash_ops.dart';
@@ -1029,11 +1030,23 @@ class GalleryState extends ChangeNotifier {
     return refresh(lib);
   }
 
-  /// 続きページの取得に失敗した後、次を試すまで空ける時間。
+  /// 1回目の失敗の後に空ける時間。続けて失敗するたびに倍にし60秒で止める。
   /// スクロール通知ごとに呼ばれるので、空けないと圏外のあいだ再試行と再描画を繰り返す。
   final Duration loadMoreBackoff;
-  // 壁時計だと端末時刻が過去へ戻った時に差が負になり、追いつくまで続きが読めなくなる
-  Stopwatch? _sinceLoadMoreFailure;
+
+  /// 続き（または続き由来の取り直し）の失敗の後の待ち。立っている間は続きを頼まない。
+  /// 明けたら通知して、末尾に居るグリッドが自分で頼み直す。Timer は端末の時刻に左右されない
+  Timer? _backoffTimer;
+
+  /// 続きの失敗が続いた回数。待ちの長さ（[loadMoreBackoffAfter]）に使う
+  int _moreFailures = 0;
+  Duration get _backoff => loadMoreBackoffAfter(loadMoreBackoff, _moreFailures);
+
+  /// 一覧の上の帯の「再試行」が何をやり直すか。続きの失敗なら先頭へ巻き戻さない
+  bool _lastErrorFromMore = false;
+
+  /// 一覧が置き換わった回数。取り直しの間に戻ってきた古い続きを継ぎ足さんための印（#181）
+  int listGen = 0;
 
   List<MediaItem> items = [];
   List<String> folders = [];
@@ -1072,7 +1085,11 @@ class GalleryState extends ChangeNotifier {
     loading = true;
     // 取り直しの間に戻ってきた古い続きページを積まんよう、ページ送りも打ち切る
     loadingMore = false;
-    _sinceLoadMoreFailure = null;
+    // 先頭からの取り直しは、続きの失敗の待ちと数を一旦消す
+    _backoffTimer?.cancel();
+    _backoffTimer = null;
+    _moreFailures = 0;
+    _lastErrorFromMore = false;
     error = null;
     // 手元に何も無い時だけ控えを出す。回線を待たずにディスクのサムネで最初の画面を埋めるため
     if (items.isEmpty) unawaited(_showCached(lib, e));
@@ -1115,6 +1132,7 @@ class GalleryState extends ChangeNotifier {
     folders = page.folders;
     cursor = page.cursor;
     total = page.total;
+    listGen++;
   }
 
   ListingScope? _scopeFor(String lib) {
@@ -1213,7 +1231,10 @@ class GalleryState extends ChangeNotifier {
       ...items.skip(last + 1).where((it) => !fetched.contains(_rowId(it))),
     ];
     // 読み込み済みが全部先頭ページの範囲に収まっていたなら、続きは先頭ページの cursor から
-    if (coveredAll) cursor = page.cursor;
+    if (coveredAll) {
+      cursor = page.cursor;
+      listGen++;
+    }
     folders = page.folders;
     total = page.total;
   }
@@ -1239,19 +1260,59 @@ class GalleryState extends ChangeNotifier {
 
   Future<void> loadMore(String lib) async {
     if (loadingMore || loading || selectAllBusy) return;
+    if (_backoffTimer != null) return;
     if (_needsFirstPage) {
-      await refresh(lib);
+      await _refreshFromMore(lib, always: false);
       return;
     }
     if (cursor == null) return;
-    final sinceFailure = _sinceLoadMoreFailure;
-    if (sinceFailure != null && sinceFailure.elapsed < loadMoreBackoff) return;
     await _fetchNextPage(lib);
+  }
+
+  /// 帯の「再試行」。最後の失敗が続き（続き由来の取り直しを含む）なら、
+  /// 待ちを消して続きを頼み直す。読み進めた位置を先頭へ巻き戻さないため。
+  /// それ以外（起動・引っ張って更新の失敗）は今までどおり先頭から取り直す。
+  Future<void> retry(String lib) {
+    if (_lastErrorFromMore) {
+      _backoffTimer?.cancel();
+      _backoffTimer = null;
+      return loadMore(lib);
+    }
+    return refresh(lib);
+  }
+
+  /// 続きの入口から呼ぶ取り直し。失敗したら続きの失敗と同じ数え方で待ちをかける
+  /// （覚えを消した後、圏外で取り直しが回り続けないため）。
+  /// [always] なら成否によらず待ちを1回ぶん数える（並び違いの取り直し）。
+  Future<void> _refreshFromMore(String lib, {required bool always}) async {
+    final before = _moreFailures;
+    await refresh(lib);
+    if (_disposed) return;
+    if (always) {
+      _noteMoreFailure(before, showRetry: false);
+    } else if (_needsFirstPage && error != null && !loading) {
+      _noteMoreFailure(before, showRetry: true);
+    }
+  }
+
+  /// 続きの失敗を1回数えて、次を試すまでの待ちを始める。
+  /// [showRetry] なら帯の「再試行」が先頭ではなく続きをやり直すよう覚える。
+  void _noteMoreFailure(int before, {required bool showRetry}) {
+    _moreFailures = before + 1;
+    if (showRetry) _lastErrorFromMore = true;
+    _backoffTimer?.cancel();
+    // 明けたら通知し、末尾に居るグリッドに頼み直させる（末尾から離れていれば頼まない）
+    _backoffTimer = Timer(_backoff, () {
+      _backoffTimer = null;
+      notifyListeners();
+    });
   }
 
   /// 続きの 1 ページを実際に取る。入口のガード（backoff・取り合い）は呼び出し側の責務。
   Future<void> _fetchNextPage(String lib) async {
     final e = epoch;
+    final g0 = listGen;
+    final sent = cursor;
     loadingMore = true;
     notifyListeners();
     try {
@@ -1262,11 +1323,17 @@ class GalleryState extends ChangeNotifier {
           sort: sort.apiValue,
           type: kind.apiValue);
       if (e != epoch) return;
+      // 取り直しで一覧が置き換わっていたら、古い cursor の続きは継ぎ足さない
+      if (g0 != listGen) {
+        loadingMore = false;
+        notifyListeners();
+        return;
+      }
       // 先頭ページは Worker の並びだったのに、続きが別の並びで返ったら cursor は使えない
-      // (Worker の入れ替わり)。続きを継ぎ足さず先頭から取り直す
+      // (Worker の入れ替わり)。続きを継ぎ足さず先頭から取り直し、待ちを1回ぶん数える
       if (_serverSorted && page.sort != sort.apiValue) {
         loadingMore = false;
-        await refresh(lib);
+        await _refreshFromMore(lib, always: true);
         return;
       }
       final seen = {for (final it in items) '${it.lib}:${it.key}'};
@@ -1277,13 +1344,24 @@ class GalleryState extends ChangeNotifier {
             .where((it) => seen.add('${it.lib}:${it.key}')),
       ];
       if (!recursive) folders = page.folders;
-      cursor = page.cursor;
-      _sinceLoadMoreFailure = null;
+      // 送った cursor をそのまま返す応答（進まない Worker）は続きの終わりとする
+      cursor = page.cursor == sent ? null : page.cursor;
+      _moreFailures = 0;
+      // 続きが取れたなら、続きの失敗の帯は消す
+      if (_lastErrorFromMore) {
+        error = null;
+        _lastErrorFromMore = false;
+      }
     } catch (err) {
       if (e != epoch) return;
-      _sinceLoadMoreFailure = Stopwatch()..start();
+      if (g0 != listGen) {
+        loadingMore = false;
+        notifyListeners();
+        return;
+      }
       // 続きの取得失敗も黙らせず、一覧の上の帯で知らせる
       error = err.toString();
+      _noteMoreFailure(_moreFailures, showRetry: true);
     }
     loadingMore = false;
     notifyListeners();
@@ -1589,6 +1667,7 @@ class GalleryState extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _backoffTimer?.cancel();
     super.dispose();
   }
 }

@@ -148,7 +148,7 @@ class _FolderBrowseScreenState extends State<FolderBrowseScreen> {
                   ),
             body: MediaListBody(
               c: _c,
-              // 並び替えで件数が戻っても続きを頼み直せるよう、並び順ごとに作り直す
+              // 並び順を替えたら、別の一覧として作り直して先頭から見せる
               gridKey: ValueKey('folder-${_g.sort.apiValue}'),
               sort: _sort,
               sorted: sorted,

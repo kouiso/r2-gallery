@@ -81,9 +81,9 @@ class MediaGrid extends StatefulWidget {
 }
 
 class _MediaGridState extends State<MediaGrid> {
-  // 同じ件数のまま何度も続きを頼まんよう、頼んだ時の件数を覚えておく。
-  // 取得に失敗しても毎フレーム投げ直すループにならない
-  int _askedAt = -1;
+  // 続きを頼むかは一覧の状態が決める。ここは組み立て中の通知を避けて、
+  // 描画後に1フレーム1回だけ送る
+  bool _askQueued = false;
 
   // フォルダ段の横送り用。Web/マウスでは既定のドラッグが効かんので、バーを出して掴めるようにする
   final ScrollController _folderStripCtl = ScrollController();
@@ -96,10 +96,11 @@ class _MediaGridState extends State<MediaGrid> {
 
   void _maybeNearEnd(int index) {
     final n = widget.items.length;
-    if (n == 0 || index < n - nearEndThreshold || _askedAt == n) return;
-    _askedAt = n;
+    if (n == 0 || index < n - nearEndThreshold || _askQueued) return;
+    _askQueued = true;
     // セルを組み立てている最中に一覧の状態を変えると build 中の通知になるので、描画後に頼む
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _askQueued = false;
       if (mounted) widget.onNearEnd();
     });
   }

@@ -221,9 +221,7 @@ class _GalleryTabState extends State<GalleryTab> {
                 c: _c,
                 sort: chrome.sort,
                 sorted: sorted,
-                // ライブラリごとに別の一覧として作り直し、先頭から見せる（KMP 版と同じ）。
-                // 並び順も入れるのは、グリッドが「続きを頼んだ件数」を覚えており、並び替えで
-                // 件数が戻ると 2 ページ目を頼まなくなるため
+                // ライブラリ・並び順・種別を替えたら、別の一覧として作り直して先頭から見せる（KMP 版と同じ）
                 gridKey: ValueKey('grid-${widget.lib}-${g.sort.apiValue}-${g.kind.apiValue}'),
                 onOpenItem: (i) => _openPlayer(sorted, i),
                 errorActions: [

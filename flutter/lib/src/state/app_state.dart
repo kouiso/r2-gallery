@@ -1058,7 +1058,21 @@ class GalleryState extends ChangeNotifier {
   /// 一覧が置き換わった回数。取り直しの間に戻ってきた古い続きを継ぎ足さんための印（#181）
   int listGen = 0;
 
-  List<MediaItem> items = [];
+  List<MediaItem> _items = [];
+  List<MediaItem> get items => _items;
+  set items(List<MediaItem> v) {
+    _items = v;
+    // 続きの重複除け（_ids）とバックフィルの走査位置（_backfillScanned）も一覧に揃える（#25 作業2）
+    _ids
+      ..clear()
+      ..addAll(v.map((it) => '${it.lib}:${it.key}'));
+    _backfillScanned = 0;
+  }
+
+  // loadMore の重複除けを毎回全件から組み直さないため、一覧の行を覚え続ける（#25 作業2）
+  final Set<String> _ids = {};
+  // backfillThumbs は前に調べた所より後ろだけを調べる。items の代入で 0 に戻る
+  int _backfillScanned = 0;
   List<String> folders = [];
   String? cursor;
   bool loading = false;
@@ -1373,12 +1387,12 @@ class GalleryState extends ChangeNotifier {
         await _refreshFromMore(lib, always: true);
         return;
       }
-      final seen = {for (final it in items) '${it.lib}:${it.key}'};
+      // 重複除けは一覧が持ち続ける集合で行う。全件から組み直すと届くたびに重くなる（#25 作業2）
       items = [
         ...items,
         ..._withoutTrashing(page.items)
             .where(kind.matches)
-            .where((it) => seen.add('${it.lib}:${it.key}')),
+            .where((it) => _ids.add('${it.lib}:${it.key}')),
       ];
       if (!recursive) folders = page.folders;
       // 送った cursor をそのまま返す応答（進まない Worker）は続きの終わりとする
@@ -1605,13 +1619,15 @@ class GalleryState extends ChangeNotifier {
     required Future<Uint8List?> Function(MediaItem) makeThumb,
     Future<void> Function(MediaItem)? onThumbStored,
   }) {
+    // 前に調べた所より後ろの行だけを調べる。全件をなめ直すと届くたびに重くなる（#25 作業2）
     final targets = [
-      for (final item in items)
-        if (!item.thumbStored &&
-            (item.isImage || item.isVideo) &&
-            thumbTried.add('${item.lib ?? lib}:${item.key}'))
-          item,
+      for (var i = _backfillScanned; i < items.length; i++)
+        if (!items[i].thumbStored &&
+            (items[i].isImage || items[i].isVideo) &&
+            thumbTried.add('${items[i].lib ?? lib}:${items[i].key}'))
+          items[i],
     ];
+    _backfillScanned = items.length;
     if (targets.isEmpty) return;
     _backfillQueue.addAll(targets.map((t) => (lib: lib, item: t)));
     if (_backfilling) return;

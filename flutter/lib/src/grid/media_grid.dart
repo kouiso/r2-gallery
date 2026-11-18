@@ -5,6 +5,7 @@ import '../state/app_state.dart';
 import '../ui/media_tile.dart';
 import '../ui/theme.dart';
 import 'day_label.dart';
+import 'day_rows.dart';
 import 'selection_widgets.dart';
 
 /// 1セルの最小幅と隙間。端まで広げて、スマホの幅で4列になる密なグリッド（KMP 版 Adaptive(88dp)・2dp）。
@@ -81,6 +82,8 @@ class MediaGrid extends StatefulWidget {
 }
 
 class _MediaGridState extends State<MediaGrid> {
+  // 日付の区切りと行はページが届くたびに全件をなめ直さず、足された分だけ作り直す（#25 作業2）
+  final DayRows _dayRows = DayRows();
   // 続きを頼むかは一覧の状態が決める。ここは組み立て中の通知を避けて、
   // 描画後に1フレーム1回だけ送る
   bool _askQueued = false;
@@ -282,37 +285,8 @@ class _MediaGridState extends State<MediaGrid> {
           slivers.add(SliverToBoxAdapter(child: _folderStrip()));
         }
         if (widget.dateHeaders) {
-          final rows =
-              <
-                ({
-                  String? label,
-                  List<MediaItem> day,
-                  int start,
-                  int count,
-                  bool gapAfter,
-                })
-              >[];
-          var offset = 0;
-          for (final day in groupByDay(items, now)) {
-            rows.add((
-              label: day.label,
-              day: day.items,
-              start: offset,
-              count: 0,
-              gapAfter: false,
-            ));
-            for (var i = 0; i < day.items.length; i += columns) {
-              final remaining = day.items.length - i;
-              rows.add((
-                label: null,
-                day: day.items,
-                start: offset + i,
-                count: remaining < columns ? remaining : columns,
-                gapAfter: remaining > columns,
-              ));
-            }
-            offset += day.items.length;
-          }
+          // 日付の区切りと行は DayRows が覚える。届いた分と最後の日だけを作り直す（#25 作業2）
+          final rows = _dayRows.update(items, columns: columns, now: now);
           final cell = (c.maxWidth - gridGap * (columns - 1)) / columns;
           // 複数の SliverGrid は画面外でも各日先頭を構築するため、日付も行も一つの遅延リストにする。
           slivers.add(

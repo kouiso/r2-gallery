@@ -1,0 +1,121 @@
+name: e2e-181
+
+# issue #181 作業4: Android エミュレータで 6000 件の続き読み込みを確かめる一時的な検証 lane。
+# maestro.yml と同じ形（KVM + API34 エミュレータ + 手元 Worker + release APK）。
+# 「確かめ方」の6手順を adb スクリプトで回し、録画と結果表を成果物に上げる。
+on:
+  workflow_dispatch:
+    inputs:
+      build_ref:
+        description: 'APK を焼く ref（直した版=main / 直す前=cb7f574…）'
+        required: true
+        default: 'main'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      WORK: ${{ github.workspace }}/.w181
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: ci
+          persist-credentials: false
+
+      - uses: actions/checkout@v4
+        with:
+          path: app
+          ref: ${{ inputs.build_ref }}
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+
+      - name: Start the local worker and seed 6000 items
+        run: |
+          set -euo pipefail
+          cd app
+          pnpm install --frozen-lockfile
+          sudo apt-get update -q
+          sudo apt-get install -y -q ffmpeg
+          mkdir -p "$WORK"
+          cp .maestro/wrangler.maestro.toml worker/wrangler.maestro.toml \
+            || cp "$GITHUB_WORKSPACE/ci/.maestro/wrangler.maestro.toml" worker/wrangler.maestro.toml
+          (cd worker && nohup npx wrangler dev --local --port 8787 \
+            -c wrangler.maestro.toml --persist-to "$WORK/state" >"$WORK/wrangler.log" 2>&1 &)
+          for _ in $(seq 1 90); do
+            curl -sf http://127.0.0.1:8787/health >/dev/null && break; sleep 1
+          done
+          curl -sf http://127.0.0.1:8787/health >/dev/null || { cat "$WORK/wrangler.log"; exit 1; }
+          ffmpeg -loglevel error -y -f lavfi -i testsrc=size=320x240 -frames:v 1 "$WORK/seed.jpg"
+          seq -w 1 6000 | xargs -P8 -I{} curl -sf -X PUT \
+            -H "Authorization: Bearer live-token" -H "Content-Type: image/jpeg" \
+            -T "$WORK/seed.jpg" "http://127.0.0.1:8787/v1/a/objects?key=scroll/{}.jpg" -o /dev/null
+          curl -s -H "Authorization: Bearer live-token" \
+            "http://127.0.0.1:8787/v1/a/folders?order=recent" | head -c 300; echo
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Flutter の版をリポジトリの正本から読む
+        id: fver
+        run: echo "v=$(cat app/flutter/.flutter-version)" >> "$GITHUB_OUTPUT"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "${{ steps.fver.outputs.v }}"
+          channel: stable
+
+      - name: Build the release APK for the local worker
+        run: |
+          set -euo pipefail
+          MANIFEST=app/flutter/android/app/src/main/AndroidManifest.xml
+          sed -i 's#<application#<application android:usesCleartextTraffic="true"#' "$MANIFEST"
+          grep -q 'usesCleartextTraffic="true"' "$MANIFEST"
+          cd app/flutter
+          flutter pub get
+          flutter build apk --release \
+            --dart-define=R2_BAKED_ENDPOINT=http://127.0.0.1:8787 \
+            --dart-define=R2_BAKED_TOKEN=live-token
+          {
+            echo "build_ref=${{ inputs.build_ref }}"
+            echo "app_commit=$(cd "$GITHUB_WORKSPACE/app" && git rev-parse --short HEAD)"
+            echo "apk_sha256=$(sha256sum build/app/outputs/flutter-apk/app-release.apk | cut -d' ' -f1)"
+          } >> "$WORK/meta.txt"
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run the 6-step verification on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          profile: pixel_6
+          script: |
+            bash "$GITHUB_WORKSPACE/ci/.maestro-181/verify.sh" \
+              "$GITHUB_WORKSPACE/app" "$WORK"
+
+      - name: Summarize
+        if: always()
+        run: |
+          cat "$WORK/meta.txt" "$WORK/results.md" >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-181-${{ inputs.build_ref }}
+          path: ${{ github.workspace }}/.w181/

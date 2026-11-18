@@ -103,12 +103,24 @@ adb logcat -c
 # 「1リクエストで止まる」時に、cursor が無い(これ以上無い)か、空で止まったかを分ける
 PROBE=$(curl -s -H "Authorization: Bearer $TOKEN" \
   "http://127.0.0.1:8787/v1/a/folders?prefix=&recursive=1&order=recent&sort=new" | \
-  python3 -c "import json,sys\nd=json.load(sys.stdin)\nprint('total=%s items=%s cursor=%s' % (d.get('total'), len(d.get('items') or []), 'yes' if d.get('cursor') else 'no'))" 2>/dev/null || echo probe-failed)
+  jq -r '"total=\(.total // "?") items=\((.items // []) | length) cursor=\(if .cursor then "yes" else "no" end)"' 2>/dev/null || echo probe-failed)
 echo "worker_first_page: $PROBE" >> "$RES"
 
 launch() {
-  adb shell am start -n "$PKG/.MainActivity" >/dev/null 2>&1 || \
+  # マージ後 manifest の activity 名は namespace (app.r2gallery.r2_gallery) で解決される
+  # ため "$PKG/.MainActivity" は存在しないクラスを指し起動に失敗する。
+  adb shell am start -n "$PKG/app.r2gallery.r2_gallery.MainActivity" >/dev/null 2>&1 || \
     adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
+  # 手順の前提はアプリが前面に居ること。ドロワー上で fling しても何も動かないので、
+  # 前面に出るまで立ち上げ直し、出なければ logcat を残して落とす。
+  for _ in $(seq 1 10); do
+    adb shell dumpsys window 2>/dev/null | grep -q "mCurrentFocus.*$PKG" && return 0
+    adb shell am start -n "$PKG/app.r2gallery.r2_gallery.MainActivity" >/dev/null 2>&1
+    sleep 2
+  done
+  adb logcat -d > "$WORK/logcat-launch.txt" 2>/dev/null || true
+  echo "launch failed: app never reached foreground (logcat-launch.txt)" >> "$RES"
+  exit 1
 }
 
 # ---- 手順 1: 写真タブを開き、fling で末尾まで送り続ける ----
@@ -218,4 +230,6 @@ P6F=$(pages); shot s6_end
 rec_off s6
 row "6" "新着が先頭に出た=$([ $OK6 -eq 0 ] && echo yes || echo no)・総ページ=$P6F" "末尾まで=$([ "$P6F" -ge $((P6B+33)) ] && echo yes || echo partial)"
 
+# アプリ側の log も残す（クラッシュ・通信エラーが結果表からは読めないため）
+adb logcat -d > "$WORK/logcat.txt" 2>/dev/null || true
 cat "$RES"

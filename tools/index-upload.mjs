@@ -36,6 +36,8 @@ const VIDEO = mediaExt.video.join("|");
 const IMAGE_RE = new RegExp(`\\.(${IMAGE})$`, "i");
 const VIDEO_RE = new RegExp(`\\.(${VIDEO})$`, "i");
 const MEDIA_RE = new RegExp(`\\.(${IMAGE}|${VIDEO})$`, "i");
+// 同梱の sharp は HEIC・HEIF（HEVC）と BMP を読めない。サムネはアプリの一覧の補完が作る
+const NO_SHARP_RE = /\.(heic|heif|bmp)$/i;
 const FORBIDDEN_PREFIX = /^(?:\.system\/|\.trash\/)/;
 // The worker resolves declared albums first, so declaring this id hides the virtual "その他" album.
 const RESERVED_ALBUM_IDS = new Set(["__other__"]);
@@ -181,7 +183,7 @@ let skipped = 0;
 for (const key of keys) {
   const src = mediaRoot ? join(mediaRoot, key) : null;
   const thumbKey = `.system/thumbs/${args.lib}/${key}.webp`;
-  const isImage = IMAGE_RE.test(key);
+  const isImage = IMAGE_RE.test(key) && !NO_SHARP_RE.test(key);
   const isVideo = VIDEO_RE.test(key);
   if (!src || !existsSync(src) || (!isImage && !(isVideo && args["video-thumbs"]))) {
     skipped++;

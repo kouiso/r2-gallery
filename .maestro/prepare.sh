@@ -34,3 +34,6 @@ put() {
 }
 put seed-photo.jpg image/jpeg
 put seed-clip.mp4 video/mp4
+# HEIC は同梱の sharp が読めないのでサムネは生成しない（一覧の補完が作る）
+cp "$HERE/fixtures/seed-photo.heic" "$WORK/seed-photo.heic"
+put seed-photo.heic image/heic

@@ -418,6 +418,34 @@ describe("folders", () => {
     expect(f3.items).toEqual([]);
   });
 
+  it("HEIC・HEIF・BMP を画像として一覧に出し、原本を署名 URL で配る", async () => {
+    await env.LIB_A.put("fmt/a.heic", PNG, { httpMetadata: { contentType: "image/heic" } });
+    await env.LIB_A.put("fmt/b.heif", PNG, { httpMetadata: { contentType: "image/heif" } });
+    await env.LIB_A.put("fmt/c.bmp", PNG, { httpMetadata: { contentType: "image/bmp" } });
+    await env.LIB_A.put("fmt/d.dng", PNG, {
+      httpMetadata: { contentType: "application/octet-stream" },
+    });
+    for (const res of [
+      await api("/v1/a/folders?prefix=fmt%2F"),
+      await api("/v1/a/folders?prefix=fmt%2F&type=photo"),
+    ]) {
+      const f = (await res.json()) as Folders;
+      expect(f.items.map((i) => i.key).sort()).toEqual(["fmt/a.heic", "fmt/b.heif", "fmt/c.bmp"]);
+      for (const it of f.items) {
+        expect(it.type).toBe("image");
+        expect(typeof it.thumbUrl).toBe("string");
+      }
+    }
+    const m = await SELF.fetch(await signedMediaUrl("a", "fmt/a.heic"));
+    expect(m.status).toBe(200);
+    expect(m.headers.get("content-type")).toContain("image/heic");
+    const t = await SELF.fetch(await signedMediaUrl("a", "fmt/a.heic", "t"));
+    expect(t.status).toBe(200);
+    expect(new Uint8Array(await t.arrayBuffer())).toEqual(PNG);
+    const d = await SELF.fetch(await signedMediaUrl("a", "fmt/d.dng"));
+    expect(d.status).toBe(404);
+  });
+
   describe("sort=new|old|name|size は全件に対して並べ、カーソルで続きを返す (#44)", () => {
     const N = 205; // 1ページ(200件)を超える件数で、2ページ目の位置が崩れないことを確かめる
     const sorts = ["new", "old", "name", "size"] as const;

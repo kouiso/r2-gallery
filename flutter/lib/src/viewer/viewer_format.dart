@@ -44,6 +44,14 @@ String mimeFor(String name) {
       return 'image/webp';
     case 'gif':
       return 'image/gif';
+    case 'avif':
+      return 'image/avif';
+    case 'heic':
+      return 'image/heic';
+    case 'heif':
+      return 'image/heif';
+    case 'bmp':
+      return 'image/bmp';
     default:
       return 'application/octet-stream';
   }

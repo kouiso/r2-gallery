@@ -254,9 +254,13 @@ describe("index-upload", () => {
     const r = dryRun(index, ["--media-root", media]);
     expect(r.err).toBe("");
     expect(r.code).toBe(0);
-    for (const e of images) expect(r.out).toContain(`/img.${e}.webp`);
+    const noSharp = ["heic", "heif", "bmp"];
+    for (const e of images) {
+      if (noSharp.includes(e)) expect(r.out).not.toContain(`/img.${e}.webp`);
+      else expect(r.out).toContain(`/img.${e}.webp`);
+    }
     for (const e of videos) expect(r.out).not.toContain(`/vid.${e}.webp`);
-    expect(r.out).toContain(`${images.length} uploaded, ${videos.length} skipped`);
+    expect(r.out).toContain(`${images.length - 3} uploaded, ${videos.length + 3} skipped`);
   });
 
   it("dry-run plans index and thumbnail uploads without invoking wrangler", () => {

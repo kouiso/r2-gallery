@@ -697,6 +697,17 @@ void main() {
     expect(PlatformMediaStore().supported, isTrue);
   });
 
+  test('X1: HEIC は image/heic で端末のギャラリーへ登録する', () async {
+    final api = _Api();
+    final store = _Store();
+    final app = _app(api, store: store);
+    await app.exportToDevice(const MediaItem(key: 'IMG_1.heic', type: 'image',
+        url: 'https://w.example/m/IMG_1.heic'));
+    expect(store.saved.single.name, 'IMG_1.heic');
+    expect(store.saved.single.mime, 'image/heic');
+    expect(api.downloads, ['https://w.example/m/IMG_1.heic']);
+  });
+
   testWidgets('保存待ちは保存済みと区別し、暗号化保存の通知後だけ確定する', (tester) async {
     final changes = ChangeNotifier();
     addTearDown(changes.dispose);

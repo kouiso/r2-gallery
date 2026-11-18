@@ -26,6 +26,12 @@ String? extForMime(String mime) {
       return '.gif';
     case 'image/avif':
       return '.avif';
+    case 'image/heic':
+      return '.heic';
+    case 'image/heif':
+      return '.heif';
+    case 'image/bmp':
+      return '.bmp';
     case 'video/mp4':
       return '.mp4';
     case 'video/webm':
@@ -89,6 +95,12 @@ String mimeForName(String name) {
       return 'image/gif';
     case 'avif':
       return 'image/avif';
+    case 'heic':
+      return 'image/heic';
+    case 'heif':
+      return 'image/heif';
+    case 'bmp':
+      return 'image/bmp';
   }
   return 'application/octet-stream';
 }

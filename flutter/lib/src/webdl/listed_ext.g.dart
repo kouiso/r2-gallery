@@ -3,5 +3,5 @@
 // ignore_for_file: type=lint
 library;
 
-const listedImageExt = <String>['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif'];
+const listedImageExt = <String>['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif', 'heic', 'heif', 'bmp'];
 const listedVideoExt = <String>['mp4', 'webm', 'mov', 'm4v', 'mkv', 'ts', 'm2ts', 'mpg', 'mpeg', 'avi', 'flv', '3gp', 'wmv'];

@@ -407,9 +407,21 @@ void main() {
       await tester.pumpAndSettle();
     });
 
+    testWidgets('HEIC は作り変えず名前のまま上がる', (tester) async {
+      final b = Uint8List.fromList(utf8.encode('x'));
+      final heic =
+          UploadSource(name: 'a.heic', size: b.length, mime: 'image/heic', bytes: b);
+      final app = await openSheet(tester, _Checker({}), [heic]);
+      await pressUpload(tester);
+      final up = app.uploads.single;
+      expect(up.single.name, 'a.heic');
+      expect(up.single.mime, 'image/heic');
+      expect(find.text('一覧に出ない形式'), findsNothing);
+    });
+
     testWidgets('一覧に出ない形式は除かれ、残りだけが上がる', (tester) async {
       final app = await openSheet(tester, _Checker({}),
-          [_src('a.heic', 'x'), _src('b.jpg', 'y')]);
+          [_src('a.dng', 'x'), _src('b.jpg', 'y')]);
       await pressUpload(tester);
       expect(app.uploads.single.map((s) => s.name), ['b.jpg']);
       expect(find.text('一覧に出ない形式 1件を除きました'), findsOneWidget);
@@ -422,7 +434,7 @@ void main() {
           body: Builder(
             builder: (ctx) => TextButton(
               onPressed: () =>
-                  result = confirmAndUpload(ctx, app, 'lib', [_src('a.heic', 'x')]),
+                  result = confirmAndUpload(ctx, app, 'lib', [_src('a.dng', 'x')]),
               child: const Text('open'),
             ),
           ),

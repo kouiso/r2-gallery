@@ -1510,13 +1510,11 @@ void main() {
       w.media['a.heic'] = bytesOf(4000);
       w.views['a.heic'] = bytesOf(900);
       // 台帳に残った1行（viewCopy=true・写しの URL は記録しない）を作る
-      await ledger.write(jsonEncode([
-        {
-          'id': 'd1', 'kind': 'down', 'lib': 'lib', 'name': 'a.heic',
-          'status': 'queued', 'viewCopy': true,
-          'itemKey': 'a.heic', 'itemType': 'image',
-        }
-      ]));
+      ledger.put({
+        'id': 'd1', 'kind': 'down', 'lib': 'lib', 'name': 'a.heic',
+        'status': 'queued', 'viewCopy': true,
+        'itemKey': 'a.heic', 'itemType': 'image',
+      });
       final q = make(canDecode: (b) async => b.length == 900);
       await q.restore();
       await until(

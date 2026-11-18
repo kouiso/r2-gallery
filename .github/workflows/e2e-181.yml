@@ -124,3 +124,5 @@ jobs:
         with:
           name: e2e-181-${{ inputs.build_ref }}
           path: ${{ github.workspace }}/.w181/
+          # .w181 は隠しディレクトリなので、黙って件数0で upload されないよう明示する
+          include-hidden-files: true

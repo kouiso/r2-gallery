@@ -18,12 +18,15 @@ mkdir -p "$REC"
 # ---- helpers ----
 
 # 手元 Worker が受けた一覧の要求数（1ページ = 1行）
-pages() { grep -c "GET /v1/a/folders" "$WLOG" 2>/dev/null || echo 0; }
+# grep -c は不一致でも 0 を印字して終了1を返すので、|| echo 0 を付けると「0\n0」になる
+pages() { local n; n=$(grep -c "GET /v1/a/folders" "$WLOG" 2>/dev/null || true); echo "${n:-0}"; }
 
 # 帯（再試行）が画面に居るか: 1 以上なら居る
 band_count() {
   adb shell uiautomator dump /sdcard/u.xml >/dev/null 2>&1 || true
-  adb shell cat /sdcard/u.xml 2>/dev/null | grep -o 'text="[^"]*"' | grep -c '再試行' || echo 0
+  local n
+  n=$(adb shell cat /sdcard/u.xml 2>/dev/null | grep -o 'text="[^"]*"' | { grep -c '再試行' || true; })
+  echo "${n:-0}"
 }
 
 shot() { adb exec-out screencap -p > "$REC/$1.png" 2>/dev/null || true; }

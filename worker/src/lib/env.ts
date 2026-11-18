@@ -31,6 +31,8 @@ export interface Env {
   DUP_SCAN_OBJECTS?: string;
   /** これより大きい物は重複の確認で中身を計算しない（既定 1 GiB）。 */
   DUP_MAX_OBJECT_BYTES?: string;
+  /** Cloudflare Images の binding。無い環境では JPEG の写しを作らない。 */
+  IMAGES?: unknown;
   /** Optional read-only D1 binding holding per-object review rows. */
   REVIEW_DB?: D1Database;
   /** Comma-separated library ids allowed to join objects to REVIEW_DB rows. */

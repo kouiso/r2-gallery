@@ -114,6 +114,9 @@ app.on(["GET", "HEAD", "POST", "PUT"], "/m/:lib/:key{.+}", (c) =>
 app.on(["GET", "HEAD", "POST", "PUT"], "/t/:lib/:key{.+}", (c) =>
   handleMedia(c.req.raw, c.env, "t", c.req.param("lib"), c.req.param("key"), new URL(c.req.url)),
 );
+app.on(["GET", "HEAD"], "/v/:lib/:key{.+}", (c) =>
+  handleMedia(c.req.raw, c.env, "v", c.req.param("lib"), c.req.param("key"), new URL(c.req.url)),
+);
 app.all("/", () => json({ ok: true }));
 app.all("/health", () => json({ ok: true }));
 

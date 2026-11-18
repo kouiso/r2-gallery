@@ -34,7 +34,7 @@ function b64url(buf: ArrayBuffer): string {
 }
 
 /** Same scheme as the worker: HMAC-SHA256 of `${kind}\n${lib}:${key}\n${exp}`. */
-async function sign(kind: "m" | "t", lib: string, key: string, exp: number): Promise<string> {
+async function sign(kind: "m" | "t" | "v", lib: string, key: string, exp: number): Promise<string> {
   const k = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode("test-signing-secret"),
@@ -52,7 +52,7 @@ async function sign(kind: "m" | "t", lib: string, key: string, exp: number): Pro
 
 const encKey = (key: string) => key.split("/").map(encodeURIComponent).join("/");
 
-async function signedMediaUrl(lib: string, key: string, kind: "m" | "t" = "m", exp?: number) {
+async function signedMediaUrl(lib: string, key: string, kind: "m" | "t" | "v" = "m", exp?: number) {
   const e = exp ?? Math.floor(Date.now() / 1000) + 600;
   const s = await sign(kind, lib, key, e);
   return `${ORIGIN}/${kind}/${lib}/${encKey(key)}?e=${e}&s=${s}`;
@@ -117,6 +117,8 @@ interface Folders {
     size: number;
     url: string;
     thumbUrl: string;
+    thumbStored: boolean;
+    viewUrl: string | null;
     createdAt: number | null;
   }[];
   cursor: string | null;
@@ -1889,7 +1891,13 @@ interface Listing {
   sort: string;
   total: number;
   folders: string[];
-  items: { key: string; size: number; thumbUrl: string | null; thumbStored: boolean }[];
+  items: {
+    key: string;
+    size: number;
+    thumbUrl: string | null;
+    thumbStored: boolean;
+    viewUrl: string | null;
+  }[];
   cursor: string | null;
 }
 
@@ -2731,5 +2739,158 @@ describe("重複として消す", () => {
   it("読み取り専用のライブラリでは消せない", async () => {
     const res = await post("/v1/b/ops/trash", { key: "ro/keep.jpg", duplicateOf: "ro/x.jpg" });
     expect(res.status).toBe(403);
+  });
+});
+
+describe("JPEG の写し", () => {
+  interface Call {
+    width: number;
+    height: number;
+    format: string;
+  }
+  function fakeImages(opts: { fail?: boolean; onOutput?: () => Promise<void> } = {}) {
+    const calls: Call[] = [];
+    const images = {
+      input: () => ({
+        transform: (o: { width: number; height: number; fit: string }) => ({
+          output: async (o2: { format: string; quality: number }) => {
+            if (opts.onOutput) await opts.onOutput();
+            if (opts.fail) throw new Error("9422");
+            calls.push({ width: o.width, height: o.height, format: o2.format });
+            return { response: () => new Response(JPEG.buffer.slice(0) as ArrayBuffer) };
+          },
+        }),
+      }),
+    };
+    return { images, calls };
+  }
+
+  const putHeic = (key: string) =>
+    env.LIB_A.put(key, PNG, { httpMetadata: { contentType: "image/heic" } });
+
+  it("サムネの無い HEIC の /t/ は JPEG を作って返し、サムネとして保存して索引に載せる", async () => {
+    await putHeic("jc/a.heic");
+    const { images, calls } = fakeImages();
+    const url = await signedMediaUrl("a", "jc/a.heic", "t");
+    const res = await direct(url.slice(ORIGIN.length), {}, { ...env, IMAGES: images } as Env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/jpeg");
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(JPEG);
+    expect(calls).toEqual([{ width: 512, height: 512, format: "image/jpeg" }]);
+    const stored = await env.META.head(".system/thumbs/a/jc/a.heic.webp");
+    expect(stored?.httpMetadata?.contentType).toBe("image/jpeg");
+    // もう一度 GET しても写し作りは走らない（保存済みが返る）
+    const res2 = await direct(url.slice(ORIGIN.length), {}, { ...env, IMAGES: images } as Env);
+    expect(res2.status).toBe(200);
+    expect(calls).toHaveLength(1);
+    // 一覧の thumbStored が true になる（journal で索引へ載る）
+    const res3 = await direct("/v1/a/folders?prefix=jc%2F&catalog_max_age=0", {}, cachedEnv());
+    const f = (await res3.json()) as Folders;
+    expect(f.items.find((i) => i.key === "jc/a.heic")?.thumbStored).toBe(true);
+  });
+
+  it("binding が無い時の /t/ は原本を返す", async () => {
+    await putHeic("jc/b.heic");
+    const res = await SELF.fetch(await signedMediaUrl("a", "jc/b.heic", "t"));
+    expect(res.status).toBe(200);
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(PNG);
+    expect(await env.META.head(".system/thumbs/a/jc/b.heic.webp")).toBeNull();
+  });
+
+  it("binding が失敗した時の /t/ は原本を返し、サムネを保存しない", async () => {
+    await putHeic("jc/f.heic");
+    const { images } = fakeImages({ fail: true });
+    const url = await signedMediaUrl("a", "jc/f.heic", "t");
+    const res = await direct(url.slice(ORIGIN.length), {}, { ...env, IMAGES: images } as Env);
+    expect(res.status).toBe(200);
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(PNG);
+    expect(await env.META.head(".system/thumbs/a/jc/f.heic.webp")).toBeNull();
+  });
+
+  it("HEAD の /t/ は写しを作らない", async () => {
+    await putHeic("jc/h.heic");
+    const { images, calls } = fakeImages();
+    const url = await signedMediaUrl("a", "jc/h.heic", "t");
+    const res = await direct(url.slice(ORIGIN.length), { method: "HEAD" }, {
+      ...env,
+      IMAGES: images,
+    } as Env);
+    expect(res.status).toBe(200);
+    expect(calls).toHaveLength(0);
+    expect(await env.META.head(".system/thumbs/a/jc/h.heic.webp")).toBeNull();
+  });
+
+  it("同名を上げ直した後に出来た写しは、サムネとして残さない", async () => {
+    await putHeic("jc/race.heic");
+    const { images } = fakeImages({
+      onOutput: async () => {
+        await env.LIB_A.put("jc/race.heic", JPEG, {
+          httpMetadata: { contentType: "image/heic" },
+        });
+      },
+    });
+    const url = await signedMediaUrl("a", "jc/race.heic", "t");
+    const res = await direct(url.slice(ORIGIN.length), {}, { ...env, IMAGES: images } as Env);
+    expect(res.status).toBe(200);
+    expect(await env.META.head(".system/thumbs/a/jc/race.heic.webp")).toBeNull();
+  });
+
+  it("/v/ は HEIC に長辺 2560px の JPEG を返し、保存しない", async () => {
+    await putHeic("jc/c.heic");
+    const { images, calls } = fakeImages();
+    const url = await signedMediaUrl("a", "jc/c.heic", "v");
+    const e = { ...env, IMAGES: images } as Env;
+    const head = await direct(url.slice(ORIGIN.length), { method: "HEAD" }, e);
+    expect(head.status).toBe(200);
+    expect(head.headers.get("content-type")).toBe("image/jpeg");
+    expect(calls).toHaveLength(0);
+    const get = await direct(url.slice(ORIGIN.length), {}, e);
+    expect(get.status).toBe(200);
+    expect(get.headers.get("content-type")).toBe("image/jpeg");
+    expect(calls).toEqual([{ width: 2560, height: 2560, format: "image/jpeg" }]);
+    const listed = await env.META.list({ prefix: ".system/thumbs/a/jc/c.heic" });
+    expect(listed.objects).toEqual([]);
+  });
+
+  it("/v/ は JPEG の key に 404 を返す", async () => {
+    await env.LIB_A.put("jc/d.jpg", JPEG, { httpMetadata: { contentType: "image/jpeg" } });
+    const res = await SELF.fetch(await signedMediaUrl("a", "jc/d.jpg", "v"));
+    expect(res.status).toBe(404);
+    expect(await res.text()).toBe("unsupported");
+  });
+
+  it("/v/ の署名は /m/ の署名では通らない", async () => {
+    await putHeic("jc/c.heic");
+    const m = await signedMediaUrl("a", "jc/c.heic", "m");
+    const res = await SELF.fetch(m.replace(`/${"m"}/a/`, "/v/a/"));
+    expect(res.status).toBe(403);
+  });
+
+  it("/v/ は binding が失敗した時に原本を短い期限で返す", async () => {
+    await putHeic("jc/e.heic");
+    const { images } = fakeImages({ fail: true });
+    const url = await signedMediaUrl("a", "jc/e.heic", "v");
+    const res = await direct(url.slice(ORIGIN.length), {}, { ...env, IMAGES: images } as Env);
+    expect(res.status).toBe(200);
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(PNG);
+    expect(res.headers.get("cache-control")).toBe("private, max-age=60");
+  });
+
+  it("一覧は binding が在る時だけ HEIC に viewUrl を付ける", async () => {
+    await putHeic("jc/v.heic");
+    await env.LIB_A.put("jc/w.jpg", JPEG, { httpMetadata: { contentType: "image/jpeg" } });
+    const { images } = fakeImages();
+    const res = await direct("/v1/a/folders?prefix=jc%2F", {}, {
+      ...cachedEnv(),
+      IMAGES: images,
+    } as Env);
+    const f = (await res.json()) as Folders;
+    expect(f.items.find((i) => i.key.endsWith(".heic"))?.viewUrl).toContain(
+      "https://example.test/v/a/jc/",
+    );
+    expect(f.items.find((i) => i.key.endsWith(".jpg"))?.viewUrl).toBeNull();
+    const res2 = await direct("/v1/a/folders?prefix=jc%2F", {}, cachedEnv());
+    const f2 = (await res2.json()) as Folders;
+    for (const it of f2.items) expect(it.viewUrl).toBeNull();
   });
 });

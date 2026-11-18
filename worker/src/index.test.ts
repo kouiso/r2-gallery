@@ -2267,6 +2267,23 @@ describe("一覧の索引", () => {
     }
   });
 
+  it("索引の作り直しが落ちても、残っている索引と追記で一覧に答える", async () => {
+    await rebuildNow();
+    expect((await putVia("catrb/fresh.png")).status).toBe(201);
+    resetCatalogMemory();
+    const list = vi.spyOn(env.LIB_A, "list").mockRejectedValue(new Error("r2 down"));
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      // 毎回作り直す設定で列挙が全部落ちる → 以前は一覧自体が落ちた
+      const keys = await keysOf("recursive=1&sort=name&prefix=catrb%2F", env as Env);
+      expect(keys).toEqual(["catrb/fresh.png"]);
+      expect(log).toHaveBeenCalledWith("catalog_rebuild_failed", "a", expect.anything());
+    } finally {
+      list.mockRestore();
+      log.mockRestore();
+    }
+  });
+
   it("戻す時にサムネの確認が落ちても、戻した事は成功で返り、一覧に出る", async () => {
     await rebuildNow();
     expect((await putVia("cat10/pic.png")).status).toBe(201);

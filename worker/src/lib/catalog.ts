@@ -603,7 +603,14 @@ export async function loadCatalog(
   }
   const age = composed ? Date.now() - composed.state.startedAt : Infinity;
   if (!composed || maxAge === 0 || (opts.fresh === true && age > FRESH_MIN_INTERVAL_MS)) {
-    await rebuildCatalog(env, lib, bucket);
+    try {
+      await rebuildCatalog(env, lib, bucket);
+    } catch (e) {
+      // 作り直しが落ちても、残っている索引と追記で答えて一覧を止めない。
+      // 揃いは裏のやり直しと日次の cron で取り戻す
+      console.error("catalog_rebuild_failed", lib, e);
+      background();
+    }
     composed = (await compose(env, lib, true)) as Composed | null;
   } else if (age > maxAge || composed.journal > JOURNAL_COMPACT_AT) {
     background();

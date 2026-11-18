@@ -90,7 +90,9 @@ jobs:
           flutter pub get
           flutter build apk --release \
             --dart-define=R2_BAKED_ENDPOINT=http://127.0.0.1:8787 \
-            --dart-define=R2_BAKED_TOKEN=live-token
+            --dart-define=R2_BAKED_TOKEN=live-token \
+            --dart-define=R2_DISABLE_LOCK=true \
+            --dart-define=R2_PERF_LOG=true
           {
             echo "build_ref=${{ inputs.build_ref }}"
             echo "app_commit=$(cd "$GITHUB_WORKSPACE/app" && git rev-parse --short HEAD)"

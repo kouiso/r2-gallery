@@ -1,5 +1,15 @@
 {
-  "image": ["jpg", "jpeg", "png", "webp", "gif", "avif", "heic", "heif", "bmp"],
+  "image": [
+    "jpg",
+    "jpeg",
+    "png",
+    "webp",
+    "gif",
+    "avif",
+    "heic",
+    "heif",
+    "bmp"
+  ],
   "video": [
     "mp4",
     "webm",
@@ -14,5 +24,9 @@
     "flv",
     "3gp",
     "wmv"
+  ],
+  "jpegCopy": [
+    "heic",
+    "heif"
   ]
 }

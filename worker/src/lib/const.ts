@@ -6,6 +6,8 @@ const alt = (exts: readonly string[]) => exts.join("|");
 export const IMAGE_EXT = new RegExp(`\\.(${alt(mediaExt.image)})$`, "i");
 export const VIDEO_EXT = new RegExp(`\\.(${alt(mediaExt.video)})$`, "i");
 export const MEDIA_EXT = new RegExp(`\\.(${alt([...mediaExt.image, ...mediaExt.video])})$`, "i");
+// JPEG の写しを作れる形式（image の部分集合）。binding が読めない形式は返さない
+export const JPEG_COPY_EXT = new RegExp(`\\.(${alt(mediaExt.jpegCopy)})$`, "i");
 export const SYSTEM_PREFIX = ".system/";
 export const TRASH_PREFIX = ".trash/";
 export const MAX_SIMPLE_UPLOAD = 100 * 1024 * 1024;

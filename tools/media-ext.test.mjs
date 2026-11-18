@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 import { render } from "./gen-media-ext.mjs";
-import { IMAGE_EXT, MEDIA_EXT, VIDEO_EXT } from "../worker/src/lib/const.ts";
+import { IMAGE_EXT, JPEG_COPY_EXT, MEDIA_EXT, VIDEO_EXT } from "../worker/src/lib/const.ts";
 
 const table = JSON.parse(
   readFileSync(new URL("../worker/src/lib/media-ext.json", import.meta.url), "utf8"),
@@ -37,4 +37,12 @@ it("HEIC・HEIF・BMP は画像として一覧に出る", () => {
     expect(MEDIA_EXT.test(`a.${e}`)).toBe(true);
     expect(VIDEO_EXT.test(`a.${e}`)).toBe(false);
   }
+});
+
+it("jpegCopy の拡張子は全部 image の表に在る", () => {
+  for (const e of table.jpegCopy) {
+    expect(table.image).toContain(e);
+    expect(JPEG_COPY_EXT.test(`a.${e.toUpperCase()}`)).toBe(true);
+  }
+  expect(JPEG_COPY_EXT.test("a.jpg")).toBe(false);
 });

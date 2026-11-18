@@ -5,6 +5,7 @@ import '../ui/media_tile.dart';
 import '../ui/theme.dart';
 import 'album_states.dart';
 import '../grid/day_label.dart';
+import '../grid/media_grid.dart' show nearEndThreshold;
 import 'media_selection.dart';
 
 /// 選択中の操作バーの1操作。アイコンの下に必ず文字を付ける（KMP 版 SelAction と同じ）。
@@ -67,7 +68,7 @@ class SelectionActionsBar extends StatelessWidget {
 }
 
 /// アルバム・フォルダの中身グリッド。日付見出しと日ごとの丸選択、末尾のフォルダカードを持てる。
-class AlbumMediaGrid extends StatelessWidget {
+class AlbumMediaGrid extends StatefulWidget {
   final List<MediaItem> items;
   final String lib;
   final MediaSelection selection;
@@ -103,6 +104,25 @@ class AlbumMediaGrid extends StatelessWidget {
     this.now,
   });
 
+  @override
+  State<AlbumMediaGrid> createState() => _AlbumMediaGridState();
+}
+
+class _AlbumMediaGridState extends State<AlbumMediaGrid> {
+  // 続きを頼むかは一覧の状態が決める。ここは組み立て中の通知を避けて、
+  // 描画後に1フレーム1回だけ送る（写真タブの MediaGrid と同じ規則・#25 作業3）
+  bool _askQueued = false;
+
+  void _maybeNearEnd(int index) {
+    final n = widget.items.length;
+    if (n == 0 || index < n - nearEndThreshold || _askQueued) return;
+    _askQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _askQueued = false;
+      if (mounted) widget.onNearEnd();
+    });
+  }
+
   static const _gridDelegate = SliverGridDelegateWithMaxCrossAxisExtent(
     maxCrossAxisExtent: 160,
     mainAxisSpacing: 4,
@@ -110,33 +130,32 @@ class AlbumMediaGrid extends StatelessWidget {
   );
 
   Widget _tile(MediaItem it, int index) {
-    // KMP 版と同じく、末尾9件手前まで来たら続きを読む（見出しの有無に関わらず）
-    if (index >= items.length - 9) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => onNearEnd());
-    }
-    final selecting = selection.isNotEmpty;
+    // 写真タブと同じ先読み距離。アルバムの1ページは60件なので、画面に出た時点で次を頼む（#25 作業3）
+    _maybeNearEnd(index);
+    final selecting = widget.selection.isNotEmpty;
     return MediaTile(
-      key: ValueKey('album-media-${it.lib ?? lib}:${it.key}'),
+      key: ValueKey('album-media-${it.lib ?? widget.lib}:${it.key}'),
       item: it,
-      selected: selection.contains(it, lib),
+      selected: widget.selection.contains(it, widget.lib),
       selectionMode: selecting,
-      onTap: () => selecting ? onToggle(it) : onOpen(it),
-      onLongPress: () => onLongPress(it),
+      onTap: () => selecting ? widget.onToggle(it) : widget.onOpen(it),
+      onLongPress: () => widget.onLongPress(it),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final selecting = selection.isNotEmpty;
+    final items = widget.items;
+    final selecting = widget.selection.isNotEmpty;
     final slivers = <Widget>[];
-    if (!dateHeaders) {
+    if (!widget.dateHeaders) {
       slivers.add(SliverGrid(
         gridDelegate: _gridDelegate,
         delegate: SliverChildBuilderDelegate((c, i) => _tile(items[i], i),
             childCount: items.length),
       ));
     } else {
-      final base = now ?? DateTime.now();
+      final base = widget.now ?? DateTime.now();
       // 並び順を崩さず、続いている同じ日をひとまとめにする
       final groups = <({String label, List<int> idx})>[];
       for (var i = 0; i < items.length; i++) {
@@ -149,7 +168,7 @@ class AlbumMediaGrid extends StatelessWidget {
       }
       for (final g in groups) {
         final dayItems = [for (final i in g.idx) items[i]];
-        final allSel = selection.allSelected(dayItems, lib);
+        final allSel = widget.selection.allSelected(dayItems, widget.lib);
         slivers.add(SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 4, 0),
@@ -161,10 +180,10 @@ class AlbumMediaGrid extends StatelessWidget {
                       style: const TextStyle(fontWeight: FontWeight.w700)),
                 ),
               ),
-              if (selecting && onToggleDay != null)
+              if (selecting && widget.onToggleDay != null)
                 IconButton(
                   tooltip: 'この日をまとめて選択',
-                  onPressed: () => onToggleDay!(dayItems),
+                  onPressed: () => widget.onToggleDay!(dayItems),
                   icon: Icon(
                     allSel ? Icons.check_circle : Icons.radio_button_unchecked,
                     color: allSel ? AppColors.accent : AppColors.textDim,
@@ -181,21 +200,21 @@ class AlbumMediaGrid extends StatelessWidget {
         ));
       }
     }
-    if (folders.isNotEmpty) {
+    if (widget.folders.isNotEmpty) {
       slivers.add(SliverPadding(
         padding: const EdgeInsets.only(top: 4),
         sliver: SliverGrid(
           gridDelegate: _gridDelegate,
           delegate: SliverChildBuilderDelegate(
             (c, i) => FolderCard(
-                name: folderName(folders[i]),
-                onTap: () => onOpenFolder?.call(folders[i])),
-            childCount: folders.length,
+                name: folderName(widget.folders[i]),
+                onTap: () => widget.onOpenFolder?.call(widget.folders[i])),
+            childCount: widget.folders.length,
           ),
         ),
       ));
     }
-    if (loadingMore) {
+    if (widget.loadingMore) {
       slivers.add(const SliverToBoxAdapter(
         child: Padding(
           padding: EdgeInsets.all(16),
@@ -205,7 +224,7 @@ class AlbumMediaGrid extends StatelessWidget {
     }
     slivers.add(const SliverToBoxAdapter(child: SizedBox(height: 96)));
     return RefreshIndicator(
-      onRefresh: onRefresh,
+      onRefresh: widget.onRefresh,
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: slivers,

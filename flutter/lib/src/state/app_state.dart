@@ -23,6 +23,7 @@ import '../transfer/transfer_queue.dart';
 import '../upload/thumbs.dart';
 import '../viewer/device_export.dart';
 import '../webdl/cookies.dart';
+import '../webdl/media_name.dart';
 import '../webdl/web_fetcher.dart';
 import '../webdl/web_transfer.dart';
 import 'load_more_backoff.dart';
@@ -334,8 +335,13 @@ class AppState extends ChangeNotifier {
   Future<int> upload(String lib, List<UploadSource> sources,
       {String? albumId}) async {
     if (!canUploadTo(lib)) return 0;
+    // キューへの唯一の入口。一覧に出ない形式はここで止める（確認シートが先に分けるが、
+    // ほかの道から来た分もキューへ入れない）
+    final listed =
+        sources.where((s) => isListedUpload(s.name, s.mime)).toList();
+    if (listed.isEmpty) return 0;
     _wireTransfers();
-    return (await transfers.enqueueUploads(lib, sources, albumId: albumId))
+    return (await transfers.enqueueUploads(lib, listed, albumId: albumId))
         .length;
   }
 

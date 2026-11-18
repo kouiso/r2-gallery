@@ -66,7 +66,16 @@ String mimeForName(String name) {
     if (i >= 0) n = n.substring(0, i);
   }
   final dot = n.lastIndexOf('.');
-  final ext = dot < 0 ? '' : n.substring(dot + 1).toLowerCase();
+  return _mimeForExt(dot < 0 ? '' : n.substring(dot + 1).toLowerCase());
+}
+
+/// ? と # で切らない版。端末から上げる名前用（URL 用の飾り切り落としはしない）。
+String mimeForDeviceName(String name) {
+  final dot = name.lastIndexOf('.');
+  return _mimeForExt(dot < 0 ? '' : name.substring(dot + 1).toLowerCase());
+}
+
+String _mimeForExt(String ext) {
   switch (ext) {
     case 'mp4':
     case 'm4v':
@@ -121,6 +130,25 @@ String normalizeUploadName(String displayName, String mime) {
   final dot = base.lastIndexOf('.');
   return (dot < 0 ? base : base.substring(0, dot)) + ext;
 }
+
+/// 端末から上げる時の名前。URL 用と違い ? と # で切らない。
+/// / の後ろを取る・前後の空白を落とす・MIME から拡張子を借りる所は normalizeUploadName と同じ。
+String normalizeDeviceName(String name, String mime) {
+  var clean =
+      name.substring(name.lastIndexOf('/') + 1).trim();
+  if (hasListedExtension(clean)) return clean;
+  final base = clean.isEmpty ? 'upload' : clean;
+  final ext = extForMime(mime);
+  if (ext == null) return base;
+  final dot = base.lastIndexOf('.');
+  return (dot < 0 ? base : base.substring(0, dot)) + ext;
+}
+
+
+
+/// 上げた後にギャラリーの一覧に出るか。hasListedExtension(normalizeDeviceName(name, mime))。
+bool isListedUpload(String name, String mime) =>
+    hasListedExtension(normalizeDeviceName(name, mime));
 
 /// 同名キーが既にある時の候補名。`name.mp4` → `name (2).mp4`。
 String suffixedName(String name, int n) {

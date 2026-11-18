@@ -498,6 +498,20 @@ void main() {
       expect(File(path).existsSync(), isTrue);
     });
 
+    test('名前に # と ? が在ってもそのままのキーで上がる（URL 用の切り取りはしない）',
+        () async {
+      final q = make();
+      await q.restore();
+      await q.enqueueUploads('lib', [
+        UploadSource(
+            name: '夏 #1.jpg', size: 3, mime: 'image/jpeg', bytes: bytesOf(3)),
+        UploadSource(
+            name: '写真?.png', size: 3, mime: 'image/png', bytes: bytesOf(3)),
+      ]);
+      await until(() => q.tasks.every((t) => t.status == TransferStatus.done));
+      expect(w.objects.keys, containsAll(['夏 #1.jpg', '写真?.png']));
+    });
+
     test('アルバムを選んで上げると、確定したキーがそのアルバムに入る', () async {
       final q = make();
       await q.restore();

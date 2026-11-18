@@ -638,7 +638,7 @@ class TransferQueue extends ChangeNotifier {
         id: 'u${++_seq}',
         kind: 'up',
         lib: lib,
-        name: normalizeUploadName(s.name, s.mime),
+        name: normalizeDeviceName(s.name, s.mime),
         size: s.size,
         mime: s.mime,
         status: TransferStatus.preparing,

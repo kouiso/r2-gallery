@@ -1,4 +1,4 @@
-import { journalBestEffort, rowOf } from "../lib/catalog";
+import { journalBestEffort, journalExisting, rowOf } from "../lib/catalog";
 import { MAX_SIMPLE_UPLOAD, SYSTEM_PREFIX, TRASH_PREFIX } from "../lib/const";
 import type { Env } from "../lib/env";
 import { bucketFor, readable, writable } from "../lib/env";
@@ -18,9 +18,27 @@ import { trashDuplicate } from "./duplicates";
 
 const thumbPath = (lib: string, key: string) => `${SYSTEM_PREFIX}thumbs/${lib}/${key}.webp`;
 
+type WaitUntil = Pick<ExecutionContext, "waitUntil">;
+
 /** 新しく置いた物を索引へ足す。同名の古いサムネは消した後なので、サムネ無しとして足す。 */
-const journalCreated = (env: Env, lib: string, obj: R2Object) =>
-  journalBestEffort(env, lib, { put: [rowOf(obj)], unthumb: [obj.key] });
+const journalCreated = (env: Env, lib: string, obj: R2Object, ctx?: WaitUntil) =>
+  journalBestEffort(env, lib, { put: [rowOf(obj)], unthumb: [obj.key] }, ctx);
+
+/**
+ * 409 で断る在る物を索引へ足す。初回の応答が届かず送り直された物を一覧へ戻す。
+ * 追記の直前にもう一度確かめる。断りの確認と追記の間に消された物を、
+ * 遅い追記の勝ちで一覧に復活させないため（競合の窓は残るが、残りは作り直しで揃う）
+ */
+const journalBlocked = async (
+  env: Env,
+  lib: string,
+  bucket: R2Bucket,
+  key: string,
+  ctx?: WaitUntil,
+) => {
+  const existing = await bucket.head(key);
+  if (existing) await journalExisting(env, lib, existing, ctx);
+};
 
 // ゴミ箱へ送る時に外したアルバムの控え。復元で元のアルバムへ戻すために、
 // 外した項目そのものを META に置く（R2 のゴミ箱には載せない）。
@@ -166,7 +184,13 @@ function insertByTrashOrder(album: GlobalAlbum, item: GlobalAlbumItem) {
 }
 
 /** PUT /v1/:lib/objects?key= — small object upload; refuses to overwrite. */
-export async function handlePutObject(req: Request, env: Env, lib: string, url: URL) {
+export async function handlePutObject(
+  req: Request,
+  env: Env,
+  lib: string,
+  url: URL,
+  ctx?: WaitUntil,
+) {
   const { bucket } = writable(env, lib);
   const key = assertUserKey(url.searchParams.get("key"));
   const len = Number(req.headers.get("content-length") ?? "0");
@@ -175,7 +199,11 @@ export async function handlePutObject(req: Request, env: Env, lib: string, url: 
   // アプリが計算した中身のハッシュ。R2 に検証させ、通った物だけを重複判定の記録に使う
   const claimed = req.headers.get("x-content-sha256")?.toLowerCase();
   if (claimed !== undefined && !isSha256Hex(claimed)) throw new HttpError(400, "bad_sha256");
-  if (await bucket.head(key)) throw new HttpError(409, "destination_exists");
+  const existing = await bucket.head(key);
+  if (existing) {
+    await journalBlocked(env, lib, bucket, key, ctx);
+    throw new HttpError(409, "destination_exists");
+  }
   let put: R2Object | null;
   try {
     put = await bucket.put(key, req.body, {
@@ -192,10 +220,13 @@ export async function handlePutObject(req: Request, env: Env, lib: string, url: 
     }
     throw e;
   }
-  if (!put) throw new HttpError(409, "destination_exists");
+  if (!put) {
+    await journalBlocked(env, lib, bucket, key, ctx);
+    throw new HttpError(409, "destination_exists");
+  }
   // 同名の削除済みの物のサムネが残っていると、新しい物に古い絵が出る
   await dropThumbBestEffort(env, lib, key);
-  await journalCreated(env, lib, put);
+  await journalCreated(env, lib, put, ctx);
   if (claimed) {
     await recordHashBestEffort(env, lib, key, { size: put.size, etag: put.etag, sha256: claimed });
   }
@@ -203,11 +234,15 @@ export async function handlePutObject(req: Request, env: Env, lib: string, url: 
 }
 
 /** POST /v1/:lib/objects/multipart — initiate a multipart upload. */
-export async function handleMultipartInit(req: Request, env: Env, lib: string) {
+export async function handleMultipartInit(req: Request, env: Env, lib: string, ctx?: WaitUntil) {
   const { bucket } = writable(env, lib);
   const body = await readJson(req);
   const key = assertUserKey(body.key);
-  if (await bucket.head(key)) throw new HttpError(409, "destination_exists");
+  const existing = await bucket.head(key);
+  if (existing) {
+    await journalBlocked(env, lib, bucket, key, ctx);
+    throw new HttpError(409, "destination_exists");
+  }
   const contentType =
     typeof body.contentType === "string" && body.contentType.startsWith("image/")
       ? body.contentType
@@ -241,6 +276,7 @@ export async function handleMultipartDone(
   env: Env,
   lib: string,
   action: "complete" | "abort",
+  ctx?: WaitUntil,
 ) {
   const { bucket } = writable(env, lib);
   const body = await readJson(req);
@@ -261,9 +297,18 @@ export async function handleMultipartDone(
     return { partNumber, etag };
   });
   if (!uploaded.length) throw new HttpError(400, "bad_parts");
-  const obj = await completeCreateOnly(bucket, up, uploaded);
+  let obj: R2Object;
+  try {
+    obj = await completeCreateOnly(bucket, up, uploaded);
+  } catch (e) {
+    // 完了の直前に同名が在った時（409）。応答を落として送り直された物を索引へ戻す
+    if (e instanceof HttpError && e.status === 409) {
+      await journalBlocked(env, lib, bucket, key, ctx);
+    }
+    throw e;
+  }
   await dropThumbBestEffort(env, lib, key);
-  await journalCreated(env, lib, obj);
+  await journalCreated(env, lib, obj, ctx);
   return json({ key, size: obj.size }, 201);
 }
 

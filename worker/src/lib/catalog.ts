@@ -121,7 +121,12 @@ const journalTime = (journalKey: string, prefix: string): number =>
  * クライアントが再送して 409 になり別名で二重保存される。なので数回試して、だめなら
  * 記録だけ残す（次の作り直しで揃う）。
  */
-export async function journalBestEffort(env: Env, lib: string, entry: JournalEntry): Promise<void> {
+export async function journalBestEffort(
+  env: Env,
+  lib: string,
+  entry: JournalEntry,
+  ctx?: Pick<ExecutionContext, "waitUntil">,
+): Promise<void> {
   const key = `${journalPrefix(lib)}${String(Date.now()).padStart(15, "0")}-${crypto.randomUUID()}.json`;
   const body = JSON.stringify(entry);
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -132,6 +137,43 @@ export async function journalBestEffort(env: Env, lib: string, entry: JournalEnt
       if (attempt === 2) console.error("catalog_journal_failed", lib, e);
     }
   }
+  // WHY: 追記が書けないと在る物が一覧から欠ける。応答の後に間をあけてやり直し、
+  //      クライアントの送り直しを待たずに索引が揃うようにする
+  if (!ctx) return;
+  // 書き直す間隔は設定で変えられる。テストは 0 にして待ちを通さない。
+  // 応答の後に走れる時間には上限があるので、間隔の合計はそれに収める
+  const delays = (env.JOURNAL_RETRY_AFTER_MS ?? "1000,5000,20000")
+    .split(",")
+    .map((s) => Number(s.trim()) || 0)
+    .slice(0, 8);
+  ctx.waitUntil(
+    (async () => {
+      for (const wait of delays) {
+        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+        try {
+          await env.META.put(key, body, { httpMetadata: { contentType: "application/json" } });
+          return;
+        } catch {
+          // 次の間隔へ
+        }
+      }
+      console.error("catalog_journal_retry_failed", lib);
+    })(),
+  );
+}
+
+/**
+ * 409 で断った在る物も索引へ追記する。応答が届かずに送り直された物を一覧へ戻す。
+ * サムネの記録には触れない。409 は本体もサムネも置き換えていないので、
+ * unthumb を入れると在るサムネを消したことになって一覧からサムネが落ちる
+ */
+export async function journalExisting(
+  env: Env,
+  lib: string,
+  obj: { key: string; size: number; uploaded: Date; etag: string },
+  ctx?: Pick<ExecutionContext, "waitUntil">,
+): Promise<void> {
+  await journalBestEffort(env, lib, { put: [rowOf(obj)] }, ctx);
 }
 
 export const rowOf = (o: {
@@ -203,6 +245,9 @@ async function listJournal(env: Env, lib: string): Promise<string[]> {
 
 async function rebuildOnce(env: Env, lib: string, bucket: R2Bucket): Promise<void> {
   const startedAt = Date.now();
+  // 列挙の前に読んだ時点の etag を取る。列挙の間に別の作り直しが書いたなら、
+  // それは新しい索引なので、古い索引で上書きしない（書き込みを etag 条件にする）
+  const before = await env.META.head(snapshotKey(lib));
   const [rows, thumbs] = await Promise.all([enumerate(bucket), enumerateThumbs(env, lib)]);
   const file: SnapshotFile = {
     version: 1,
@@ -214,10 +259,13 @@ async function rebuildOnce(env: Env, lib: string, bucket: R2Bucket): Promise<voi
   const current = await env.META.head(snapshotKey(lib));
   const currentAt = Number(current?.customMetadata?.startedAt ?? 0);
   if (currentAt > startedAt && currentAt <= Date.now() + CLOCK_SKEW_MS) return;
-  await env.META.put(snapshotKey(lib), JSON.stringify(file), {
+  const wrote = await env.META.put(snapshotKey(lib), JSON.stringify(file), {
     httpMetadata: { contentType: "application/json" },
     customMetadata: { startedAt: String(startedAt) },
+    onlyIf: before ? { etagMatches: before.etag } : { etagDoesNotMatch: "*" },
   });
+  // 列挙の間に索引が差し替わっていたらその方が新しい。追記の掃除もやらない
+  if (!wrote) return;
   // 索引に入った分の追記を消す。索引を書いた後に消すので、途中で落ちても追記が残るだけ
   const prefix = journalPrefix(lib);
   const old = (await listJournal(env, lib)).filter(
@@ -303,14 +351,24 @@ async function fetchSnapshot(
   };
 }
 
-/** [wanted] のうち手元に無い追記を読む。[listed] に無い物（畳まれた物）は手元からも捨てる。 */
-async function loadJournalBodies(env: Env, wanted: string[], listed: string[]): Promise<void> {
+/**
+ * [wanted] のうち手元に無い追記を読む。[listed] に無い物（畳まれた物）は手元からも捨てる。
+ * 返すのは「一覧にあったのに本体が消えていた」追記。読む間に畳まれた印なので、
+ * 呼び出し側は索引を取り直してやり直す
+ */
+async function loadJournalBodies(
+  env: Env,
+  wanted: string[],
+  listed: string[],
+): Promise<Set<string>> {
   const missing = wanted.filter((k) => !journalBodies.has(k));
+  const gone = new Set<string>();
   // 同時に開ける接続には上限があるので、まとめて投げずに区切って読む
   for (let i = 0; i < missing.length; i += 24) {
     await Promise.all(
       missing.slice(i, i + 24).map(async (k) => {
         const obj = await env.META.get(k);
+        if (!obj) gone.add(k);
         // 一覧の後に畳まれて消えた追記は、新しい索引に入っているので空として扱う
         journalBodies.set(k, obj ? await obj.json<JournalEntry>() : {});
       }),
@@ -320,6 +378,7 @@ async function loadJournalBodies(env: Env, wanted: string[], listed: string[]): 
     const keep = new Set(listed);
     for (const k of journalBodies.keys()) if (!keep.has(k)) journalBodies.delete(k);
   }
+  return gone;
 }
 
 type Composed = { state: CatalogState; journal: number };
@@ -334,43 +393,51 @@ async function compose(
   allowBacklog = false,
 ): Promise<Composed | "backlog" | null> {
   const prefix = journalPrefix(lib);
-  let [state, listed] = await Promise.all([
-    fetchSnapshot(env, lib, mem.get(lib)),
-    listJournal(env, lib),
-  ]);
-  if (!state) return null;
-  const relevantOf = (s: CatalogState) =>
-    listed.filter((k) => journalTime(k, prefix) >= s.startedAt - CLOCK_SKEW_MS);
-  let relevant = relevantOf(state);
-  // 当て済みの追記が一覧から消えていたら、畳まれた直後。新しい索引を取り直す
-  if (state.applied.some((k) => !relevant.includes(k))) {
-    const again = await fetchSnapshot(env, lib, state);
-    if (again && again !== state) {
-      state = again;
-      listed = await listJournal(env, lib);
-      relevant = relevantOf(state);
+  for (let round = 0; round < 3; round++) {
+    // WHY: 追記の一覧を先に取ってから索引を取る。逆の順だと、索引を取った後に
+    //      書き込まれた新しい追記と古い索引を組んで、上げた物が欠ける
+    const listed = await listJournal(env, lib);
+    let state = await fetchSnapshot(env, lib, mem.get(lib));
+    if (!state) return null;
+    const relevantOf = (s: CatalogState) =>
+      listed.filter((k) => journalTime(k, prefix) >= s.startedAt - CLOCK_SKEW_MS);
+    let relevant = relevantOf(state);
+    // 当て済みの追記が一覧から消えていたら、畳まれた直後。新しい索引を取り直す
+    if (state.applied.some((k) => !relevant.includes(k))) {
+      const again = await fetchSnapshot(env, lib, state);
+      if (again && again !== state) {
+        state = again;
+        relevant = relevantOf(state);
+      }
     }
+    if (relevant.length > JOURNAL_HARD_LIMIT && !allowBacklog) return "backlog";
+    const isPrefix =
+      state.applied.length <= relevant.length && state.applied.every((k, i) => relevant[i] === k);
+    const todo = isPrefix ? relevant.slice(state.applied.length) : relevant;
+    // 読むのは先に全部済ませる。同じ isolate の別のリクエストがこの state を使っているので、
+    // await を挟んで少しずつ書き換えると、当てかけの一覧を相手に見せてしまう
+    const gone = await loadJournalBodies(env, todo, listed);
+    // 読む間に畳まれて消えた追記がある。索引が差し替わっているはずなので最初からやり直す
+    if (gone.size && round < 2) {
+      // 次の周回でもう一度本体を確かめる
+      for (const k of gone) journalBodies.delete(k);
+      continue;
+    }
+    if (!isPrefix) {
+      // 途中に割り込む追記・消えた追記がある。索引から当て直す
+      state.rows = new Map(state.base);
+      state.thumbs = new Set(state.baseThumbs);
+    }
+    if (todo.length || !isPrefix) {
+      for (const k of todo) applyEntry(state, journalBodies.get(k) ?? {});
+      state.applied = relevant;
+      state.views.clear();
+      state.sizes = null;
+    }
+    mem.set(lib, state);
+    return { state, journal: relevant.length };
   }
-  if (relevant.length > JOURNAL_HARD_LIMIT && !allowBacklog) return "backlog";
-  const isPrefix =
-    state.applied.length <= relevant.length && state.applied.every((k, i) => relevant[i] === k);
-  const todo = isPrefix ? relevant.slice(state.applied.length) : relevant;
-  // 読むのは先に全部済ませる。同じ isolate の別のリクエストがこの state を使っているので、
-  // await を挟んで少しずつ書き換えると、当てかけの一覧を相手に見せてしまう
-  await loadJournalBodies(env, todo, listed);
-  if (!isPrefix) {
-    // 途中に割り込む追記・消えた追記がある。索引から当て直す
-    state.rows = new Map(state.base);
-    state.thumbs = new Set(state.baseThumbs);
-  }
-  if (todo.length || !isPrefix) {
-    for (const k of todo) applyEntry(state, journalBodies.get(k) ?? {});
-    state.applied = relevant;
-    state.views.clear();
-    state.sizes = null;
-  }
-  mem.set(lib, state);
-  return { state, journal: relevant.length };
+  return null;
 }
 
 export function sortPoint(sort: FolderSort, row: CatalogRow): SortPoint {

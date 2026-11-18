@@ -26,7 +26,9 @@ class _FakeApi extends ApiClient {
           {String prefix = '',
           String? cursor,
           bool recursive = false,
-          String? sort}) async =>
+          String? sort,
+          String? type,
+          bool fresh = false}) async =>
       FolderPage(items: const [], folders: folders);
 
   @override

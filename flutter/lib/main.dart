@@ -4,6 +4,7 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+import 'src/diag/perf_log.dart';
 import 'src/state/app_state.dart';
 import 'src/playback/mobile_playback.dart';
 import 'src/state/pairing.dart';
@@ -16,6 +17,8 @@ import 'src/ui/theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  PerfLog.mark('main');
+  PerfLog.watchFrames();
   AppTypography.registerLicense();
   try {
     await MobilePlayback.initialize();

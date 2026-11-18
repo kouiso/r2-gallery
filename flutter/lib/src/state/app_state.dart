@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart' as hash;
 import 'package:flutter/foundation.dart';
 
 import '../api/client.dart';
+import '../diag/perf_log.dart';
 import '../api/models.dart';
 import '../config/baked.dart' as baked;
 import '../grid/photos_chrome.dart';
@@ -1352,6 +1353,10 @@ class GalleryState extends ChangeNotifier {
     final sent = cursor;
     loadingMore = true;
     notifyListeners();
+    // PerfLog(#25): 続き1ページの待ち時間を測る定点。取り直しで書き直しても残す
+    final pageWatch = Stopwatch()..start();
+    final before = items.length;
+    PerfLog.mark('page.ask', {'n': before});
     try {
       final page = await api.folder(lib,
           prefix: prefix,
@@ -1389,6 +1394,11 @@ class GalleryState extends ChangeNotifier {
         error = null;
         _lastErrorFromMore = false;
       }
+      PerfLog.mark('page.done', {
+        'n': items.length,
+        'added': items.length - before,
+        'ms': pageWatch.elapsedMilliseconds,
+      });
     } catch (err) {
       if (e != epoch) return;
       if (g0 != listGen) {
@@ -1396,6 +1406,7 @@ class GalleryState extends ChangeNotifier {
         notifyListeners();
         return;
       }
+      PerfLog.mark('page.fail', {'ms': pageWatch.elapsedMilliseconds});
       // 続きの取得失敗も黙らせず、一覧の上の帯で知らせる
       error = err.toString();
       _noteMoreFailure(_moreFailures, showRetry: true);

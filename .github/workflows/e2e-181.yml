@@ -26,10 +26,20 @@ jobs:
           path: ci
           persist-credentials: false
 
+      # cb7f574 のような短い SHA は checkout@v4 が branch/tag として
+      # 解決できず "could not be found" で落ちるため、先に API で完全な
+      # SHA (または branch/tag 名はそのまま) に解決してから checkout する
+      - name: build_ref を完全な SHA に解決する
+        id: ref
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SHA=$(gh api "repos/${{ github.repository }}/commits/${{ inputs.build_ref }}" --jq .sha)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
           path: app
-          ref: ${{ inputs.build_ref }}
+          ref: ${{ steps.ref.outputs.sha }}
           persist-credentials: false
           # fetch-depth:1 だと cb7f574 のような短い SHA が
           # refs/heads/cb7f574* として探しに行って取れず落ちるため全部取る

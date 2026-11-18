@@ -10,6 +10,7 @@ import 'package:r2_gallery/src/api/client.dart';
 import 'package:r2_gallery/src/api/models.dart';
 import 'package:r2_gallery/src/api/review_meta.dart';
 import 'package:r2_gallery/src/state/app_state.dart';
+import 'package:r2_gallery/src/ui/theme.dart';
 import 'package:r2_gallery/src/ui/viewer_screen.dart';
 import 'package:r2_gallery/src/viewer/device_export.dart';
 import 'package:r2_gallery/src/grid/day_label.dart';
@@ -818,5 +819,34 @@ void main() {
     await tester.pumpAndSettle();
     expect(app.saved, ['review:a.jpg']);
     expect(find.text('保存済み'), findsOneWidget);
+  });
+
+  // 退行（コントロール表示時の「二重表示」）: 上バーをベタ塗りのスクリムに戻すと、
+  // 横画面で全面に出る動画の上に硬い水平の継ぎ目ができ、ずれた2枚目の絵に見える。
+  // 下の操作バーと同じく上→下で消えるグラデーションを守る。
+  testWidgets('上バーの減光はグラデーションで、横画面の全面動画に継ぎ目を作らない',
+      (tester) async {
+    await _open(tester, _app(_Api()), [_img('a.jpg')]);
+    expect(find.byTooltip('一覧に戻る'), findsOneWidget);
+    final bars = find.ancestor(
+      of: find.byTooltip('一覧に戻る'),
+      matching: find.byWidgetPredicate(
+          (w) => w is Container && w.decoration is BoxDecoration),
+    );
+    var found = false;
+    for (final e in bars.evaluate()) {
+      final deco = (e.widget as Container).decoration! as BoxDecoration;
+      expect(deco.color, isNull,
+          reason: '上バーをベタ塗りにすると横画面で継ぎ目が見える');
+      if (deco.gradient is LinearGradient) {
+        final g = deco.gradient! as LinearGradient;
+        expect(g.begin, Alignment.topCenter);
+        expect(g.end, Alignment.bottomCenter);
+        expect(g.colors.first, AppColors.scrimBar);
+        expect(g.colors.last, Colors.transparent);
+        found = true;
+      }
+    }
+    expect(found, isTrue);
   });
 }

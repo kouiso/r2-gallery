@@ -631,7 +631,13 @@ class _ViewerScreenState extends State<ViewerScreen>
         ? it.name
         : formatDateTime(it.createdAt!, _now);
     return Container(
-      color: AppColors.scrimBar,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [AppColors.scrimBar, Colors.transparent],
+        ),
+      ),
       child: SafeArea(
         bottom: false,
         child: Row(

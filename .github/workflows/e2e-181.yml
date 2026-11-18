@@ -42,6 +42,7 @@ jobs:
       - name: Start the local worker and seed 6000 items
         run: |
           set -euo pipefail
+          TOKEN=live-token
           cd app
           pnpm install --frozen-lockfile
           sudo apt-get update -q
@@ -57,9 +58,9 @@ jobs:
           curl -sf http://127.0.0.1:8787/health >/dev/null || { cat "$WORK/wrangler.log"; exit 1; }
           ffmpeg -loglevel error -y -f lavfi -i testsrc=size=320x240 -frames:v 1 "$WORK/seed.jpg"
           seq -w 1 6000 | xargs -P8 -I{} curl -sf -X PUT \
-            -H "Authorization: Bearer live-token" -H "Content-Type: image/jpeg" \
+            -H "Authorization: Bearer $TOKEN" -H "Content-Type: image/jpeg" \
             -T "$WORK/seed.jpg" "http://127.0.0.1:8787/v1/a/objects?key=scroll/{}.jpg" -o /dev/null
-          curl -s -H "Authorization: Bearer live-token" \
+          curl -s -H "Authorization: Bearer $TOKEN" \
             "http://127.0.0.1:8787/v1/a/folders?order=recent" | head -c 300; echo
 
       - uses: actions/setup-java@v4

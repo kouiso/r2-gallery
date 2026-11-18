@@ -1,4 +1,5 @@
 import {
+  JPEG_COPY_EXT,
   IMAGE_EXT,
   INDEX_CACHE_MS,
   MEDIA_EXT,
@@ -157,9 +158,13 @@ export async function mediaFor(
   // 画像は /t/ が原本へフォールバックするので常に署名するが、サムネ未生成かは
   // クライアントがバックフィル対象を決められるよう thumbStored で別途伝える。
   const hasThumb = type === "image" ? true : thumbStored;
-  const [url, thumbUrl] = await Promise.all([
+  const [url, thumbUrl, viewUrl] = await Promise.all([
     signedUrl(env, origin, "m", lib, item.key),
     hasThumb ? signedUrl(env, origin, "t", lib, thumbKey) : null,
+    // JPEG の写しを返せるのは、形式が表に在り binding が在る時だけ
+    JPEG_COPY_EXT.test(item.key) && env.IMAGES
+      ? signedUrl(env, origin, "v", lib, item.key)
+      : Promise.resolve(null),
   ]);
   return {
     key: item.key,
@@ -168,6 +173,7 @@ export async function mediaFor(
     url,
     thumbUrl,
     thumbStored,
+    viewUrl,
     note: item.note ?? null,
     createdAt: item.createdAt ?? null,
   };

@@ -62,3 +62,21 @@ Uint8List _encodeJpg(({int width, int height, Uint8List rgba}) a) {
   );
   return Uint8List.fromList(img.encodeJpg(image, quality: 82));
 }
+
+/// 端末がこの中身を画像として読めるか。寸法だけ読む（全体は展開しない）。
+Future<bool> canDecodeImageBytes(Uint8List bytes) async {
+  ui.ImageDescriptor? descriptor;
+  try {
+    final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+    try {
+      descriptor = await ui.ImageDescriptor.encoded(buffer);
+    } finally {
+      buffer.dispose();
+    }
+    return descriptor.width > 0;
+  } on Exception {
+    return false;
+  } finally {
+    descriptor?.dispose();
+  }
+}

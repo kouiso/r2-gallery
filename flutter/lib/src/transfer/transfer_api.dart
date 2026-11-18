@@ -57,6 +57,9 @@ abstract class TransferApi {
   /// 署名URLは期限が切れるので、一覧から取り直す。見つからなければ null。
   Future<String?> itemUrl(String lib, String key);
 
+  /// JPEG の写しの署名 URL を一覧から取り直す。写しが無ければ null。
+  Future<String?> itemViewUrl(String lib, String key);
+
   /// アップロード確定後に、そのキーをアルバムへ入れる（#102）。
   /// 失敗しても上げ直しにはしないので、呼び出し側が結果だけ記録する。
   Future<void> albumAdd(String lib, String albumId, List<String> keys);
@@ -263,6 +266,19 @@ class ApiClientTransferApi implements TransferApi {
       final page = await api.folder(lib, cursor: cursor, recursive: true);
       for (final it in page.items) {
         if (it.key == key) return it.url;
+      }
+      cursor = page.cursor;
+    } while (cursor != null);
+    return null;
+  }
+
+  @override
+  Future<String?> itemViewUrl(String lib, String key) async {
+    String? cursor;
+    do {
+      final page = await api.folder(lib, cursor: cursor, recursive: true);
+      for (final it in page.items) {
+        if (it.key == key) return it.viewUrl;
       }
       cursor = page.cursor;
     } while (cursor != null);

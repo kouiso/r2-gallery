@@ -12,6 +12,7 @@ import '../offline/offline_store.dart';
 import '../state/pairing.dart';
 import '../store/kv.dart';
 import '../store/private_storage.dart';
+import '../upload/image_thumb.dart';
 import '../webdl/media_name.dart';
 import 'transfer_api.dart';
 import 'transfer_ledger.dart';
@@ -109,6 +110,13 @@ class TransferTask {
   String? itemKey;
   String? itemType;
   String? itemUrl;
+
+  /// 転送の記録（ledger）に保存しない（itemUrl と同じ）。
+  String? itemViewUrl;
+
+  /// 転送の記録（ledger）に 'viewCopy': true で保存する（false の時は書かない）。
+  bool viewCopy = false;
+
   String? offlineAccountId;
 
   /// 前回の起動から引き継いだ行か。
@@ -204,6 +212,7 @@ class TransferQueue extends ChangeNotifier {
     bool Function()? configured,
     this.requireDownloadAccount = false,
     this.canUseOfflineAccount,
+    this.canDecode,
     Connection? Function()? connOf,
   })  : _ledger = ledger ?? FileTransferLedger(),
         _legacyLedger = legacyLedger ?? const KvLedgerStore(),
@@ -239,6 +248,9 @@ class TransferQueue extends ChangeNotifier {
   final bool Function() _configured;
   final bool requireDownloadAccount;
   final bool Function(String? accountId, String lib)? canUseOfflineAccount;
+
+  /// 端末が中身を画像として読めるか。試験でだけ差し替える。
+  final Future<bool> Function(Uint8List bytes)? canDecode;
 
   /// いまの接続。行がどの接続の物かを見るのと、abort を正しい送り先へ出すのに使う
   final Connection? Function() _connOf;
@@ -563,6 +575,7 @@ class TransferQueue extends ChangeNotifier {
       if (ik is! String) return null;
       t.itemKey = ik;
       t.itemType = it is String ? it : 'image';
+      t.viewCopy = e['viewCopy'] == true;
       final account = e['offlineAccountId'];
       if (account is String) t.offlineAccountId = account;
       if (requireDownloadAccount && t.offlineAccountId == null) {
@@ -682,6 +695,8 @@ class TransferQueue extends ChangeNotifier {
         ..itemKey = it.key
         ..itemType = it.type
         ..itemUrl = it.url
+        ..itemViewUrl = it.viewUrl
+        ..viewCopy = it.viewUrl != null
         ..connEndpoint = conn?.endpoint
         ..connToken = conn?.token
         ..offlineAccountId = store.accountId;
@@ -1121,13 +1136,43 @@ class TransferQueue extends ChangeNotifier {
     // 待機へ戻して、元の接続へ戻した時にもう一度取り直す（#149）
     if (!_forThisConn(t)) throw const _ConnSwitched();
     t.size = bytes.length;
+    // 原本を端末が読めず JPEG の写しが在る時は、写しを置く（HEIC を読めない環境向け）。
+    // 読める原本・写しも読めない・写しの URL が無い時は原本を置く（今の動き）
+    var plain = bytes;
+    final canDecode = this.canDecode ?? canDecodeImageBytes;
+    if (t.viewCopy && t.itemType != 'video' && !(await canDecode(bytes))) {
+      final viewBytes = await _fetchViewCopy(t, token);
+      if (viewBytes != null && viewBytes.isNotEmpty && await canDecode(viewBytes)) {
+        plain = viewBytes;
+      }
+    }
     await store.saveBytes(
       lib: t.lib,
       key: t.itemKey!,
       type: t.itemType ?? 'image',
       name: t.name,
-      plain: bytes,
+      plain: plain,
     );
+  }
+
+  /// JPEG の写しを取る。取れなければ null（原本を置く側へ戻る）
+  Future<Uint8List?> _fetchViewCopy(TransferTask t, CancelToken token) async {
+    Future<Uint8List> fetch(String u) => api.fetchBytes(u, cancelToken: token);
+    final first = t.itemViewUrl ?? await api.itemViewUrl(t.lib, t.itemKey!);
+    if (first == null) return null;
+    try {
+      return await fetch(first);
+    } on ApiError catch (e) {
+      // 署名URLの期限切れ。一覧から取り直して1回だけやり直す
+      if (e.status != 403 || token.isCancelled) return null;
+      final url = await api.itemViewUrl(t.lib, t.itemKey!);
+      if (url == null) return null;
+      try {
+        return await fetch(url);
+      } on ApiError {
+        return null;
+      }
+    }
   }
 
   Future<String> _resign(TransferTask t) async {

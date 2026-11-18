@@ -38,7 +38,7 @@ export function encodeKey(key: string): string {
 export async function signedUrl(
   env: Env,
   origin: string,
-  kind: "m" | "t",
+  kind: "m" | "t" | "v",
   lib: string,
   key: string,
 ): Promise<string> {

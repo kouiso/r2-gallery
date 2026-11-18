@@ -222,6 +222,29 @@ void main() {
   });
 
   group('一覧の置き換わり', () {
+    test('続きを取っている間に重ならない先頭ページへ置き換わったら、古い続きは継ぎ足さない', () async {
+      final api = _ScriptApi('https://w1');
+      final g = GalleryState(api);
+      final f = g.refresh('a');
+      api.answer([_it('a.jpg'), _it('b.jpg'), _it('c.jpg'), _it('d.jpg'), _it('e.jpg')],
+          cursor: 'c1');
+      await f;
+
+      // 続きの取得を答えずに置いたまま、先頭ページの取り直しを始める
+      final m = g.loadMore('a');
+      final s = g.softRefresh('a');
+      // 先頭ページは今の一覧と重ならない（置き換わる）
+      api.answerAt(1, [_it('x.jpg'), _it('y.jpg'), _it('z.jpg')], cursor: 'c9');
+      await s;
+      // 遅れて届いた古い続き（置き換わる前の cursor の分）
+      api.answerAt(0, [_it('f.jpg'), _it('g.jpg'), _it('h.jpg'), _it('i.jpg'), _it('j.jpg')],
+          cursor: 'c2');
+      await m;
+
+      expect(_keys(g), ['x.jpg', 'y.jpg', 'z.jpg']);
+      expect(g.cursor, 'c9');
+    });
+
     testWidgets('控えを出している間に末尾近くで頼んでも、先頭ページが届いた後に2ページ目を頼む',
         (tester) async {
       final cache = MemoryListingCache();

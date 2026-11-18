@@ -986,7 +986,11 @@ class GalleryState extends ChangeNotifier {
 
   Future<void>? _revalidation;
   Future<void> _saving = Future.value();
-  int _softSeq = 0;
+
+  /// 差分の取り直しは同時に1本だけ。走っている間の頼みは [_softAgain] で
+  /// 「もう1回」の印だけ立て、返ってきた応答は必ず反映する（#181）
+  Future<void>? _softRun;
+  bool _softAgain = false;
 
   /// 先に一覧から外し、ゴミ箱へ送っている最中の行。送り終わるまでは Worker の一覧に
   /// まだ載っているので、その間に届いたページから蘇らせない。
@@ -1090,6 +1094,8 @@ class GalleryState extends ChangeNotifier {
     _backoffTimer = null;
     _moreFailures = 0;
     _lastErrorFromMore = false;
+    // 始まる前に来た「もう1回」の頼みは、この取り直しが含むので消す
+    _softAgain = false;
     error = null;
     // 手元に何も無い時だけ控えを出す。回線を待たずにディスクのサムネで最初の画面を埋めるため
     if (items.isEmpty) unawaited(_showCached(lib, e));
@@ -1121,6 +1127,11 @@ class GalleryState extends ChangeNotifier {
     }
     loading = false;
     notifyListeners();
+    // 読み込み中に来た「もう1回」の頼みは、成功して終わった時に1回だけ取り直す
+    if (e == epoch && error == null && _softAgain && !_disposed) {
+      _softAgain = false;
+      unawaited(softRefresh(lib));
+    }
   }
 
   void _adoptFirstPage(FolderPage page) {
@@ -1184,28 +1195,48 @@ class GalleryState extends ChangeNotifier {
   /// 一覧を開いたまま中身が変わった時（アップロード・取り込みの完了、別のタブでの復元など）の取り直し。
   /// 先頭ページだけ取り、読み込み済みの続きのページと cursor は残して差分だけ反映する。
   /// [refresh] だと先頭ページに巻き戻り、読み進めた位置と続きのページを失うため。
-  Future<void> softRefresh(String lib) async {
-    if (loading || items.isEmpty || _needsFirstPage || showingCached) {
+  Future<void> softRefresh(String lib) {
+    if (loading) {
+      // 読み込み中は取り直しを積まず、終わった後に1回だけ取り直す
+      _softAgain = true;
+      return _revalidation ?? Future.value();
+    }
+    if (items.isEmpty || _needsFirstPage || showingCached) {
       return refresh(lib);
     }
-    final e = epoch;
-    final seq = ++_softSeq;
-    try {
-      final page = await api.folder(lib,
-          prefix: prefix,
-          cursor: null,
-          recursive: recursive,
-          sort: sort.apiValue,
-          type: kind.apiValue);
-      if (e != epoch || seq != _softSeq) return;
-      _mergeFirstPage(page);
-      error = null;
-      _saveSnapshot(lib);
-    } catch (err) {
-      if (e != epoch || seq != _softSeq) return;
-      error = err.toString();
+    final running = _softRun;
+    if (running != null) {
+      _softAgain = true;
+      return running;
     }
-    notifyListeners();
+    return _softRun = _softLoop(lib).whenComplete(() => _softRun = null);
+  }
+
+  /// 差分の取り直しを1本ずつ回す。中に来た「もう1回」の頼みを捨てずに捌き、
+  /// 返ってきた応答はその時点で必ず一覧へ映す（#181）
+  Future<void> _softLoop(String lib) async {
+    do {
+      _softAgain = false;
+      final e = epoch;
+      try {
+        final page = await api.folder(lib,
+            prefix: prefix,
+            cursor: null,
+            recursive: recursive,
+            sort: sort.apiValue,
+            type: kind.apiValue);
+        if (e != epoch) return;
+        _mergeFirstPage(page);
+        error = null;
+        _lastErrorFromMore = false;
+        _saveSnapshot(lib);
+      } catch (err) {
+        if (e != epoch) return;
+        error = err.toString();
+        _lastErrorFromMore = false;
+      }
+      notifyListeners();
+    } while (_softAgain && !_disposed);
   }
 
   String _rowId(MediaItem it) => '${it.lib}:${it.key}';

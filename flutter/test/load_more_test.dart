@@ -245,6 +245,64 @@ void main() {
       expect(g.cursor, 'c9');
     });
 
+    test('取り直しが重なっても、返ってきた応答はその時点で映る', () async {
+      final api = _ScriptApi('https://w1');
+      final g = GalleryState(api);
+      final f = g.refresh('a');
+      api.answer([_it('a.jpg'), _it('b.jpg'), _it('c.jpg'), _it('d.jpg'), _it('e.jpg')],
+          cursor: 'c1');
+      await f;
+      final m = g.loadMore('a');
+      api.answer([_it('f.jpg'), _it('g.jpg'), _it('h.jpg'), _it('i.jpg'), _it('j.jpg')],
+          cursor: 'c2');
+      await m;
+
+      // 上げ終わりが短い間隔で続いても、重なった分は捨てずに映す
+      g.softRefresh('a');
+      g.softRefresh('a');
+      g.softRefresh('a');
+      api.answerAt(0, [_it('n.jpg'), _it('a.jpg'), _it('b.jpg'), _it('c.jpg')],
+          cursor: 'c9');
+      await pumpEventQueue();
+
+      expect(g.items.first.key, 'n.jpg');
+    });
+
+    test('後から始めた取り直しが失敗しても、先に返った成功は捨てない', () async {
+      final api = _ScriptApi('https://w1');
+      final g = GalleryState(api);
+      final f = g.refresh('a');
+      api.answer([_it('a.jpg'), _it('b.jpg'), _it('c.jpg'), _it('d.jpg'), _it('e.jpg')],
+          cursor: 'c1');
+      await f;
+
+      final s = g.softRefresh('a');
+      g.softRefresh('a');
+      api.answerAt(0, [_it('n.jpg'), _it('a.jpg'), _it('b.jpg')], cursor: 'c9');
+      await pumpEventQueue();
+      api.failAt(0);
+      await s;
+
+      expect(_keys(g), contains('n.jpg'));
+    });
+
+    test('読み込み中に上げ終わりが続いても、最初の読み込みを打ち切らず、終わった後に1回だけ取り直す', () async {
+      final api = _ScriptApi('https://w1');
+      final g = GalleryState(api);
+      final r = g.refresh('a');
+      g.softRefresh('a');
+      g.softRefresh('a');
+      api.answer([_it('a.jpg')]);
+      await r;
+
+      // 終わった後の取り直しは1回だけ
+      api.answer([_it('a.jpg')]);
+      await pumpEventQueue();
+
+      expect(_keys(g), ['a.jpg']);
+      expect(api.calls, hasLength(2));
+    });
+
     testWidgets('控えを出している間に末尾近くで頼んでも、先頭ページが届いた後に2ページ目を頼む',
         (tester) async {
       final cache = MemoryListingCache();

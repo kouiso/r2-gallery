@@ -405,6 +405,8 @@ void main() {
     int part = 1024,
     Duration stagedDeleteTimeout = const Duration(seconds: 5),
     FileThumbMaker? makeThumb,
+    int stageParallel = 2,
+    Duration thumbTimeout = const Duration(seconds: 20),
   }) {
     final q = TransferQueue(
       api: ApiClientTransferApi(api),
@@ -419,6 +421,8 @@ void main() {
       netRetryDelay: const Duration(milliseconds: 50),
       stagedDeleteTimeout: stagedDeleteTimeout,
       makeThumb: makeThumb,
+      stageParallel: stageParallel,
+      thumbTimeout: thumbTimeout,
       configured: () => api.conn != null,
     );
     queues.add(q);
@@ -1338,6 +1342,101 @@ void main() {
       final q = make();
       await q.restore();
       expect(q.tasks.single.name, 'new.jpg');
+    });
+  });
+
+  group('退避の同時数と失敗の行（#182 作業2）', () {
+    test('退避は同時に2件までしか走らない', () async {
+      final gates = List.generate(6, (_) => Completer<void>());
+      var live = 0;
+      var maxLive = 0;
+      final q = make();
+      await q.restore();
+      await q.enqueueUploads('lib', [
+        for (var i = 0; i < 6; i++)
+          UploadSource(
+            name: 'g$i.jpg',
+            size: 1,
+            mime: 'image/jpeg',
+            reader: () async* {
+              live++;
+              if (live > maxLive) maxLive = live;
+              await gates[i].future;
+              yield [i];
+              live--;
+            },
+          ),
+      ]);
+      await until(() => q.stagingCount == 2, what: '2 staging');
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(q.stagingCount, 2);
+      for (final g in gates) {
+        g.complete();
+      }
+      await until(() => q.tasks.every((t) => t.status == TransferStatus.done),
+          what: 'all done');
+      expect(maxLive, 2);
+    });
+
+    test('終わった行を消しても、失敗の行と退避ファイルは残る', () async {
+      final q = make();
+      await q.restore();
+      final good = await source('ok.jpg', bytesOf(300));
+      await q.enqueueUploads('lib', [
+        UploadSource(
+            name: 'ok.jpg', size: 300, mime: 'image/jpeg', path: good),
+      ]);
+      await until(() => q.tasks.last.status == TransferStatus.done,
+          what: 'done');
+      w.failPutStatus = 500;
+      final bad = await source('bad.jpg', bytesOf(400));
+      await q.enqueueUploads('lib', [
+        UploadSource(
+            name: 'bad.jpg', size: 400, mime: 'image/jpeg', path: bad),
+      ]);
+      await until(() => q.tasks.last.status == TransferStatus.error,
+          what: 'error');
+      final staged = q.tasks.last.stagedPath!;
+      expect(File(staged).existsSync(), isTrue);
+      await q.clearFinished();
+      // 終わった行だけ消えて、失敗の行と退避ファイルは残る
+      expect(q.tasks.single.status, TransferStatus.error);
+      expect(File(staged).existsSync(), isTrue);
+      w.failPutStatus = 0;
+      q.retryAllFailed();
+      await until(() => q.tasks.single.status == TransferStatus.done,
+          what: 'retry done');
+      expect(w.objects['bad.jpg'], bytesOf(400));
+    });
+
+    test('サムネ作りが返らなくても完了して次の行へ進む', () async {
+      final q = make(
+        makeThumb: (file, mime) => Completer<Uint8List?>().future,
+        thumbTimeout: const Duration(milliseconds: 200),
+      );
+      await q.restore();
+      for (var i = 0; i < 3; i++) {
+        final path = await source('t$i.jpg', bytesOf(300));
+        await q.enqueueUploads('lib', [
+          UploadSource(
+              name: 't$i.jpg', size: 300, mime: 'image/jpeg', path: path),
+        ]);
+      }
+      await until(() => q.tasks.every((t) => t.status == TransferStatus.done),
+          what: 'all done');
+      expect(q.tasks, hasLength(3));
+    });
+
+    test('サムネ作りが Error を投げても完了になる', () async {
+      final q = make(makeThumb: (file, mime) => throw StateError('boom'));
+      await q.restore();
+      final path = await source('e.jpg', bytesOf(300));
+      await q.enqueueUploads('lib', [
+        UploadSource(
+            name: 'e.jpg', size: 300, mime: 'image/jpeg', path: path),
+      ]);
+      await until(() => q.tasks.single.status == TransferStatus.done,
+          what: 'done');
     });
   });
 }

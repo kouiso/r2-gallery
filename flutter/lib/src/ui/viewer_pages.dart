@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
@@ -151,12 +152,16 @@ class ViewerImagePage extends StatefulWidget {
 
   /// 原本のキャッシュ。テストでだけ差し替える（実機の cache manager はテストでは応答しない）。
   final BaseCacheManager? cacheManager;
+
+  /// 原本より先に JPEG の写しを読むか。Web は HEIC を読めないブラウザが在るので true。試験で差し替える。
+  final bool preferViewCopy;
   const ViewerImagePage({
     super.key,
     required this.item,
     required this.onToggleControls,
     required this.onViewport,
     this.cacheManager,
+    this.preferViewCopy = kIsWeb,
   });
 
   @override
@@ -209,7 +214,11 @@ class _ViewerImagePageState extends State<ViewerImagePage> {
   Widget build(BuildContext context) {
     final item = widget.item;
     final thumb = item.thumbUrl;
+    final view = item.viewUrl;
+    final src = widget.preferViewCopy && view != null ? view : item.url;
     const spinner = Center(child: CircularProgressIndicator());
+    const broken =
+        Icon(Icons.broken_image, size: 64, color: AppColors.textDim);
     return GestureDetector(
       onTap: widget.onToggleControls,
       child: InteractiveViewer(
@@ -221,9 +230,10 @@ class _ViewerImagePageState extends State<ViewerImagePage> {
             alignment: Alignment.center,
             children: [
               CachedNetworkImage(
-            imageUrl: item.url,
-            // 署名URLは 1〜2 時間で変わるので、パスだけで引いて再署名後も同じ原本に当てる
-            cacheKey: thumbCacheKey(item.url),
+            imageUrl: src,
+            // 署名URLは 1〜2 時間で変わるので、パスだけで引いて再署名後も同じ原本に当てる。
+            // /v/ と /m/ はパスが違うので控えは混ざらない
+            cacheKey: thumbCacheKey(src),
             cacheManager: widget.cacheManager ?? viewerCache,
             fit: BoxFit.contain,
             memCacheWidth: viewerDecodeWidth(
@@ -243,14 +253,24 @@ class _ViewerImagePageState extends State<ViewerImagePage> {
                     errorWidget: (_, _, _) => spinner,
                   )
                 : spinner,
-            errorWidget: (_, _, _) => const Icon(Icons.broken_image,
-                size: 64, color: AppColors.textDim),
+            // 原本（/m/）が読めない端末は JPEG の写し（/v/）に落とす
+            errorWidget: (_, _, _) => view != null && src != view
+                ? CachedNetworkImage(
+                    imageUrl: view,
+                    cacheKey: thumbCacheKey(view),
+                    cacheManager: widget.cacheManager ?? viewerCache,
+                    fit: BoxFit.contain,
+                    fadeInDuration: Duration.zero,
+                    placeholder: (_, _) => spinner,
+                    errorWidget: (_, _, _) => broken,
+                  )
+                : broken,
           ),
               if (_sharp)
                 // 下の画像を見せたまま、読み終えた所で原寸に差し替える（待つ間にサムネへ戻さない）
                 CachedNetworkImage(
-                  imageUrl: item.url,
-                  cacheKey: thumbCacheKey(item.url),
+                  imageUrl: src,
+                  cacheKey: thumbCacheKey(src),
                   cacheManager: widget.cacheManager ?? viewerCache,
                   fit: BoxFit.contain,
                   fadeInDuration: Duration.zero,

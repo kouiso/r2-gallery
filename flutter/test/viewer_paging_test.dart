@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:r2_gallery/src/api/models.dart';
@@ -185,6 +186,7 @@ Future<void> _pumpLocked(WidgetTester tester, AppState app, Widget screen) async
 }
 
 void main() {
+  _jpegCopyTests();
   group('スワイプで前後のメディアへ移る', () {
     testWidgets('開いたメディアから始まり、スワイプで次へ移る', (tester) async {
       final ctl = _Controllers();
@@ -559,3 +561,71 @@ void main() {
     });
   });
 }
+
+
+/// 原本も写しも取りに行かず、すぐ「取れなかった」にするキャッシュ。
+class _FailCache extends Fake implements BaseCacheManager {
+  @override
+  Stream<FileResponse> getFileStream(String url,
+          {String? key, Map<String, String>? headers, bool withProgress = false}) =>
+      Stream.error(Exception('no network in tests'));
+}
+
+Widget _imagePage(MediaItem item, {required bool preferViewCopy}) =>
+    MaterialApp(
+      home: Scaffold(
+        body: ViewerImagePage(
+          item: item,
+          onToggleControls: () {},
+          onViewport: (_, _, _) {},
+          cacheManager: _FailCache(),
+          preferViewCopy: preferViewCopy,
+        ),
+      ),
+    );
+
+MediaItem _heic() => MediaItem(
+    key: 'a.heic',
+    type: 'image',
+    url: 'https://w.example/m/a.heic?s=1',
+    viewUrl: 'https://w.example/v/a.heic?s=2');
+
+void _jpegCopyTests() {
+  group('ViewerImagePage の JPEG の写し (#180 SBI-2)', () {
+    testWidgets('preferViewCopy が true の時は写し（/v/）を読み、cacheKey も写しのパス', (tester) async {
+      final item = _heic();
+      await tester.pumpWidget(_imagePage(item, preferViewCopy: true));
+      final img = tester.widget<CachedNetworkImage>(
+          find.byType(CachedNetworkImage).first);
+      expect(img.imageUrl, item.viewUrl);
+      expect(img.cacheKey, contains('/v/a.heic'));
+    });
+
+    testWidgets('preferViewCopy が false でも原本が読めない時は写しへ落ちる', (tester) async {
+      final item = _heic();
+      await tester.pumpWidget(_imagePage(item, preferViewCopy: false));
+      expect(
+          tester
+              .widget<CachedNetworkImage>(
+                  find.byType(CachedNetworkImage).first)
+              .imageUrl,
+          item.url);
+      await tester.pump();
+      final imgs = tester
+          .widgetList<CachedNetworkImage>(find.byType(CachedNetworkImage))
+          .toList();
+      expect(imgs.last.imageUrl, item.viewUrl);
+      expect(imgs.last.cacheKey, contains('/v/a.heic'));
+    });
+
+    testWidgets('写しが無い時は壊れた印を出す', (tester) async {
+      final item = MediaItem(
+          key: 'a.heic', type: 'image', url: 'https://w.example/m/a.heic?s=1');
+      await tester.pumpWidget(_imagePage(item, preferViewCopy: false));
+      await tester.pump();
+      expect(find.byIcon(Icons.broken_image), findsWidgets);
+    });
+  });
+}
+
+//（_jpegCopyTests は main の中で呼ぶ）

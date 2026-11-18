@@ -19,6 +19,8 @@ class FakeWorker {
 
   final Map<String, Uint8List> objects = {};
   final Map<String, Uint8List> media = {};
+  // /v/ の JPEG の写し（key → 中身）。一覧の items の viewUrl にも載る
+  final Map<String, Uint8List> views = {};
   final Set<String> expired = {};
   final Map<String, Map<int, Uint8List>> _parts = {};
   final List<String> partsSeen = [];
@@ -75,6 +77,19 @@ class FakeWorker {
 
   Future<void> _handle(HttpRequest r) async {
     final p = r.uri.path;
+    if (p.startsWith('/v/')) {
+      final name = p.substring(3);
+      final data = views[name];
+      if (data == null) {
+        r.response.statusCode = 404;
+        await r.response.close();
+        return;
+      }
+      r.response.contentLength = data.length;
+      r.response.add(data);
+      await r.response.close();
+      return;
+    }
     if (p.startsWith('/m/')) {
       final name = p.substring(3);
       if (expired.contains(name) && r.uri.queryParameters['sig'] != 'fresh') {
@@ -150,7 +165,12 @@ class FakeWorker {
       return _json(r, {
         'items': [
           for (final n in media.keys)
-            {'key': n, 'type': 'image', 'url': '$base/m/$n?sig=fresh'},
+            {
+              'key': n,
+              'type': 'image',
+              'url': '$base/m/$n?sig=fresh',
+              if (views.containsKey(n)) 'viewUrl': '$base/v/$n?sig=fresh',
+            },
           for (final e in objects.entries)
             {
               'key': e.key,
@@ -407,6 +427,7 @@ void main() {
     FileThumbMaker? makeThumb,
     int stageParallel = 2,
     Duration thumbTimeout = const Duration(seconds: 20),
+    Future<bool> Function(Uint8List bytes)? canDecode,
   }) {
     final q = TransferQueue(
       api: ApiClientTransferApi(api),
@@ -423,6 +444,7 @@ void main() {
       makeThumb: makeThumb,
       stageParallel: stageParallel,
       thumbTimeout: thumbTimeout,
+      canDecode: canDecode,
       configured: () => api.conn != null,
     );
     queues.add(q);
@@ -1437,6 +1459,71 @@ void main() {
       ]);
       await until(() => q.tasks.single.status == TransferStatus.done,
           what: 'done');
+    });
+  });
+  group('オフライン保存の JPEG の写し (#180 SBI-2)', () {
+
+    MediaItem heic() => MediaItem(
+          key: 'a.heic',
+          type: 'image',
+          url: '${w.base}/m/a.heic',
+          viewUrl: '${w.base}/v/a.heic',
+          lib: 'lib',
+        );
+
+    test('原本を読めず写しが在る時は JPEG の写しを置く', () async {
+      w.media['a.heic'] = bytesOf(4000);
+      w.views['a.heic'] = bytesOf(900);
+      final q = make(canDecode: (b) async => b.length == 900);
+      await q.restore();
+      await q.enqueueDownloads('lib', [heic()]);
+      await until(() => q.tasks.single.status == TransferStatus.done);
+      expect(await offline.readBytes('lib', 'a.heic'), bytesOf(900));
+    });
+
+    test('原本を読める時は原本を置き、写しは取りに行かない', () async {
+      w.media['a.heic'] = bytesOf(4000);
+      w.views['a.heic'] = bytesOf(900);
+      var vCalls = 0;
+      final q = make(canDecode: (b) async {
+        if (b.length == 900) vCalls++;
+        return true;
+      });
+      await q.restore();
+      await q.enqueueDownloads('lib', [heic()]);
+      await until(() => q.tasks.single.status == TransferStatus.done);
+      expect(await offline.readBytes('lib', 'a.heic'), bytesOf(4000));
+      expect(vCalls, 0);
+    });
+
+    test('写しも読めない時は原本を置く', () async {
+      w.media['a.heic'] = bytesOf(4000);
+      w.views['a.heic'] = bytesOf(900);
+      final q = make(canDecode: (_) async => false);
+      await q.restore();
+      await q.enqueueDownloads('lib', [heic()]);
+      await until(() => q.tasks.single.status == TransferStatus.done);
+      expect(await offline.readBytes('lib', 'a.heic'), bytesOf(4000));
+    });
+
+    test('転送の記録（ledger）から戻した行は、写しの URL を一覧から取り直す', () async {
+      w.media['a.heic'] = bytesOf(4000);
+      w.views['a.heic'] = bytesOf(900);
+      // 台帳に残った1行（viewCopy=true・写しの URL は記録しない）を作る
+      await ledger.write(jsonEncode([
+        {
+          'id': 'd1', 'kind': 'down', 'lib': 'lib', 'name': 'a.heic',
+          'status': 'queued', 'viewCopy': true,
+          'itemKey': 'a.heic', 'itemType': 'image',
+        }
+      ]));
+      final q = make(canDecode: (b) async => b.length == 900);
+      await q.restore();
+      await until(
+          () => q.tasks.isNotEmpty &&
+              q.tasks.single.status == TransferStatus.done,
+          what: 'done');
+      expect(await offline.readBytes('lib', 'a.heic'), bytesOf(900));
     });
   });
 }

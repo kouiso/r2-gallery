@@ -163,6 +163,9 @@ class _RecordingTransferApi implements TransferApi {
       false;
   @override
   Future<String?> itemUrl(String lib, String key) async => null;
+
+  @override
+  Future<String?> itemViewUrl(String lib, String key) async => null;
   @override
   Future<void> albumAdd(String lib, String albumId, List<String> keys) async {}
 }

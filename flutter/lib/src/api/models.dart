@@ -53,6 +53,9 @@ class MediaItem {
   /// META に縮小サムネが保存済みか。false はクライアント側バックフィル対象。
   final bool thumbStored;
 
+  /// HEIC を読めない環境向けの JPEG の写し（/v/ の署名 URL）。写しが無い形式は null。
+  final String? viewUrl;
+
   const MediaItem({
     required this.key,
     required this.type,
@@ -63,6 +66,7 @@ class MediaItem {
     this.size,
     this.lib,
     this.thumbStored = true,
+    this.viewUrl,
   });
 
   factory MediaItem.fromJson(Map<String, dynamic> j) => MediaItem(
@@ -75,6 +79,7 @@ class MediaItem {
         size: (j['size'] as num?)?.toInt(),
         lib: j['lib'] as String?,
         thumbStored: (j['thumbStored'] as bool?) ?? true,
+        viewUrl: j['viewUrl'] as String?,
       );
 
   /// 一覧の先頭ページを端末に残すため。fromJson で読み戻せる形にする
@@ -88,6 +93,7 @@ class MediaItem {
         'size': ?size,
         'lib': ?lib,
         'thumbStored': thumbStored,
+        'viewUrl': ?viewUrl,
       };
 
   bool get isVideo => type == 'video';

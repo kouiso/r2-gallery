@@ -39,4 +39,12 @@ void main() {
   test('画像として読めないバイト列はサムネ無し（null）にする', () async {
     expect(await makeImageThumb(Uint8List.fromList([1, 2, 3, 4])), isNull);
   });
+
+  test('canDecodeImageBytes は読める画像に true', () async {
+    expect(await canDecodeImageBytes(_png(10, 10)), isTrue);
+  });
+
+  test('canDecodeImageBytes は画像でないバイト列に false', () async {
+    expect(await canDecodeImageBytes(Uint8List.fromList([1, 2, 3])), isFalse);
+  });
 }

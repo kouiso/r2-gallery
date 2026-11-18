@@ -552,17 +552,43 @@ void main() {
     });
   });
 
-  test('A8: 続きの取得に失敗したら、取り直すまで自動では読みに行かない', () async {
+  test('A8: 続きの取得に失敗したら倍の待ちを空けて頼み直す（写真タブと同じ規則）', () async {
     final api = _FailMoreApi();
-    final s = AlbumDetailState(api, 'a', 'x');
+    final s = AlbumDetailState(api, 'a', 'x',
+        loadMoreBackoff: const Duration(milliseconds: 50));
     await s.refresh();
-    await s.loadMore();
     await s.loadMore();
     expect(api.pages, ['null', '1']);
     expect(s.error, isNotNull);
+    // 失敗の直後は、待ちが明けるまで頼み直さない
+    await s.loadMore();
+    expect(api.pages, ['null', '1']);
+    // 待ちが明けたら、取り直しを待たずに頼める（自動の頼み直しはグリッドの通知から起きる）
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+    await s.loadMore();
+    expect(api.pages, ['null', '1', '1']);
+    // 待ちは失敗のたびに倍になる（50ms → 100ms）
+    await s.loadMore();
+    expect(api.pages, ['null', '1', '1']);
+    await Future<void>.delayed(const Duration(milliseconds: 110));
+    await s.loadMore();
+    expect(api.pages, ['null', '1', '1', '1']);
+  });
+
+  test('A8b: 続きの失敗の「再試行」は先頭ではなく続きを頼み直す', () async {
+    final api = _FailMoreApi()..failuresLeft = 1;
+    final s = AlbumDetailState(api, 'a', 'x',
+        loadMoreBackoff: const Duration(milliseconds: 50));
     await s.refresh();
     await s.loadMore();
-    expect(api.pages, ['null', '1', 'null', '1']);
+    expect(api.pages, ['null', '1']);
+    expect(s.error, isNotNull);
+    // 待ちが残っていても、「再試行」は待ちを消して続きを頼み直す
+    await s.retry();
+    // 1回の失敗のあとは取れる: 先頭を取り直さず cursor=1 の続きだけを引く
+    expect(api.pages, ['null', '1', '1']);
+    expect(s.error, isNull);
+    expect(s.items.length, 2);
   });
 
   // 統合（#145 の書き込みガードをアルバム操作とフォルダ作成にもつないだ）
@@ -590,11 +616,22 @@ void main() {
 
 class _FailMoreApi extends ApiClient {
   final List<String> pages = [];
+  // あと何回失敗するか。0 になったら続きも取れる
+  int failuresLeft = 1 << 30;
+  int _n = 1;
   @override
   Future<AlbumPage> album(String libId, String albumId,
       {String? cursor, int limit = 60}) async {
     pages.add('$cursor');
-    if (cursor != null) throw const ApiError(500, 'boom');
-    return AlbumPage(items: [_img('0.jpg')], cursor: '1', title: 't', count: 2, readOnly: false);
+    if (cursor != null && failuresLeft > 0) {
+      failuresLeft--;
+      throw const ApiError(500, 'boom');
+    }
+    return AlbumPage(
+        items: [cursor == null ? _img('0.jpg') : _img('${_n++}.jpg')],
+        cursor: cursor == null ? '1' : null,
+        title: 't',
+        count: 2,
+        readOnly: false);
   }
 }

@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../api/client.dart';
 import '../api/models.dart';
 import 'media_selection.dart';
+import '../state/load_more_backoff.dart';
 import '../state/trash_ops.dart';
 
 /// 画面を閉じた後に通信が返っても落ちないようにする共通部分。
@@ -168,7 +171,12 @@ class AlbumsHomeState extends ChangeNotifier with _SafeNotify {
 abstract class _PagedMediaState extends ChangeNotifier with _SafeNotify {
   final ApiClient api;
   final String lib;
-  _PagedMediaState(this.api, this.lib);
+  _PagedMediaState(this.api, this.lib,
+      {this.loadMoreBackoff = const Duration(seconds: 3)});
+
+  /// 続きの失敗の後に空ける待ちの1回目。失敗のたびに倍にして 60 秒で止める。
+  /// 写真タブ（GalleryState）と同じ規則にするため共有の loadMoreBackoffAfter を使う（#25 作業3）
+  final Duration loadMoreBackoff;
 
   List<MediaItem> items = [];
   String? cursor;
@@ -180,8 +188,13 @@ abstract class _PagedMediaState extends ChangeNotifier with _SafeNotify {
   String? error;
   int _epoch = 0;
 
-  /// 続きの取得に失敗したら、取り直すまで自動では読みに行かない（失敗の繰り返しで通信し続けないため）
-  bool _moreFailed = false;
+  /// 続きの失敗が続いた回数。待ちの長さ（[loadMoreBackoffAfter]）に使う
+  int _moreFailures = 0;
+  Duration get _backoff => loadMoreBackoffAfter(loadMoreBackoff, _moreFailures);
+  Timer? _backoffTimer;
+
+  /// 最後に出した失敗が続きのものか。帯の「再試行」が先頭ではなく続きをやり直すための印
+  bool _lastErrorFromMore = false;
   final MediaSelection selection = MediaSelection();
   bool bulkBusy = false;
 
@@ -193,7 +206,11 @@ abstract class _PagedMediaState extends ChangeNotifier with _SafeNotify {
     loading = true;
     // 取り直しの間に返ってきた古い続きページを積まないよう、ページ送りも打ち切る
     loadingMore = false;
-    _moreFailed = false;
+    // 取り直しは続きの失敗の待ちと数を一旦消す
+    _backoffTimer?.cancel();
+    _backoffTimer = null;
+    _moreFailures = 0;
+    _lastErrorFromMore = false;
     error = null;
     notifyListeners();
     try {
@@ -211,7 +228,9 @@ abstract class _PagedMediaState extends ChangeNotifier with _SafeNotify {
   }
 
   Future<void> loadMore() async {
-    if (cursor == null || loadingMore || loading || _moreFailed) return;
+    if (cursor == null || loadingMore || loading || _backoffTimer != null) {
+      return;
+    }
     final e = _epoch;
     loadingMore = true;
     notifyListeners();
@@ -224,13 +243,48 @@ abstract class _PagedMediaState extends ChangeNotifier with _SafeNotify {
         ...p.items.where((it) => seen.add('${it.lib ?? lib}:${it.key}')),
       ];
       cursor = p.cursor;
+      _moreFailures = 0;
+      // 続きが取れたなら、続きの失敗の帯は消す
+      if (_lastErrorFromMore) {
+        error = null;
+        _lastErrorFromMore = false;
+      }
     } on ApiError catch (err) {
       if (e != _epoch) return;
       error = err.toString();
-      _moreFailed = true;
+      _noteMoreFailure();
     }
     loadingMore = false;
     notifyListeners();
+  }
+
+  /// 続きの失敗を1回数えて、次を試すまでの待ちを始める。
+  /// 明けたら通知し、末尾に居るグリッドに頼み直させる（写真タブと同じ規則）
+  void _noteMoreFailure() {
+    _moreFailures++;
+    _lastErrorFromMore = true;
+    _backoffTimer?.cancel();
+    _backoffTimer = Timer(_backoff, () {
+      _backoffTimer = null;
+      notifyListeners();
+    });
+  }
+
+  /// 帯の「再試行」。最後の失敗が続きなら、待ちを消して続きを頼み直す。
+  /// それ以外（起動・引っ張って更新の失敗）は先頭から取り直す
+  Future<void> retry() {
+    if (_lastErrorFromMore) {
+      _backoffTimer?.cancel();
+      _backoffTimer = null;
+      return loadMore();
+    }
+    return refresh();
+  }
+
+  @override
+  void dispose() {
+    _backoffTimer?.cancel();
+    super.dispose();
   }
 
   void toggle(MediaItem it) {
@@ -267,7 +321,8 @@ abstract class _PagedMediaState extends ChangeNotifier with _SafeNotify {
 /// アルバムの中身。並びは worker が持つアルバム順のまま出す（手動の並び替えが見えるように）。
 class AlbumDetailState extends _PagedMediaState {
   final String albumId;
-  AlbumDetailState(super.api, super.lib, this.albumId);
+  AlbumDetailState(super.api, super.lib, this.albumId,
+      {super.loadMoreBackoff});
 
   String title = '';
   int count = 0;

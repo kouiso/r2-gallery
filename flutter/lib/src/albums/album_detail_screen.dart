@@ -7,6 +7,7 @@ import '../ui/write_guard_notice.dart';
 import '../ui/album_picker.dart';
 import '../ui/viewer_screen.dart' show openViewer;
 import '../ui/theme.dart';
+import '../grid/state_views.dart';
 import 'album_states.dart';
 import 'album_widgets.dart';
 import 'item_actions.dart';
@@ -268,13 +269,8 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
             ),
             body: Column(children: [
               if (s.error != null && items.isNotEmpty)
-                MaterialBanner(
-                  content: Text(s.error!),
-                  actions: [
-                    TextButton(
-                        onPressed: s.refresh, child: const Text('再試行')),
-                  ],
-                ),
+                // 続きの失敗なら読み進めた位置を保ったまま続きをやり直す（写真タブと同じ並べ方・#25 作業3）
+                ErrorBanner(message: s.error!, onRetry: s.retry),
               Expanded(child: body),
             ]),
             bottomNavigationBar:

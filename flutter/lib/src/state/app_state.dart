@@ -1664,42 +1664,29 @@ class GalleryState extends ChangeNotifier {
 
   /// サムネを保存できた動画の行だけを、サーバーの最新の行に差し替える。
   /// refresh() は先頭 1 ページに巻き戻して続きページを捨て、スクロール位置が飛ぶので使わない。
-  /// 一覧は今の並び順で積まれているため、対象が見つかるまで先頭から読み込み済みの件数分だけ辿る。
+  /// 保存できたキーごとに objectAt で 1 件だけ引くので、読み込み済みの件数によらず 1 キー 1 回で済む。
   Future<void> _adoptStoredThumbs(String lib, Set<String> ids) async {
     final e = epoch;
-    final pending = {...ids};
-    final loaded = items.length;
-    var walked = 0;
-    String? cur;
-    try {
-      while (pending.isNotEmpty && !_disposed) {
-        // items は今の並び順で積まれているので、同じ範囲・同じ並びで辿らないと見つからない
-        final page = await api.folder(lib,
-            prefix: prefix,
-            cursor: cur,
-            recursive: recursive,
-            sort: sort.apiValue,
-            type: kind.apiValue);
+    var changed = false;
+    for (final id in ids) {
+      if (e != epoch || _disposed) return;
+      // id は「lib:key」で key に : が入りうるので、一覧の行から key を拾う
+      final row = items.where((it) => _idOf(it, lib) == id).firstOrNull;
+      if (row == null) continue;
+      try {
+        final fresh = await api.objectAt(lib, row.key);
         if (e != epoch) return;
-        final fresh = {
-          for (final it in page.items.where(kind.matches)) _idOf(it, lib): it
-        };
+        if (fresh == null || !kind.matches(fresh)) continue;
         items = [
           for (final it in items)
-            if (fresh.containsKey(_idOf(it, lib)) &&
-                pending.remove(_idOf(it, lib)))
-              fresh[_idOf(it, lib)]!
-            else
-              it,
+            if (_idOf(it, lib) == id) fresh else it,
         ];
-        walked += page.items.length;
-        cur = page.cursor;
-        if (cur == null || walked >= loaded) break;
+        changed = true;
+      } catch (_) {
+        // 引けなかった行はサムネ無しのまま。次に一覧を取り直した時に揃う
       }
-    } catch (_) {
-      // 引けなかった行はサムネ無しのまま。次に一覧を取り直した時に揃う
     }
-    notifyListeners();
+    if (changed) notifyListeners();
   }
 
   final List<({String lib, MediaItem item})> _backfillQueue = [];

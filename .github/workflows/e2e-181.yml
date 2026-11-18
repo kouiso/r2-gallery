@@ -32,7 +32,12 @@ jobs:
           ref: ${{ inputs.build_ref }}
           persist-credentials: false
 
+      # 两个 checkout 都放在子目录（ci/・app/），workspace 根没有 package.json，
+      # pnpm/action-setup 找不到 packageManager 字段会报 "No pnpm version is specified"，
+      # 因此显式给出版本（与仓库根 package.json 的 packageManager 保持一致）。
       - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
       - uses: actions/setup-node@v4
         with:
           node-version: 22

@@ -48,7 +48,7 @@ pullrefresh(){ adb shell input swipe 540 450 540 1600 700 >/dev/null 2>&1; sleep
 
 worker_start() {
   (cd "$APP/worker" && nohup npx wrangler dev --local --port 8787 \
-    -c wrangler.maestro.toml --persist-to "$WORK/state" >>"$WLOG" 2>&1 &)
+    -c wrangler.maestro.toml --persist-to "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/w181-state" >>"$WLOG" 2>&1 &)
   for _ in $(seq 1 60); do
     curl -sf http://127.0.0.1:8787/health >/dev/null && return 0; sleep 1
   done
@@ -98,6 +98,13 @@ adb wait-for-device
 adb reverse tcp:8787 tcp:8787
 adb install -r "$APP/flutter/build/app/outputs/flutter-apk/app-release.apk" >/dev/null
 adb logcat -c
+
+# 診断(#181): アプリが最初の一覧要求で受け取る応答そのものを控える。
+# 「1リクエストで止まる」時に、cursor が無い(これ以上無い)か、空で止まったかを分ける
+PROBE=$(curl -s -H "Authorization: Bearer $TOKEN" \
+  "http://127.0.0.1:8787/v1/a/folders?prefix=&recursive=1&order=recent&sort=new" | \
+  python3 -c "import json,sys\nd=json.load(sys.stdin)\nprint('total=%s items=%s cursor=%s' % (d.get('total'), len(d.get('items') or []), 'yes' if d.get('cursor') else 'no'))" 2>/dev/null || echo probe-failed)
+echo "worker_first_page: $PROBE" >> "$RES"
 
 launch() {
   adb shell am start -n "$PKG/.MainActivity" >/dev/null 2>&1 || \

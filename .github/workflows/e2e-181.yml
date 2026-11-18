@@ -31,6 +31,9 @@ jobs:
           path: app
           ref: ${{ inputs.build_ref }}
           persist-credentials: false
+          # fetch-depth:1 だと cb7f574 のような短い SHA が
+          # refs/heads/cb7f574* として探しに行って取れず落ちるため全部取る
+          fetch-depth: 0
 
       # 两个 checkout 都放在子目录（ci/・app/），workspace 根没有 package.json，
       # pnpm/action-setup 找不到 packageManager 字段会报 "No pnpm version is specified"，

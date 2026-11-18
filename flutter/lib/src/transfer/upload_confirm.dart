@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../albums/album_widgets.dart';
 import '../api/models.dart';
 import '../duplicates/content_hash.dart';
 import '../duplicates/upload_check.dart';
@@ -42,6 +43,38 @@ UploadSummary summarizeUpload(List<UploadSource> items) {
   );
 }
 
+({List<UploadSource> listed, List<UploadSource> unlisted}) splitByListed(
+    List<UploadSource> sources) {
+  final listed = <UploadSource>[];
+  final unlisted = <UploadSource>[];
+  for (final s in sources) {
+    (isListedUpload(s.name, s.mime) ? listed : unlisted).add(s);
+  }
+  return (listed: listed, unlisted: unlisted);
+}
+
+const unlistedBlockedTitle = 'アップロードできない形式です';
+
+String unlistedBlockedBody(List<UploadSource> unlisted) {
+  final n = unlisted.length;
+  final first = unlisted.first.name;
+  final lead = n == 1 ? '選んだ1件は' : '選んだ$n件は';
+  final names = n == 1 ? first : '$first ほか';
+  return '$lead、ギャラリーに表示できない形式です（$names）。'
+      'JPEG・PNG・HEIC・MP4 ほか、表示できる形式で選び直してください。';
+}
+
+/// 一部を止めた時に確認シートへ出す1行。止めた物が無ければ null。
+String? unlistedNotice(List<UploadSource> unlisted) {
+  if (unlisted.isEmpty) return null;
+  final n = unlisted.length;
+  final first = unlisted.first.name;
+  final names = n == 1 ? first : '$first ほか';
+  return n == 1
+      ? '1件はギャラリーに表示できない形式のため、アップロードしません（$names）'
+      : '$n件はギャラリーに表示できない形式のため、アップロードしません（$names）';
+}
+
 /// アップロード確認シートの中身（KMP 版 UploadConfirmContent、design #37 画面06）。
 class UploadConfirmContent extends StatelessWidget {
   final UploadSummary summary;
@@ -57,6 +90,9 @@ class UploadConfirmContent extends StatelessWidget {
   /// アルバムの入れ先の欄（#102）。書き込めない保存先では選べないので null。
   final ValueListenable<String>? albumLabel;
   final VoidCallback? onPickAlbum;
+
+  /// 止めた形式の案内（#180 SBI-3）。止めた物が無い時は null
+  final String? unlistedText;
   const UploadConfirmContent({
     super.key,
     required this.summary,
@@ -68,6 +104,7 @@ class UploadConfirmContent extends StatelessWidget {
     this.duplicateCheck,
     this.albumLabel,
     this.onPickAlbum,
+    this.unlistedText,
   });
 
   @override
@@ -92,6 +129,12 @@ class UploadConfirmContent extends StatelessWidget {
                 child: Text('ほか ${summary.more}件',
                     style: AppText.caption.copyWith(
                         color: AppColors.textDim)),
+              ),
+            if (unlistedText != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(unlistedText!,
+                    style: AppText.caption.copyWith(color: AppColors.textDim)),
               ),
             ?duplicateCheck,
             if (albumLabel != null && onPickAlbum != null)
@@ -242,14 +285,15 @@ Future<int> confirmAndUpload(
     BuildContext context, AppState app, String lib, List<UploadSource> sources,
     {UploadHasher? hasher}) async {
   if (sources.isEmpty) return 0;
-  // 一覧が拾う拡張子以外は上げても一覧に一生出てこないので、確認の前に除く（#63）
-  final rejected = sources.where((s) => !hasListedExtension(s.name)).length;
-  if (rejected > 0) {
-    sources = sources.where((s) => hasListedExtension(s.name)).toList();
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(content: Text('一覧に出ない形式 $rejected件を除きました')));
-    if (sources.isEmpty) return 0;
+  // 一覧に出ない形式だけを止めて理由を出す（#180 SBI-3。SnackBar の除く処理は #164 が消えた分）
+  final split = splitByListed(sources);
+  if (split.listed.isEmpty) {
+    await showMessageDialog(
+        context, unlistedBlockedTitle, unlistedBlockedBody(split.unlisted));
+    return 0;
   }
+  final unlistedText = unlistedNotice(split.unlisted);
+  sources = split.listed;
   final libs = app.libraries;
   final found = libs.where((l) => l.id == lib).toList();
   final writable = found.isNotEmpty && !found.first.readOnly;
@@ -275,6 +319,7 @@ Future<int> confirmAndUpload(
     isScrollControlled: true,
     backgroundColor: AppColors.surfaceHigh,
     builder: (ctx) => UploadConfirmContent(
+      unlistedText: unlistedText,
       summary: summarizeUpload(sources),
       libTitle: found.isEmpty ? lib : found.first.title,
       readOnly: found.isNotEmpty && found.first.readOnly,
@@ -348,7 +393,7 @@ Future<int> pickAndConfirmUpload(
   if (files.isEmpty || !context.mounted) return 0;
   final sources = <UploadSource>[];
   for (final f in files) {
-    final mime = mimeForName(f.name);
+    final mime = mimeForDeviceName(f.name);
     if (kIsWeb) {
       // Web は端末のファイル置き場が無いので、選んだ中身をそのまま持つ
       final bytes = await f.readAsBytes();

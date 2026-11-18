@@ -16,9 +16,10 @@ import 'package:r2_gallery/src/transfer/transfer_ledger.dart';
 import 'package:r2_gallery/src/transfer/transfer_queue.dart';
 import 'package:r2_gallery/src/transfer/upload_confirm.dart';
 
-UploadSource _src(String name, String content) {
+UploadSource _src(String name, String content,
+    {String mime = 'image/jpeg'}) {
   final b = Uint8List.fromList(utf8.encode(content));
-  return UploadSource(name: name, size: b.length, mime: 'image/jpeg', bytes: b);
+  return UploadSource(name: name, size: b.length, mime: mime, bytes: b);
 }
 
 const _stored = MediaItem(
@@ -443,22 +444,27 @@ void main() {
       expect(find.text('一覧に出ない形式'), findsNothing);
     });
 
-    testWidgets('一覧に出ない形式は除かれ、残りだけが上がる', (tester) async {
+    testWidgets('一覧に出ない形式は止めて案内の1行を出し、残りだけが上がる',
+        (tester) async {
       final app = await openSheet(tester, _Checker({}),
-          [_src('a.dng', 'x'), _src('b.jpg', 'y')]);
+          [_src('a.dng', 'x', mime: 'application/octet-stream'), _src('b.jpg', 'y')]);
+      expect(
+          find.text(
+              '1件はギャラリーに表示できない形式のため、アップロードしません（a.dng）'),
+          findsOneWidget);
       await pressUpload(tester);
       expect(app.uploads.single.map((s) => s.name), ['b.jpg']);
-      expect(find.text('一覧に出ない形式 1件を除きました'), findsOneWidget);
     });
 
-    testWidgets('全部が一覧に出ない形式ならシートを出さずに知らせる', (tester) async {
+    testWidgets('全部が一覧に出ない形式ならシートを出さずダイアログで理由を出す',
+        (tester) async {
       final app = _UploadApp(_CheckApi(_Checker({})));
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
           body: Builder(
             builder: (ctx) => TextButton(
-              onPressed: () =>
-                  result = confirmAndUpload(ctx, app, 'lib', [_src('a.dng', 'x')]),
+              onPressed: () => result =
+                  confirmAndUpload(ctx, app, 'lib', [_src('a.dng', 'x', mime: 'application/octet-stream')]),
               child: const Text('open'),
             ),
           ),
@@ -466,9 +472,15 @@ void main() {
       ));
       await tester.tap(find.text('open'));
       await tester.pump();
+      expect(find.text('アップロードできない形式です'), findsOneWidget);
+      expect(
+          find.textContaining('選んだ1件は、ギャラリーに表示できない形式です（a.dng）'),
+          findsOneWidget);
+      expect(find.textContaining('件をアップロード'), findsNothing);
+      await tester.tap(find.text('OK'));
+      await tester.pump();
       expect(await result, 0);
       expect(app.uploads, isEmpty);
-      expect(find.text('一覧に出ない形式 1件を除きました'), findsOneWidget);
     });
 
     testWidgets('読み取り専用のライブラリでは照合しない', (tester) async {
@@ -476,6 +488,23 @@ void main() {
       await openSheet(tester, checker, [_src('a.jpg', 'same')], readOnly: true);
       expect(checker.calls, isEmpty);
       expect(find.textContaining('重複'), findsNothing);
+    });
+  });
+
+  group('止めた物の文は件数と先頭の名前で作る', () {
+    UploadSource u(String name) => _src(name, 'x');
+    test('unlistedBlockedBody', () {
+      expect(unlistedBlockedBody([u('a.dng')]),
+          contains('選んだ1件は、ギャラリーに表示できない形式です（a.dng）'));
+      expect(unlistedBlockedBody([u('a.dng'), u('b.tiff'), u('c.mp3')]),
+          contains('選んだ3件は、ギャラリーに表示できない形式です（a.dng ほか）'));
+    });
+    test('unlistedNotice', () {
+      expect(unlistedNotice([u('a.dng')]),
+          '1件はギャラリーに表示できない形式のため、アップロードしません（a.dng）');
+      expect(unlistedNotice([u('a.dng'), u('b.tiff'), u('c.mp3')]),
+          '3件はギャラリーに表示できない形式のため、アップロードしません（a.dng ほか）');
+      expect(unlistedNotice([]), isNull);
     });
   });
 

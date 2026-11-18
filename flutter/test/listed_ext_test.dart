@@ -24,4 +24,21 @@ void main() {
     expect(normalizeUploadName('photo', 'image/heic'), 'photo.heic');
     expect(normalizeUploadName('photo', 'image/bmp'), 'photo.bmp');
   });
+
+  test('isListedUpload はキューが付ける名前で決める', () {
+    // 拡張子が無く MIME で分かる物は止めない（キューが拡張子を付ける）
+    expect(isListedUpload('photo', 'image/jpeg'), isTrue);
+    // 拡張子も MIME も分からない物は止める
+    expect(isListedUpload('photo', 'application/octet-stream'), isFalse);
+    expect(isListedUpload('a.dng', 'image/x-adobe-dng'), isFalse);
+  });
+
+  test('端末の名前は # と ? を含んでもそのまま・拡張子から MIME になる', () {
+    expect(normalizeDeviceName('夏 #1.jpg', 'image/jpeg'), '夏 #1.jpg');
+    expect(normalizeDeviceName('写真?.png', 'image/png'), '写真?.png');
+    expect(mimeForDeviceName('夏 #1.jpg'), 'image/jpeg');
+    // / の後ろを取る・MIME から拡張子を借りる所は URL 用と同じ
+    expect(normalizeDeviceName('a/b/c.heic', 'image/heic'), 'c.heic');
+    expect(normalizeDeviceName('photo', 'image/heic'), 'photo.heic');
+  });
 }

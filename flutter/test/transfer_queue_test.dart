@@ -8,6 +8,7 @@ import 'package:r2_gallery/src/api/client.dart';
 import 'package:r2_gallery/src/api/models.dart';
 import 'package:r2_gallery/src/offline/offline_store.dart';
 import 'package:r2_gallery/src/transfer/transfer_api.dart';
+import 'package:r2_gallery/src/transfer/transfer_ledger.dart';
 import 'package:r2_gallery/src/transfer/transfer_queue.dart';
 import 'package:r2_gallery/src/transfer/transfer_rows.dart';
 
@@ -235,7 +236,33 @@ class FakeWorker {
   }
 }
 
-class MemLedger implements LedgerStore {
+/// 行ごとの台帳をメモリで真似る。実装は TransferLedger と同じ3関数だけ。
+class MemLedger implements TransferLedger {
+  final Map<String, String> rows = {};
+  // 規模テストで「書いた量が件数に比例する」ことを見る
+  int bytesWritten = 0;
+  @override
+  Future<List<Map<String, Object?>>> readRows() async => [
+        for (final j in rows.values)
+          Map<String, Object?>.from(jsonDecode(j) as Map),
+      ];
+  @override
+  Future<void> writeRow(String id, String json) async {
+    rows[id] = json;
+    bytesWritten += json.length;
+  }
+
+  @override
+  Future<void> deleteRow(String id) async {
+    rows.remove(id);
+  }
+
+  /// テストで行を1つ置く（旧 `value = jsonEncode([m])` と同じ意味）
+  void put(Map<String, Object?> m) => rows[m['id'] as String] = jsonEncode(m);
+}
+
+/// 旧形式（1つの文字列に全行）の移し元をメモリで真似る
+class MemLegacyLedger implements LedgerStore {
   String? value;
   @override
   Future<String?> read() async => value;
@@ -244,19 +271,34 @@ class MemLedger implements LedgerStore {
 }
 
 /// 指定した条件の書き込みを 1 回だけ止めておける台帳（完了の書き込みが遅い端末を真似る）。
+/// holdWhen には書き込み後の全行を旧形式と同じ配列JSONにした文字列を渡す
 class GateLedger extends MemLedger {
   bool Function(String json)? holdWhen;
   final Completer<void> held = Completer<void>();
   final Completer<void> release = Completer<void>();
-  @override
-  Future<void> write(String json) async {
+
+  String get _all =>
+      jsonEncode([for (final j in rows.values) jsonDecode(j)]);
+
+  Future<void> _maybeHold() async {
     final cond = holdWhen;
-    if (cond != null && cond(json)) {
+    if (cond != null && cond(_all)) {
       holdWhen = null;
       held.complete();
       await release.future;
     }
-    value = json;
+  }
+
+  @override
+  Future<void> writeRow(String id, String json) async {
+    await super.writeRow(id, json);
+    await _maybeHold();
+  }
+
+  @override
+  Future<void> deleteRow(String id) async {
+    super.deleteRow(id);
+    await _maybeHold();
   }
 }
 
@@ -353,6 +395,8 @@ void main() {
   late ApiClient api;
   late Directory tmp;
   late MemLedger ledger;
+  late MemLegacyLedger legacy;
+  late MemKv secrets;
   late OfflineStore offline;
   final queues = <TransferQueue>[];
 
@@ -366,6 +410,8 @@ void main() {
       api: ApiClientTransferApi(api),
       offline: offline,
       ledger: ledger,
+      legacyLedger: legacy,
+      secrets: secrets,
       stageDir: () async => Directory('${tmp.path}/stage'),
       persist: true,
       multipartThreshold: threshold,
@@ -391,6 +437,8 @@ void main() {
     api = ApiClient()..setConnection(Connection(w.base, 'tok'));
     tmp = await Directory.systemTemp.createTemp('r2g-queue-test-');
     ledger = MemLedger();
+    legacy = MemLegacyLedger();
+    secrets = MemKv();
     offline = OfflineStore(
         kv: MemKv(), dir: () async => Directory('${tmp.path}/offline'));
   });
@@ -419,7 +467,7 @@ void main() {
       await until(() => q.tasks.single.status == TransferStatus.done);
       expect(w.objects['a.jpg'], data);
       expect(Directory('${tmp.path}/stage').listSync(), isEmpty);
-      expect(jsonDecode(ledger.value!), isEmpty);
+      expect(ledger.rows, isEmpty);
       // 元のファイルには触らない
       expect(File(path).existsSync(), isTrue);
     });
@@ -464,20 +512,18 @@ void main() {
 
     test('アルバム追加の前に落とされても、次の起動で入れ直す', () async {
       // 送り済み（キー確定）だがアルバム未追加の行を台帳に残す
-      ledger.value = jsonEncode([
-        {
-          'id': 'u1',
-          'kind': 'up',
-          'lib': 'lib',
-          'name': 'a.jpg',
-          'size': 3,
-          'mime': 'image/jpeg',
-          'status': 'queued',
-          'key': 'a.jpg',
-          'albumId': 'al9',
-          'stagedPath': await source('rest.jpg', bytesOf(3)),
-        },
-      ]);
+      ledger.put({
+        'id': 'u1',
+        'kind': 'up',
+        'lib': 'lib',
+        'name': 'a.jpg',
+        'size': 3,
+        'mime': 'image/jpeg',
+        'status': 'queued',
+        'key': 'a.jpg',
+        'albumId': 'al9',
+        'stagedPath': await source('rest.jpg', bytesOf(3)),
+      });
       w.objects['a.jpg'] = bytesOf(3);
       final q = make();
       await q.restore();
@@ -517,7 +563,7 @@ void main() {
         expect(t.status, TransferStatus.done);
         expect(t.stagedPath, isNull);
         expect(Directory('${tmp.path}/stage').listSync(), isEmpty);
-        expect(jsonDecode(ledger.value!), isEmpty);
+        expect(ledger.rows, isEmpty);
         expect(w.objects.keys.toList(), ['pr.jpg']);
       }, _SlowDeleteOverrides(const Duration(milliseconds: 300)));
     });
@@ -541,7 +587,7 @@ void main() {
         expect(t.status, TransferStatus.done);
         expect(t.stagedPath, isNull);
         expect(Directory('${tmp.path}/stage').listSync(), isEmpty);
-        expect(jsonDecode(ledger.value!), isEmpty);
+        expect(ledger.rows, isEmpty);
         expect(w.objects.keys.toList(), ['cr.jpg']);
       }, _SlowDeleteOverrides(const Duration(milliseconds: 300)));
     });
@@ -577,7 +623,7 @@ void main() {
         expect(t.status, TransferStatus.done);
         expect(t.stagedPath, isNull);
         expect(Directory('${tmp.path}/stage').listSync(), isEmpty);
-        expect(jsonDecode(ledger.value!), isEmpty);
+        expect(ledger.rows, isEmpty);
         expect(w.objects.keys.toList(), ['tp.jpg']);
       }, _SlowDeleteOverrides(const Duration(milliseconds: 300)));
     });
@@ -617,7 +663,7 @@ void main() {
         await until(() => q.tasks.single.status == TransferStatus.done);
         await q.idle();
         expect(q.hasActiveWork, isFalse);
-        expect(jsonDecode(ledger.value!), isEmpty);
+        expect(ledger.rows, isEmpty);
         // 消せなかったファイルは残る（起動時の掃除の対象）
         expect(Directory('${tmp.path}/stage').listSync(), isNotEmpty);
       }, _HangDeleteOverrides(never));
@@ -657,7 +703,7 @@ void main() {
             name: 'v.mp4', size: 2500, mime: 'video/mp4', path: await source('v.mp4', data)),
       ]);
       await until(() => w.partsSeen.contains('up1#1'), what: 'part 1');
-      await until(() => (ledger.value ?? '').contains('"etag":"e1"'),
+      await until(() => ledger.rows.values.any((j) => j.contains('"etag":"e1"')),
           what: 'part 1 in ledger');
       // プロセスごと消えた状態を作る（台帳と退避ファイルだけが残る）
       first.dispose();
@@ -722,7 +768,7 @@ void main() {
       expect(w.partsSeen.where((p) => p == 'up1#1'), hasLength(1));
       expect(w.partsSeen.where((p) => p == 'up2#1'), hasLength(1));
       expect(completed, unorderedEquals(videos.keys));
-      expect(jsonDecode(ledger.value!), isEmpty);
+      expect(ledger.rows, isEmpty);
       expect(Directory('${tmp.path}/stage').listSync(), isEmpty);
     });
 
@@ -741,7 +787,7 @@ void main() {
       await q.idle();
       expect(q.tasks.single.status, TransferStatus.paused);
       expect(q.tasks.single.parts.map((p) => p.partNumber), [1]);
-      expect(jsonDecode(ledger.value!).single['status'], 'paused');
+      expect(jsonDecode(ledger.rows.values.single)['status'], 'paused');
 
       w.holdPart = null;
       q.resume(q.tasks.single.id);
@@ -827,7 +873,7 @@ void main() {
       await until(() =>
           a.status == TransferStatus.done && b.status == TransferStatus.done);
       await q.idle();
-      expect(jsonDecode(gate.value!), isEmpty);
+      expect(gate.rows, isEmpty);
     });
 
     test('退避ファイルの削除中に別の行が台帳を書いても、完了待ちの行を転送中で書き戻さない', () async {
@@ -855,7 +901,7 @@ void main() {
         await until(() =>
             a.status == TransferStatus.done && b.status == TransferStatus.done);
         await q.idle();
-        expect(jsonDecode(ledger.value!), isEmpty);
+        expect(ledger.rows, isEmpty);
         // 台帳から再起動しても送り直さない
         final r = make();
         await r.restore();
@@ -881,19 +927,17 @@ void main() {
     });
 
     test('元ファイルを退避できないまま落とされた行は、理由つきの失敗として戻す', () async {
-      ledger.value = jsonEncode([
-        {
-          'id': 'u7',
-          'kind': 'up',
-          'lib': 'lib',
-          'name': 'gone.jpg',
-          'size': 10,
-          'loaded': 0,
-          'mime': 'image/jpeg',
-          'status': 'running',
-          'sourcePath': '${tmp.path}/does-not-exist.jpg',
-        }
-      ]);
+      ledger.put({
+        'id': 'u7',
+        'kind': 'up',
+        'lib': 'lib',
+        'name': 'gone.jpg',
+        'size': 10,
+        'loaded': 0,
+        'mime': 'image/jpeg',
+        'status': 'running',
+        'sourcePath': '${tmp.path}/does-not-exist.jpg',
+      });
       final q = make();
       await q.restore();
       expect(q.tasks.single.status, TransferStatus.error);
@@ -970,14 +1014,12 @@ void main() {
     test('再開で、同名の別の中身がサーバーにあれば名前を変えて上げる', () async {
       w.objects['v.mp4'] = bytesOf(2000, 9);
       // 台帳には前回決めたキーと uploadId がある行（アプリが落ちた後を真似る）
-      await ledger.write(jsonEncode([
-        {
-          'id': 't1', 'kind': 'up', 'lib': 'lib', 'name': 'v.mp4',
-          'size': 2000, 'mime': 'video/mp4', 'status': 'running',
-          'key': 'v.mp4', 'uploadId': 'gone',
-          'stagedPath': await source('stage-v.mp4', bytesOf(2000, 1)),
-        }
-      ]));
+      ledger.put({
+        'id': 't1', 'kind': 'up', 'lib': 'lib', 'name': 'v.mp4',
+        'size': 2000, 'mime': 'video/mp4', 'status': 'running',
+        'key': 'v.mp4', 'uploadId': 'gone',
+        'stagedPath': await source('stage-v.mp4', bytesOf(2000, 1)),
+      });
       final q2 = make();
       await q2.restore();
       await until(
@@ -991,14 +1033,12 @@ void main() {
 
     test('再開で、サーバーにある物が手元と同じ中身なら重ねて上げずに完了にする', () async {
       w.objects['v.mp4'] = bytesOf(2000, 1);
-      await ledger.write(jsonEncode([
-        {
-          'id': 't1', 'kind': 'up', 'lib': 'lib', 'name': 'v.mp4',
-          'size': 2000, 'mime': 'video/mp4', 'status': 'running',
-          'key': 'v.mp4',
-          'stagedPath': await source('stage-v.mp4', bytesOf(2000, 1)),
-        }
-      ]));
+      ledger.put({
+        'id': 't1', 'kind': 'up', 'lib': 'lib', 'name': 'v.mp4',
+        'size': 2000, 'mime': 'video/mp4', 'status': 'running',
+        'key': 'v.mp4',
+        'stagedPath': await source('stage-v.mp4', bytesOf(2000, 1)),
+      });
       final q = make();
       await q.restore();
       await until(
@@ -1017,20 +1057,18 @@ void main() {
       String? uploadId,
       int partCount = 0,
     }) =>
-        ledger.write(jsonEncode([
-          {
-            'id': 't1', 'kind': 'up', 'lib': 'lib', 'name': name,
-            'size': size, 'mime': mime, 'status': 'running',
-            'key': name,
-            'uploadId': ?uploadId,
-            if (partCount > 0)
-              'parts': [
-                for (var n = 1; n <= partCount; n++)
-                  {'partNumber': n, 'etag': 'e$n'}
-              ],
-            'stagedPath': staged,
-          }
-        ]));
+        Future.sync(() => ledger.put({
+              'id': 't1', 'kind': 'up', 'lib': 'lib', 'name': name,
+              'size': size, 'mime': mime, 'status': 'running',
+              'key': name,
+              'uploadId': ?uploadId,
+              if (partCount > 0)
+                'parts': [
+                  for (var n = 1; n <= partCount; n++)
+                    {'partNumber': n, 'etag': 'e$n'}
+                ],
+              'stagedPath': staged,
+            }));
 
     Future<TransferQueue> restored() async {
       final q = make();
@@ -1241,6 +1279,65 @@ void main() {
       expect(err.itemKey, gone);
       expect(err.error, isNotEmpty);
       expect(await offline.count(), 299);
+    });
+  });
+
+  group('台帳の移行', () {
+    test('旧形式（1つの文字列）の行は行ごとの記録へ移り、元は空にする', () async {
+      legacy.value = jsonEncode([
+        {
+          'id': 'u1', 'kind': 'up', 'lib': 'lib', 'name': 'a.jpg',
+          'size': 3, 'mime': 'image/jpeg', 'status': 'paused',
+          'stagedPath': await source('rest.jpg', bytesOf(3)),
+        },
+      ]);
+      final q = make();
+      await q.restore();
+      expect(q.tasks.single.name, 'a.jpg');
+      // 同じ行が行ごとの記録に置き換わり、旧置き場は空
+      expect(ledger.rows.keys, ['u1']);
+      expect(legacy.value, '[]');
+      // 記録からの復帰でも動く（paused のまま戻る）
+      expect(q.tasks.single.status, TransferStatus.paused);
+    });
+
+    test('旧行のトークンは行の記録に残らず、接続の表へ移して書き直す', () async {
+      legacy.value = jsonEncode([
+        {
+          'id': 'u1', 'kind': 'up', 'lib': 'lib', 'name': 'a.jpg',
+          'size': 3, 'mime': 'image/jpeg', 'status': 'paused',
+          'stagedPath': await source('rest.jpg', bytesOf(3)),
+          'connEndpoint': 'http://old.example', 'connToken': 'secret-tok',
+        },
+      ]);
+      final q = make();
+      await q.restore();
+      await q.idle();
+      // 行の記録にトークンは書かれない
+      expect(ledger.rows['u1'], isNot(contains('secret-tok')));
+      expect(ledger.rows['u1'], isNot(contains('connToken')));
+      // 接続の表には入っていて、行はそのトークンを引き継ぐ
+      expect(jsonDecode(secrets.values[TransferQueue.connsKey]!),
+          {'http://old.example': 'secret-tok'});
+      expect(q.tasks.single.connToken, 'secret-tok');
+    });
+
+    test('行ごとの記録が既にあれば、旧形式の同じ id は移さない', () async {
+      ledger.put({
+        'id': 'u1', 'kind': 'up', 'lib': 'lib', 'name': 'new.jpg',
+        'size': 3, 'mime': 'image/jpeg', 'status': 'paused',
+        'stagedPath': await source('n.jpg', bytesOf(3)),
+      });
+      legacy.value = jsonEncode([
+        {
+          'id': 'u1', 'kind': 'up', 'lib': 'lib', 'name': 'old.jpg',
+          'size': 3, 'mime': 'image/jpeg', 'status': 'paused',
+          'stagedPath': await source('o.jpg', bytesOf(3)),
+        },
+      ]);
+      final q = make();
+      await q.restore();
+      expect(q.tasks.single.name, 'new.jpg');
     });
   });
 }

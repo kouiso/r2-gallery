@@ -12,6 +12,7 @@ import 'package:r2_gallery/src/duplicates/upload_check.dart';
 import 'package:r2_gallery/src/offline/offline_store.dart';
 import 'package:r2_gallery/src/state/app_state.dart';
 import 'package:r2_gallery/src/transfer/transfer_api.dart';
+import 'package:r2_gallery/src/transfer/transfer_ledger.dart';
 import 'package:r2_gallery/src/transfer/transfer_queue.dart';
 import 'package:r2_gallery/src/transfer/upload_confirm.dart';
 
@@ -174,12 +175,32 @@ class _MemKv implements SecretKv {
   Future<void> set(String key, String value) async => v[key] = value;
 }
 
-class _MemLedger implements LedgerStore {
+class _MemLegacy implements LedgerStore {
   String? value;
   @override
   Future<String?> read() async => value;
   @override
   Future<void> write(String json) async => value = json;
+}
+
+class _MemLedger implements TransferLedger {
+  final Map<String, String> rows = {};
+  @override
+  Future<List<Map<String, Object?>>> readRows() async => [
+        for (final j in rows.values)
+          Map<String, Object?>.from(jsonDecode(j) as Map),
+      ];
+  @override
+  Future<void> writeRow(String id, String json) async {
+    rows[id] = json;
+  }
+
+  @override
+  Future<void> deleteRow(String id) async {
+    rows.remove(id);
+  }
+
+  void put(Map<String, Object?> m) => rows[m['id'] as String] = jsonEncode(m);
 }
 
 void main() {
@@ -460,11 +481,13 @@ void main() {
     setUp(() async => tmp = await Directory.systemTemp.createTemp('r2g-dup-q-'));
     tearDown(() => tmp.delete(recursive: true));
 
-    TransferQueue make(TransferApi api, {LedgerStore? ledger}) => TransferQueue(
+    TransferQueue make(TransferApi api, {TransferLedger? ledger}) => TransferQueue(
           api: api,
           offline: OfflineStore(
               kv: _MemKv(), dir: () async => Directory('${tmp.path}/off')),
           ledger: ledger ?? _MemLedger(),
+          legacyLedger: _MemLegacy(),
+          secrets: _MemKv(),
           stageDir: () async => Directory('${tmp.path}/stage'),
           persist: ledger != null,
           multipartThreshold: 8,
@@ -497,18 +520,16 @@ void main() {
       final staged = File('${tmp.path}/staged.bin');
       await staged.writeAsBytes([1, 2, 3]);
       final ledger = _MemLedger()
-        ..value = jsonEncode([
-          {
-            'id': 'u1', 'kind': 'up', 'lib': 'lib', 'name': 'old.jpg',
-            'size': 3, 'mime': 'image/jpeg', 'status': 'paused',
-            'stagedPath': staged.path,
-          },
-          {
-            'id': 'u2', 'kind': 'up', 'lib': 'lib', 'name': 'new.jpg',
-            'size': 3, 'mime': 'image/jpeg', 'status': 'paused',
-            'stagedPath': staged.path, 'sha256': 'h:new',
-          },
-        ]);
+        ..put({
+          'id': 'u1', 'kind': 'up', 'lib': 'lib', 'name': 'old.jpg',
+          'size': 3, 'mime': 'image/jpeg', 'status': 'paused',
+          'stagedPath': staged.path,
+        })
+        ..put({
+          'id': 'u2', 'kind': 'up', 'lib': 'lib', 'name': 'new.jpg',
+          'size': 3, 'mime': 'image/jpeg', 'status': 'paused',
+          'stagedPath': staged.path, 'sha256': 'h:new',
+        });
       final q = make(_RecordingTransferApi(), ledger: ledger);
       addTearDown(q.dispose);
       await q.restore();

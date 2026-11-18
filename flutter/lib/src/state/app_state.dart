@@ -42,6 +42,7 @@ class AppState extends ChangeNotifier {
     ApiClient? api,
     this.bakedEndpoint = baked.bakedEndpoint,
     this.bakedToken = baked.bakedToken,
+    this.disableLock = baked.disableLockForTesting,
     DeviceAuth? deviceAuth,
     LockClock? clock,
     bool? isWeb,
@@ -59,6 +60,9 @@ class AppState extends ChangeNotifier {
   final ApiClient api;
   final String bakedEndpoint;
   final String bakedToken;
+
+  /// 検証ビルド用に端末ロックを外す印。本番では R2_DISABLE_LOCK を渡さないので常に false。
+  final bool disableLock;
   final DeviceAuth deviceAuth;
   final LockClock _clock;
   final bool _isWeb;
@@ -605,7 +609,8 @@ class AppState extends ChangeNotifier {
       hasPin: hasPin, deviceLockEnabled: deviceLockEnabled, isWeb: _isWeb);
 
   Future<void> _loadLockSettings() async {
-    deviceLockEnabled = await LockSettings.deviceLockEnabled();
+    deviceLockEnabled =
+        !disableLock && await LockSettings.deviceLockEnabled();
     relockGraceMs = await LockSettings.relockGraceMs();
     await refreshDeviceLockAvailable();
   }

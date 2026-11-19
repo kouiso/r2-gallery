@@ -192,7 +192,7 @@ class _GalleryTabState extends State<GalleryTab> {
     final lib = widget.lib;
     final g = _stateFor(lib);
     // 控えの一覧から開く時は、期限の切れた署名URLを新しいものに替えてから開く
-    final target = await g.openTarget(sorted, index);
+    final target = await g.openTarget(sorted, index, lib: lib);
     if (target == null || !mounted || widget.lib != lib) return;
     await openViewer(context,
         app: widget.app,

@@ -97,7 +97,7 @@ class _FolderBrowseScreenState extends State<FolderBrowseScreen> {
 
   Future<void> _open(List<MediaItem> sorted, int index) async {
     // 控えの一覧から開く時は、期限の切れた署名URLを新しいものに替えてから開く
-    final target = await _g.openTarget(sorted, index);
+    final target = await _g.openTarget(sorted, index, lib: widget.lib);
     if (target == null || !mounted) return;
     await openViewer(context,
         app: widget.app,

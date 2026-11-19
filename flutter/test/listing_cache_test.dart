@@ -227,7 +227,7 @@ void main() {
       await pumpEventQueue();
       final shown = g.ordered();
       var opened = false;
-      final target = g.openTarget(shown, 1).then((t) {
+      final target = g.openTarget(shown, 1, lib: 'a').then((t) {
         opened = true;
         return t;
       });
@@ -248,7 +248,7 @@ void main() {
       final g = GalleryState(api, cache: cache);
       unawaited(g.refresh('a'));
       await pumpEventQueue();
-      final target = g.openTarget(g.ordered(), 0);
+      final target = g.openTarget(g.ordered(), 0, lib: 'a');
       api.answer([_it('z.jpg')]);
       expect(await target, isNull);
     });
@@ -260,9 +260,56 @@ void main() {
       final g = GalleryState(api, cache: cache);
       unawaited(g.refresh('a'));
       await pumpEventQueue();
-      final t = await g.openTarget(g.ordered(), 0);
+      final t = await g.openTarget(g.ordered(), 0, lib: 'a');
       expect(t!.items.single.key, 'a.jpg');
       expect(api.pending, hasLength(1));
+    });
+
+    test('控えでない一覧でURLが切れた行は、その1件だけ引き直して新しいURLで開く（#210）', () async {
+      final api = _GateApi('https://w1');
+      final g = GalleryState(api);
+      final f = g.refresh('a');
+      api.answer([_it('a.jpg', e: _past), _it('b.jpg')]);
+      await f;
+      expect(g.showingCached, isFalse);
+      expect(api.pending, isEmpty);
+
+      final target = g.openTarget(g.ordered(), 0, lib: 'a');
+      await pumpEventQueue();
+      // objectAt がキー接頭辞の一覧として乗ってくる
+      api.answer([_it('a.jpg'), _it('other.jpg')]);
+      final t = await target;
+      expect(t!.index, 0);
+      expect(t.items[0].key, 'a.jpg');
+      expect(signedUrlExpired(t.items[0].url), isFalse,
+          reason: '引き直した行は新しい署名URLを持つ');
+      // 一覧の行も差し替わっている（viewer が受け取る items と同じ中身）
+      expect(signedUrlExpired(g.items[0].url), isFalse);
+    });
+
+    test('控えでない一覧でURLが切れた行が消えていたら開かない（#210）', () async {
+      final api = _GateApi('https://w1');
+      final g = GalleryState(api);
+      final f = g.refresh('a');
+      api.answer([_it('a.jpg', e: _past)]);
+      await f;
+
+      final target = g.openTarget(g.ordered(), 0, lib: 'a');
+      await pumpEventQueue();
+      api.answer([_it('unrelated.jpg')]);
+      expect(await target, isNull);
+    });
+
+    test('控えでない一覧で期限内の行は引き直さずそのまま開く', () async {
+      final api = _GateApi('https://w1');
+      final g = GalleryState(api);
+      final f = g.refresh('a');
+      api.answer([_it('a.jpg')]);
+      await f;
+
+      final t = await g.openTarget(g.ordered(), 0, lib: 'a');
+      expect(t!.items.single.key, 'a.jpg');
+      expect(api.pending, isEmpty, reason: '期限内なら objectAt を呼ばない');
     });
   });
 

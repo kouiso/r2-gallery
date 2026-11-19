@@ -1,0 +1,4 @@
+      supportsPictureInPicture=true supportsEnterPipOnTaskSwitch=false autoEnteringPip=false mPauseSchedulePendingForPip=false
+      supportsPictureInPicture=true supportsEnterPipOnTaskSwitch=false autoEnteringPip=false mPauseSchedulePendingForPip=false
+    mDisablePip=true
+    name=pip_input_consumer pid=2541 user=UserHandle{0}

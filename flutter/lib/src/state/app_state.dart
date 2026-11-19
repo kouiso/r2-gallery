@@ -1298,20 +1298,41 @@ class GalleryState extends ChangeNotifier {
 
   /// 一覧のタップで開く行を決める。控えを出している間は署名URLが切れていることがあり、
   /// そのまま開くと原本を読めない。取り直しを待ち、同じキーの新しい行で開く。消えていたら null。
+  /// 控えでなくても、開き続けている間に URL の寿命が切れた時はその1件だけ引き直して開く（#210）。
   Future<({List<MediaItem> items, int index})?> openTarget(
-      List<MediaItem> shown, int index) async {
+      List<MediaItem> shown, int index,
+      {required String lib}) async {
     final it = shown[index];
-    if (!showingCached || !signedUrlExpired(it.url)) {
+    if (!signedUrlExpired(it.url)) {
       return (items: shown, index: index);
     }
-    while (showingCached && loading) {
-      final r = _revalidation;
-      if (r == null) break;
-      await r;
+    if (showingCached) {
+      while (showingCached && loading) {
+        final r = _revalidation;
+        if (r == null) break;
+        await r;
+      }
+      if (_disposed) return null;
+      final now = ordered();
+      final at = now.indexWhere((x) => x.key == it.key && x.lib == it.lib);
+      return at < 0 ? null : (items: now, index: at);
     }
-    if (_disposed) return null;
+    // 先頭ページへ巻き戻す refresh は読み進めた位置を失うので、その行だけを引き直して差し替える
+    final rowLib = it.lib ?? lib;
+    final MediaItem? fresh;
+    try {
+      fresh = await api.objectAt(rowLib, it.key);
+    } catch (_) {
+      return null;
+    }
+    if (_disposed || fresh == null) return null;
+    items = [
+      for (final x in items)
+        if (x.key == it.key && (x.lib ?? lib) == rowLib) fresh else x,
+    ];
+    notifyListeners();
     final now = ordered();
-    final at = now.indexWhere((x) => x.key == it.key && x.lib == it.lib);
+    final at = now.indexWhere((x) => x.key == it.key && (x.lib ?? lib) == rowLib);
     return at < 0 ? null : (items: now, index: at);
   }
 

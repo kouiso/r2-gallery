@@ -1,0 +1,37 @@
+PR #124 head 989ca871d48a91ca65f03d8d2bac46e041418f59 vs origin/main 5dfe918
+Flutter web --release, baked endpoint http://localhost:8787, local wrangler worker, 10 PNGs uploaded with no stored thumbs; photos tab opened (Playwright chromium, ~14s)
+BEFORE (main): originals /m/=10 thumbs /t/=10 console errors=0
+  
+AFTER (989ca87): originals /m/=0 thumbs /t/=10 console errors=0
+Requests before:
+GET /t/a/img09.png
+GET /t/a/img08.png
+GET /t/a/img07.png
+GET /t/a/img06.png
+GET /t/a/img05.png
+GET /t/a/img04.png
+GET /t/a/img03.png
+GET /t/a/img02.png
+GET /t/a/img01.png
+GET /t/a/img00.png
+GET /m/a/img09.png
+GET /m/a/img08.png
+GET /m/a/img07.png
+GET /m/a/img06.png
+GET /m/a/img05.png
+GET /m/a/img04.png
+GET /m/a/img03.png
+GET /m/a/img02.png
+GET /m/a/img01.png
+GET /m/a/img00.png
+Requests after:
+GET /t/a/img09.png
+GET /t/a/img08.png
+GET /t/a/img07.png
+GET /t/a/img06.png
+GET /t/a/img05.png
+GET /t/a/img04.png
+GET /t/a/img03.png
+GET /t/a/img02.png
+GET /t/a/img01.png
+GET /t/a/img00.png

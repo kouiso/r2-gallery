@@ -5,11 +5,13 @@ import 'package:r2_gallery/src/api/client.dart';
 import 'package:r2_gallery/src/api/models.dart';
 import 'package:r2_gallery/src/state/app_state.dart';
 
-MediaItem _item(String key, String type, {bool stored = true}) => MediaItem(
+MediaItem _item(String key, String type, {bool stored = true, int? size}) =>
+    MediaItem(
       key: key,
       type: type,
       url: 'https://w.example/m/$key',
       thumbStored: stored,
+      size: size,
     );
 
 class _PagedApi extends ApiClient {
@@ -234,6 +236,47 @@ void main() {
       await settle();
 
       expect(g.thumbBackfillFailures, 1);
+      expect(api.thumbPuts, ['2.jpg']);
+    });
+
+    test('大きさが上限を超える画像は原本を取りに行かない（#1 作業2）', () async {
+      final api = _PagedApi();
+      final g = GalleryState(api);
+      g.items = [
+        _item('big.jpg', 'image', stored: false, size: 40 * 1024 * 1024),
+        _item('small.jpg', 'image', stored: false, size: 1024),
+      ];
+      final made = <String>[];
+      g.backfillThumbs('review', makeThumb: (it) async {
+        made.add(it.key);
+        return _thumb;
+      });
+      await settle();
+
+      // 一覧の行の size で取る前に弾く。弾いた行は失敗にも数えない
+      expect(made, ['small.jpg']);
+      expect(g.thumbBackfillFailures, 0);
+      expect(api.thumbPuts, ['small.jpg']);
+    });
+
+    test('大きさの無い行で上限を超えたら失敗として1回数え、後ろの行は続ける（#1 作業2）',
+        () async {
+      final api = _PagedApi();
+      final g = GalleryState(api);
+      g.items = [
+        _item('unknown.jpg', 'image', stored: false),
+        _item('2.jpg', 'image', stored: false),
+      ];
+      g.backfillThumbs('review', makeThumb: (it) async {
+        if (it.key == 'unknown.jpg') {
+          throw const TooLargeError(32 * 1024 * 1024);
+        }
+        return _thumb;
+      });
+      await settle();
+
+      expect(g.thumbBackfillFailures, 1);
+      // 切った行はサムネを送らない。後ろの行は続ける
       expect(api.thumbPuts, ['2.jpg']);
     });
 

@@ -25,6 +25,15 @@ class Connection {
   const Connection(this.endpoint, this.token);
 }
 
+/// 大きさの上限を超える応答を [ApiClient.fetchBytes] が切った時の例外。
+/// 途中まで受けた分は捨てる。呼び出し側は普通の失敗として数えればよい
+class TooLargeError implements Exception {
+  final int limit;
+  const TooLargeError(this.limit);
+  @override
+  String toString() => 'response exceeds $limit bytes';
+}
+
 /// worker API クライアント。KMP版 ApiClient.kt と同等のエンドポイント群。
 class ApiClient {
   /// [dio] と [retryDelay] はテストで通信を差し替え・待ち時間を縮めるための口。
@@ -482,11 +491,47 @@ class ApiClient {
     }
   }
 
-  Future<Uint8List> fetchBytes(String url) async {
+  /// [maxBytes] を超える応答は、応答ヘッダか受けた量で分かった時点で切って [TooLargeError]。
+  /// 上限の無い呼び出しは今までどおり一括で読む。一覧の補完が巨大な原本を丸ごと
+  /// メモリへ読んで落ちるのを防ぐため、サムネ補完の経路にだけ上限を付ける（#1 作業2）
+  Future<Uint8List> fetchBytes(String url, {int? maxBytes}) async {
+    if (maxBytes == null) {
+      try {
+        final res = await _dio.get<Uint8List>(url,
+            options: Options(responseType: ResponseType.bytes));
+        return res.data ?? Uint8List(0);
+      } catch (e) {
+        throw _toApiError(e);
+      }
+    }
+    final cancel = CancelToken();
     try {
-      final res = await _dio.get<Uint8List>(url,
-          options: Options(responseType: ResponseType.bytes));
-      return res.data ?? Uint8List(0);
+      final res = await _dio.get<ResponseBody>(url,
+          options: Options(responseType: ResponseType.stream),
+          cancelToken: cancel);
+      final body = res.data;
+      if (body == null) return Uint8List(0);
+      // 分かる時は読む前に弾く。content-length の無い応答は受けながら数える
+      if (body.contentLength > maxBytes) {
+        cancel.cancel();
+        throw TooLargeError(maxBytes);
+      }
+      final builder = BytesBuilder(copy: false);
+      var received = 0;
+      var tooLarge = false;
+      await for (final chunk in body.stream) {
+        received += chunk.length;
+        if (received > maxBytes) {
+          tooLarge = true;
+          cancel.cancel();
+          break;
+        }
+        builder.add(chunk);
+      }
+      if (tooLarge) throw TooLargeError(maxBytes);
+      return builder.takeBytes();
+    } on TooLargeError {
+      rethrow;
     } catch (e) {
       throw _toApiError(e);
     }

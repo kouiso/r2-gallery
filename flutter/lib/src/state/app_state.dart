@@ -1661,6 +1661,10 @@ class GalleryState extends ChangeNotifier {
       for (var i = _backfillScanned; i < items.length; i++)
         if (!items[i].thumbStored &&
             (items[i].isImage || items[i].isVideo) &&
+            // 上限を超える原本は補完に積まない（#1 作業2）。積まない行は
+            // thumbTried にも入れず失敗にも数えない。一覧の行の size で取る前に弾く
+            !(items[i].isImage &&
+                (items[i].size ?? 0) > maxThumbSourceBytes) &&
             thumbTried.add('${items[i].lib ?? lib}:${items[i].key}'))
           items[i],
     ];

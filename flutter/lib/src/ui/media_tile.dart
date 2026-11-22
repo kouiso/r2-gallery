@@ -27,11 +27,14 @@ final thumbCache = CacheManager(
 
 /// サムネ未保存の間に /t/ が返す原本（'#orig'）の置き場。原寸で重いので、件数を絞って別に持つ。
 /// 同じ置き場にすると原本が件数上限を食い、本物のサムネを追い出してしまう。
+/// 原寸の展開が重なって落ちるのを防ぐため、原本の同時取得は 2 件に絞る（#1 作業2）。
+/// 保存済みサムネの置き場は速さを落とさないよう既定のままにする
 final origThumbCache = CacheManager(
   Config(
     'r2g.thumbs.orig',
     stalePeriod: const Duration(days: 7),
     maxNrOfCacheObjects: 300,
+    fileService: HttpFileService()..concurrentFetches = 2,
   ),
 );
 

@@ -323,7 +323,7 @@ abstract class _PagedMediaState extends ChangeNotifier with _SafeNotify {
         c = p.cursor;
         if (c == null) break;
       }
-    } on ApiError catch (err) {
+    } on Object catch (err) {
       if (e != _epoch || _disposed) return;
       error = err.toString();
       notifyListeners();

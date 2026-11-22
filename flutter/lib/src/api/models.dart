@@ -12,6 +12,10 @@ class Library {
         title: (j['title'] as String?) ?? j['id'] as String,
         readOnly: (j['readOnly'] as bool?) ?? false,
       );
+
+  /// 起動を回線待ちにしないため、最後に見えた一覧を端末に控える用（#24 作業A）。
+  Map<String, dynamic> toJson() =>
+      {'id': id, 'title': title, 'readOnly': readOnly};
 }
 
 class Album {

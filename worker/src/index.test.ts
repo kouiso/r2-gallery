@@ -2434,6 +2434,11 @@ describe("一覧の索引", () => {
           scheduledTime: Date.now(),
         } as unknown as ScheduledController;
         await worker.scheduled(ctrl, cachedEnv());
+        // 10秒の時計ズレの守りで、今上がったばかりの追記は畳みでも消されない。
+        // 「一覧を取った後に消えた」を試すには索引へ入った分の追記を消して畳みを終わらせる
+        const folded = (await real({ prefix: ".system/catalog/a/j/" })).objects.map((o) => o.key);
+        expect(folded.length).toBeGreaterThan(0);
+        await env.META.delete(folded);
       }
       return page;
     }) as typeof env.META.list);
@@ -2463,6 +2468,13 @@ describe("一覧の索引", () => {
           scheduledTime: Date.now(),
         } as unknown as ScheduledController;
         await worker.scheduled(ctrl, cachedEnv());
+        // 10秒の時計ズレの守りで、今上がったばかりの追記は畳みでも消されない。
+        // 「本体が消えた」を試すには索引へ入った分の追記を消して畳みを終わらせる
+        const folded = (await env.META.list({ prefix: ".system/catalog/a/j/" })).objects.map(
+          (o) => o.key,
+        );
+        expect(folded.length).toBeGreaterThan(0);
+        await env.META.delete(folded);
       }
       return (real as (...a: unknown[]) => unknown)(k, ...rest);
     }) as typeof env.META.get);

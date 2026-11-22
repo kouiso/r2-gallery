@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../api/models.dart';
@@ -66,11 +68,15 @@ class _FolderBrowseScreenState extends State<FolderBrowseScreen> {
   // フォルダの中は写真タブと同じ並びで開く。ここで変えても写真タブには持ち越さない
   late SortMode _sort = widget.app.photosChrome.sort;
   bool _selecting = false;
+  StreamSubscription<void>? _resumeSub;
 
   @override
   void initState() {
     super.initState();
     _c.addListener(_reportSelecting);
+    // 裏へ回っている間にURLの寿命が切れた分を、復帰時に差し替える（#24 作業B）
+    _resumeSub =
+        widget.app.resumed.listen((_) => _g.refreshIfExpired(widget.lib));
   }
 
   @override
@@ -89,6 +95,7 @@ class _FolderBrowseScreenState extends State<FolderBrowseScreen> {
 
   @override
   void dispose() {
+    _resumeSub?.cancel();
     _c.removeListener(_reportSelecting);
     _c.dispose();
     _g.dispose();

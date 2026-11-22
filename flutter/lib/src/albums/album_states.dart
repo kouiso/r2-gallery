@@ -7,6 +7,7 @@ import '../api/models.dart';
 import 'media_selection.dart';
 import '../state/load_more_backoff.dart';
 import '../state/trash_ops.dart';
+import '../store/listing_cache.dart';
 
 /// 画面を閉じた後に通信が返っても落ちないようにする共通部分。
 mixin _SafeNotify on ChangeNotifier {
@@ -70,6 +71,17 @@ class AlbumsHomeState extends ChangeNotifier with _SafeNotify {
     }
     loading = false;
     notifyListeners();
+  }
+
+  /// 前面へ戻った時の復帰。表紙URLが切れている時だけ取り直す（#24 作業B）。
+  /// フォルダ名にURLは無いので、表紙だけ見れば十分。
+  Future<void> refreshIfExpired(String lib) {
+    if (loading) return Future.value();
+    if (albums.any(
+        (a) => a.coverUrl != null && signedUrlExpired(a.coverUrl!))) {
+      return load(lib);
+    }
+    return Future.value();
   }
 
   /// 失敗時は画面に出す文言を返す。成功したら一覧を取り直す。
@@ -280,6 +292,49 @@ abstract class _PagedMediaState extends ChangeNotifier with _SafeNotify {
     }
     return refresh();
   }
+
+  /// 読み込み済みの行のどれかで署名URL（原本またはサムネ）が切れているか。
+  bool get hasExpiredUrls => items.any((it) =>
+      signedUrlExpired(it.url) ||
+      (it.thumbUrl != null && signedUrlExpired(it.thumbUrl!)));
+
+  /// 前面へ戻った時の復帰。載っている行のURLが切れている時だけ、先頭から
+  /// 載っている分を覆える所まで取り直して各行を新しいURLへ差し替える。
+  /// 並び・cursor・loaded はそのまま残す（#24 作業B）。
+  Future<void> refreshIfExpired() async {
+    if (!loaded || loading || _disposed || items.isEmpty || !hasExpiredUrls) {
+      return;
+    }
+    final e = _epoch;
+    final remaining = {for (final it in items) _rowId(it)};
+    final byKey = <String, MediaItem>{};
+    final loadedCount = items.length;
+    var seen = 0;
+    String? c;
+    try {
+      while (remaining.isNotEmpty && seen < loadedCount) {
+        final p = await fetchPage(c);
+        if (e != _epoch || _disposed) return;
+        seen += p.items.length;
+        for (final it in p.items) {
+          final id = _rowId(it);
+          if (remaining.remove(id)) byKey[id] = it;
+        }
+        c = p.cursor;
+        if (c == null) break;
+      }
+    } on Object catch (err) {
+      if (e != _epoch || _disposed) return;
+      error = err.toString();
+      notifyListeners();
+      return;
+    }
+    if (byKey.isEmpty) return;
+    items = [for (final it in items) byKey[_rowId(it)] ?? it];
+    notifyListeners();
+  }
+
+  String _rowId(MediaItem it) => '${it.lib ?? lib}:${it.key}';
 
   @override
   void dispose() {

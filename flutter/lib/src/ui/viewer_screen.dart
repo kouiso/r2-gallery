@@ -242,10 +242,22 @@ class _ViewerScreenState extends State<ViewerScreen>
   void _appendLoaded() {
     final latest = widget.readItems?.call();
     if (latest == null || !mounted) return;
-    final at = latest.indexWhere((it) => sameMediaItem(it, _items.last));
+    // 署名URLの引き直しでは並びが変わらないので、同じメディアの行は新しい物へ差し替える（#24 作業B）
+    var replaced = false;
+    final next = <MediaItem>[];
+    for (final it in _items) {
+      final at = latest.indexWhere((x) => sameMediaItem(x, it));
+      final n = at < 0 ? it : latest[at];
+      replaced = replaced || n.url != it.url || n.thumbUrl != it.thumbUrl;
+      next.add(n);
+    }
+    final at = latest.indexWhere((it) => sameMediaItem(it, next.last));
     if (at >= 0) {
       final added = playableMedia(latest.skip(at + 1));
-      if (added.isNotEmpty) setState(() => _items = [..._items, ...added]);
+      if (added.isNotEmpty) next.addAll(added);
+    }
+    if (replaced || next.length != _items.length) {
+      setState(() => _items = next);
     }
     // 読み込んだ分が全部メディア以外でも、末尾の近くなら続きを頼み直す
     scheduleMicrotask(_askMoreIfNearEnd);

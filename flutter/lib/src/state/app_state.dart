@@ -379,14 +379,14 @@ class AppState extends ChangeNotifier {
 
   Future<void> _initOnce() async {
     final intent = _connectionIntent;
-    // 4つの読み出しは互いに依存しないので並べる。起動の待ちは一番遅い1本分だけになる（#24 作業A）
-    final (ep, tk, pin, _) = await (
+    // 旧PINの移行判定は hasPin 済みでないと発火しないので、PIN の有無だけ先に読む。
+    // 残り3つは互いに依存しないので並べる。起動の待ちは一番遅い1本分だけになる（#24 作業A）
+    hasPin = await PinLock.hasPin();
+    final (ep, tk, _) = await (
       Kv.get(Keys.endpoint),
       Kv.get(Keys.token),
-      PinLock.hasPin(),
       _loadLockSettings(),
     ).wait;
-    hasPin = pin;
     if (intent != _connectionIntent) return;
     if (ep != null && tk != null) {
       api.setConnection(Connection(ep, tk));

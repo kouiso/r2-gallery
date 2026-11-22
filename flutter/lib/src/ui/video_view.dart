@@ -115,6 +115,8 @@ class _VideoViewState extends State<VideoView>
   Offset? _doubleTapAt;
   // 背面に回る前に再生中だったか。戻った時にだけ再開するための印（#141）
   bool _wasPlaying = false;
+  // 署名URLの引き直しで同じ動画が新URLへ変わった時、停止中なら動かし直さないための印（#24 作業B）
+  bool? _refreshAutoplay;
   // 初期化が終わる前に背面へ回ることがあるので、コントローラの状態と別に覚えておく
   bool _background = false;
   int _resumeGeneration = 0;
@@ -213,6 +215,10 @@ class _VideoViewState extends State<VideoView>
       _wasPlaying = true;
       return;
     }
+    // URL差し替えで作り直した直後に元が止まっていたなら、動かし直さない
+    final auto = _refreshAutoplay ?? true;
+    _refreshAutoplay = null;
+    if (!auto) return;
     unawaited(_resumeAfterForeground(_c, ++_resumeGeneration));
   }
 
@@ -385,7 +391,12 @@ class _VideoViewState extends State<VideoView>
     super.didUpdateWidget(old);
     if (old.url != widget.url) {
       _resumeGeneration++;
-      _resumePosition = Duration.zero;
+      // 署名URLの引き直しでは同じメディアが新しいURLへ変わるだけなので、
+      // 再生位置と再生/一時停止をそのまま引き継ぐ（#24 作業B）
+      if (_c.value.isInitialized) {
+        _resumePosition = _c.value.position;
+        _refreshAutoplay = _c.value.isPlaying;
+      }
       _disposeController();
       _create();
       return;

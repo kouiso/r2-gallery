@@ -249,6 +249,17 @@ class AppState extends ChangeNotifier {
 
   // 写真タブは IndexedStack で生き続けて一覧を持ち続ける。ゴミ箱から戻すなど写真タブの外で中身が
   // 変わった時に知らせんと、戻した写真がアプリを開き直すまで写真タブに出ない
+  /// 前面へ戻り、ロック判定が終わった直後に1回だけ立つ。一覧の署名URL差し替えは
+  /// これに乗せる（#24 作業B）。
+  final StreamController<void> _resumed = StreamController<void>.broadcast();
+
+  /// 前面へ戻ってロック判定が済んだ合図。画面はこれに乗って期限切れURLを差し替える。
+  Stream<void> get resumed => _resumed.stream;
+
+  void _emitResumed() {
+    if (sessionOpen && !locked && !_resumed.isClosed) _resumed.add(null);
+  }
+
   final StreamController<String> _contentChanged =
       StreamController<String>.broadcast();
 
@@ -895,9 +906,13 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       await refreshDeviceLockAvailable();
       notifyListeners();
+      _emitResumed();
       return;
     }
-    if (at == null || !sessionOpen) return;
+    if (at == null || !sessionOpen) {
+      _emitResumed();
+      return;
+    }
     final elapsed = elapsedBetween(await at, await _clock.read());
     if (shouldRelock(
       elapsedMs: elapsed,
@@ -911,6 +926,7 @@ class AppState extends ChangeNotifier {
     }
     await refreshDeviceLockAvailable();
     notifyListeners();
+    _emitResumed();
   }
 
   Future<void> refreshPinState() async {
@@ -935,6 +951,7 @@ class AppState extends ChangeNotifier {
   @override
   void dispose() {
     _onlineSub?.cancel();
+    _resumed.close();
     _contentChanged.close();
     super.dispose();
   }
@@ -1294,6 +1311,62 @@ class GalleryState extends ChangeNotifier {
     }
     folders = page.folders;
     total = page.total;
+  }
+
+  /// 読み込み済みの行のどれかで署名URL（原本またはサムネ）が切れているか。
+  bool get hasExpiredUrls => items.any((it) =>
+      signedUrlExpired(it.url) ||
+      (it.thumbUrl != null && signedUrlExpired(it.thumbUrl!)));
+
+  /// 裏へ回って戻った時の復帰。読み込み済みの行の署名URLが切れている時だけ、
+  /// 先頭から必要な分だけ取り直して各行のURLを新しい物へ差し替える。
+  /// 並び・読み進めた位置・cursor・folders・total はそのまま残す（#24 作業B）。
+  Future<void> refreshIfExpired(String lib) {
+    if (_disposed || loading || _softRun != null || items.isEmpty) {
+      return Future.value();
+    }
+    if (!hasExpiredUrls) return Future.value();
+    return _resignLoaded(lib);
+  }
+
+  /// 載っている行を ID で新しい行へ差し替える。消えた行や続きのページの
+  /// 有無はここでは変えない（差分は softRefresh の仕事）。取り直しは
+  /// 載っている全行を覆えるところまでで打ち切る。
+  Future<void> _resignLoaded(String lib) async {
+    final e = epoch;
+    final remaining = {for (final it in items) _rowId(it)};
+    final byKey = <String, MediaItem>{};
+    final loaded = items.length;
+    var seen = 0;
+    String? c;
+    try {
+      while (remaining.isNotEmpty && seen < loaded) {
+        final page = await api.folder(lib,
+            prefix: prefix,
+            cursor: c,
+            recursive: recursive,
+            sort: sort.apiValue,
+            type: kind.apiValue);
+        if (e != epoch || _disposed) return;
+        seen += page.items.length;
+        for (final it in page.items) {
+          final id = _rowId(it);
+          if (remaining.remove(id)) byKey[id] = it;
+        }
+        c = page.cursor;
+        if (c == null) break;
+      }
+    } catch (err) {
+      if (e != epoch || _disposed) return;
+      error = err.toString();
+      notifyListeners();
+      return;
+    }
+    if (byKey.isEmpty) return;
+    items = [
+      for (final it in items) byKey[_rowId(it)] ?? it,
+    ];
+    notifyListeners();
   }
 
   /// 一覧のタップで開く行を決める。控えを出している間は署名URLが切れていることがあり、

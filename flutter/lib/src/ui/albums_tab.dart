@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -119,11 +120,15 @@ class AlbumsTab extends StatefulWidget {
 class _AlbumsTabState extends State<AlbumsTab> {
   late final AlbumsHomeState h = AlbumsHomeState(widget.app.api);
   AlbumsSegment segment = AlbumsSegment.albums;
+  StreamSubscription<void>? _resumeSub;
 
   @override
   void initState() {
     super.initState();
     if (widget.active) h.load(widget.lib);
+    // 裏で表紙URLが切れた分だけ、復帰時に取り直す（#24 作業B）
+    _resumeSub = widget.app.resumed
+        .listen((_) => h.refreshIfExpired(widget.lib));
   }
 
   @override
@@ -134,6 +139,7 @@ class _AlbumsTabState extends State<AlbumsTab> {
 
   @override
   void dispose() {
+    _resumeSub?.cancel();
     h.dispose();
     super.dispose();
   }

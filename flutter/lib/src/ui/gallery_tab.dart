@@ -57,6 +57,7 @@ class _GalleryTabState extends State<GalleryTab> {
   final Map<String, GalleryState> _states = {};
   StreamSubscription<Object>? _doneSub;
   StreamSubscription<String>? _changeSub;
+  StreamSubscription<void>? _resumeSub;
   final Set<String> _finishedImports = {};
 
   GalleryState get g => _stateFor(widget.lib);
@@ -90,6 +91,12 @@ class _GalleryTabState extends State<GalleryTab> {
     // 読み込み中なら、終わった後に1回だけ取り直す
     _changeSub = widget.app.contentChanged
         .listen((lib) => _states[lib]?.softRefresh(lib));
+    // 裏でURLの寿命が切れていた分だけ、復帰時に各一覧が取り直す（#24 作業B）
+    _resumeSub = widget.app.resumed.listen((_) {
+      for (final e in _states.entries) {
+        e.value.refreshIfExpired(e.key);
+      }
+    });
     _resumeLostPick();
   }
 
@@ -172,6 +179,7 @@ class _GalleryTabState extends State<GalleryTab> {
     _c.dispose();
     _doneSub?.cancel();
     _changeSub?.cancel();
+    _resumeSub?.cancel();
     widget.app.webQueue.removeListener(_onImportsChanged);
     for (final s in _states.values) {
       s.dispose();

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../api/models.dart';
@@ -56,6 +58,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
       albumId: widget.album.id);
 
   bool _selecting = false;
+  StreamSubscription<void>? _resumeSub;
 
   @override
   void initState() {
@@ -64,6 +67,8 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
     s.count = widget.album.count;
     s.addListener(_reportSelecting);
     s.refresh();
+    // 裏へ回っている間にURLの寿命が切れた分を、復帰時に差し替える（#24 作業B）
+    _resumeSub = widget.app.resumed.listen((_) => s.refreshIfExpired());
   }
 
   @override
@@ -81,6 +86,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
 
   @override
   void dispose() {
+    _resumeSub?.cancel();
     s.removeListener(_reportSelecting);
     if (widget.state == null) s.dispose();
     super.dispose();

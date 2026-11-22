@@ -116,7 +116,7 @@ class _CountApi extends ApiClient {
             thumbStored: false),
       ]);
   @override
-  Future<Uint8List> fetchBytes(String url) async {
+  Future<Uint8List> fetchBytes(String url, {int? maxBytes}) async {
     fetches++;
     return Uint8List(0);
   }

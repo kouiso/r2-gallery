@@ -6,6 +6,9 @@ import 'package:get_thumbnail_video/video_thumbnail.dart';
 
 import 'image_thumb.dart';
 
+/// サムネを作るために読む原本の上限。端末のファイルと一覧の補完で共有する（#1 作業2）
+const maxThumbSourceBytes = 32 * 1024 * 1024;
+
 /// 動画の先頭付近の1コマを縮小webpにする。KMP 版と同じく署名URLや端末内のファイルから端末側で抜くので動画を丸ごと落とさない
 Future<Uint8List?> videoThumb(String urlOrPath) async {
   if (kIsWeb) return null;
@@ -25,6 +28,6 @@ Future<Uint8List?> thumbFromFile(File file, String mime) async {
   if (kIsWeb) return null;
   if (mime.startsWith('video/')) return videoThumb(file.path);
   if (!mime.startsWith('image/')) return null;
-  if (await file.length() > 32 * 1024 * 1024) return null;
+  if (await file.length() > maxThumbSourceBytes) return null;
   return makeImageThumb(await file.readAsBytes());
 }

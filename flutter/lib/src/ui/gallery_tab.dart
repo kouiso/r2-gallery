@@ -182,7 +182,9 @@ class _GalleryTabState extends State<GalleryTab> {
   Future<Uint8List?> _makeThumb(MediaItem item) async {
     if (item.isVideo) return videoThumb(item.url);
     if (!item.isImage) return null;
-    final bytes = await widget.app.api.fetchBytes(item.url);
+    // 上限を超える原本は途中で切る。大きさの無い行でも丸ごとメモリへ読ませない（#1 作業2）
+    final bytes = await widget.app.api
+        .fetchBytes(item.url, maxBytes: maxThumbSourceBytes);
     return makeImageThumb(bytes);
   }
 

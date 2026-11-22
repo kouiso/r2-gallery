@@ -55,6 +55,8 @@ class Keys {
   static const deviceLock = 'r2g.deviceLock';
   static const lockGraceMs = 'r2g.lockGraceMs';
   static const library = 'r2g.library';
+  // 接続先ごとのライブラリ一覧の控え。起動で回線の答えを待たずに出す（#24 作業A）
+  static const libraries = 'r2g.libraries';
   static const webHistory = 'r2g.webHistory';
   static const transferConns = 'r2g.transferConns';
 

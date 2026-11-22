@@ -89,6 +89,10 @@ class AppState extends ChangeNotifier {
   /// ライブラリ一覧を取りに行っている最中か。空の一覧と「まだ来ていない」を見分けるため。
   bool librariesLoading = false;
 
+  /// 今のライブラリ一覧が回線の答えか。控えから戻した時は false で、
+  /// ロック解除や復帰の機会に取り直す（#24 作業A）。
+  bool librariesFromNet = false;
+
   /// 接続済みか、接続なしでの利用を選んだか。ロックや窓の保護はこの間ずっと効かせる。
   bool get sessionOpen => connected || browseOnly;
 
@@ -179,6 +183,7 @@ class AppState extends ChangeNotifier {
     browseOnly = false;
     librariesLoading = false;
     libraries = [];
+    librariesFromNet = false;
     activeLib = null;
     startupError = null;
     notifyListeners();
@@ -374,16 +379,22 @@ class AppState extends ChangeNotifier {
 
   Future<void> _initOnce() async {
     final intent = _connectionIntent;
-    final ep = await Kv.get(Keys.endpoint);
-    final tk = await Kv.get(Keys.token);
-    hasPin = await PinLock.hasPin();
-    await _loadLockSettings();
+    // 4つの読み出しは互いに依存しないので並べる。起動の待ちは一番遅い1本分だけになる（#24 作業A）
+    final (ep, tk, pin, _) = await (
+      Kv.get(Keys.endpoint),
+      Kv.get(Keys.token),
+      PinLock.hasPin(),
+      _loadLockSettings(),
+    ).wait;
+    hasPin = pin;
     if (intent != _connectionIntent) return;
     if (ep != null && tk != null) {
       api.setConnection(Connection(ep, tk));
       _lastEndpoint = ep;
       connected = true;
       locked = _gateAtStart;
+      // 前回見えた一覧を先に戻す。回線の答えが遅くても解除後すぐ出せる（#24 作業A）
+      await _restoreLibrarySnapshot(ep);
       // 一覧のメタ情報を取るだけで、画面はロックが塞ぐ。PIN 入力中に取り終えておけば解除後すぐ出せる
       _loadLibraries();
     } else if (bakedEndpoint.isNotEmpty && bakedToken.isNotEmpty) {
@@ -701,6 +712,7 @@ class AppState extends ChangeNotifier {
     // 接続を外した後も前の接続先の一覧が端末に残り続けないよう、控えも捨てる。
     // 後片付けを待たずに画面だけは即座に未接続へ戻す。
     unawaited(listingCache.clear());
+    unawaited(Kv.remove(Keys.libraries));
     await _persistConnection(null);
   }
 
@@ -719,11 +731,13 @@ class AppState extends ChangeNotifier {
       final saved = activeLib ?? await Kv.get(Keys.library);
       if (!current()) return;
       libraries = loaded;
+      librariesFromNet = true;
       _offlineLibrariesKnown = true;
       activeLib = loaded.any((l) => l.id == saved)
           ? saved
           : (loaded.isNotEmpty ? loaded.first.id : null);
       startupError = null;
+      unawaited(_saveLibrarySnapshot());
     } on Object catch (e) {
       if (!current()) return;
       if (libraries.isEmpty) {
@@ -738,6 +752,47 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// 最後に見えた一覧を接続先ごとに端末へ控える。次の起動で回線を待たずに出すため（#24 作業A）。
+  Future<void> _saveLibrarySnapshot() async {
+    final ep = _lastEndpoint;
+    if (ep == null || !connected) return;
+    try {
+      await Kv.set(
+          Keys.libraries,
+          jsonEncode({
+            'v': 1,
+            'endpoint': ep,
+            'activeLib': activeLib,
+            'libraries': libraries.map((l) => l.toJson()).toList(),
+          }));
+    } on Object catch (e) {
+      debugPrint('library snapshot save failed: $e');
+    }
+  }
+
+  /// 控えは同じ接続先の時だけ戻す。壊れた控えは黙って捨て、回線の答えを待つ。
+  Future<void> _restoreLibrarySnapshot(String endpoint) async {
+    try {
+      final raw = await Kv.get(Keys.libraries);
+      if (raw == null) return;
+      final j = jsonDecode(raw);
+      if (j is! Map || j['endpoint'] != endpoint) return;
+      final libs = (j['libraries'] as List?)
+              ?.whereType<Map>()
+              .map((m) => Library.fromJson(Map<String, dynamic>.from(m)))
+              .toList() ??
+          const <Library>[];
+      if (libs.isEmpty) return;
+      libraries = libs;
+      // 選ばれていたライブラリは永続キーを優先し、一覧に無ければ先頭に寄せる
+      final savedActive = await Kv.get(Keys.library) ?? j['activeLib'] as String?;
+      activeLib =
+          libs.any((l) => l.id == savedActive) ? savedActive : libs.first.id;
+    } on Object catch (e) {
+      debugPrint('library snapshot restore failed: $e');
+    }
+  }
+
   void setLib(String id) {
     activeLib = id;
     notifyListeners();
@@ -748,8 +803,10 @@ class AppState extends ChangeNotifier {
     locked = false;
     _backgroundedAt = null;
     notifyListeners();
-    // ロック中の先読みが通っていれば取り直さない。圏外で起動して空のままだった時だけ再試行する
-    if (libraries.isEmpty || activeLib == null) _loadLibraries();
+    // ロック中の先読みが通っていれば取り直さない。控えだけで起動した時は回線の一覧を取り直す
+    if (libraries.isEmpty || activeLib == null || !librariesFromNet) {
+      _loadLibraries();
+    }
   }
 
   /// 端末の画面ロックで解除する。成功したらロックを外す。

@@ -1,6 +1,8 @@
 package app.r2gallery.r2_gallery
 
 import android.Manifest
+import android.app.ActivityManager
+import android.app.ApplicationExitInfo
 import android.content.ContentValues
 import android.content.pm.PackageManager
 import android.content.res.Configuration
@@ -171,6 +173,42 @@ class MainActivity : FlutterFragmentActivity() {
                     else -> result.notImplemented()
                 }
             }
+        // 前回までの終了理由を Dart 側の ExitLog へ渡す口（#1 作業1）。
+        // クラッシュの原因を adb の logcat・dumpsys activity exit-info から追えるようにする
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app.r2gallery/diag")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "exitReasons") {
+                    result.notImplemented()
+                    return@setMethodCallHandler
+                }
+                // Android 10 以下は OS が終了理由を持たない
+                if (Build.VERSION.SDK_INT < 30) {
+                    result.success(emptyList<Map<String, Any?>>())
+                    return@setMethodCallHandler
+                }
+                try {
+                    val am = getSystemService(ActivityManager::class.java)
+                    val exits = am?.getHistoricalProcessExitReasons(packageName, 0, 5)
+                        ?: emptyList()
+                    result.success(
+                        exits.map { info ->
+                            mapOf<String, Any?>(
+                                "reason" to info.reason,
+                                "reasonName" to exitReasonName(info.reason),
+                                "description" to info.description,
+                                "timestamp" to info.timestamp,
+                                "pss" to info.pss,
+                                "rss" to info.rss,
+                                "importance" to info.importance,
+                                "status" to info.status,
+                                "trace" to exitTrace(info),
+                            )
+                        },
+                    )
+                } catch (e: Exception) {
+                    result.error("diag", e.message, null)
+                }
+            }
         // 取り込みブラウザが拾ったメディアを、ページと同じ Cookie で取り直すための口。
         // webview_flutter は Cookie の読み出しを公開しておらず、HttpOnly の Cookie は JS からも読めない。
         // Dart 側からしか呼べない口で、閲覧中のページ（JS）からは届かない
@@ -224,6 +262,45 @@ class MainActivity : FlutterFragmentActivity() {
         super.onDestroy()
         // 回転などで作り直すだけの時はエンジンをそのまま次の画面へ渡す
         if (!isChangingConfigurations) SharedEngine.detach(this)
+    }
+
+    // ApplicationExitInfo は理由を定数でしか持たないので、読む人のために定数名に写す
+    private fun exitReasonName(reason: Int): String = when (reason) {
+        ApplicationExitInfo.REASON_ANR -> "ANR"
+        ApplicationExitInfo.REASON_CRASH -> "CRASH"
+        ApplicationExitInfo.REASON_CRASH_NATIVE -> "CRASH_NATIVE"
+        ApplicationExitInfo.REASON_DEPENDENCY_DIED -> "DEPENDENCY_DIED"
+        ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "EXCESSIVE_RESOURCE_USAGE"
+        ApplicationExitInfo.REASON_EXIT_SELF -> "EXIT_SELF"
+        ApplicationExitInfo.REASON_FREEZER -> "FREEZER"
+        ApplicationExitInfo.REASON_INITIALIZATION_FAILURE -> "INITIALIZATION_FAILURE"
+        ApplicationExitInfo.REASON_LOW_MEMORY -> "LOW_MEMORY"
+        ApplicationExitInfo.REASON_OTHER -> "OTHER"
+        ApplicationExitInfo.REASON_PERMISSION_CHANGE -> "PERMISSION_CHANGE"
+        ApplicationExitInfo.REASON_SIGNALED -> "SIGNALED"
+        ApplicationExitInfo.REASON_USER_REQUESTED -> "USER_REQUESTED"
+        ApplicationExitInfo.REASON_USER_STOPPED -> "USER_STOPPED"
+        ApplicationExitInfo.REASON_UNKNOWN -> "UNKNOWN"
+        else -> "REASON_$reason"
+    }
+
+    // ANR とネイティブの異常終了の時だけスタックの先頭 16KB を残す。
+    // 低メモリの終了にはスタックが無く、読めない時は trace 無しで返す
+    private fun exitTrace(info: ApplicationExitInfo): String? {
+        if (info.reason != ApplicationExitInfo.REASON_ANR &&
+            info.reason != ApplicationExitInfo.REASON_CRASH_NATIVE
+        ) {
+            return null
+        }
+        return try {
+            info.traceInputStream?.use { s ->
+                val buf = ByteArray(16 * 1024)
+                val n = s.read(buf)
+                if (n > 0) String(buf, 0, n) else null
+            }
+        } catch (e: Exception) {
+            null
+        }
     }
 
     // 端末がいま画面に出している明るさ（0.0〜1.0）。実際の値を読めなければ null。

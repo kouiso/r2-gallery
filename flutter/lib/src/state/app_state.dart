@@ -13,6 +13,7 @@ import '../grid/media_kind.dart';
 import '../grid/sort_mode.dart';
 import '../offline/offline_store.dart';
 import '../store/device_auth.dart';
+import '../store/exit_log.dart';
 import '../store/kv.dart';
 import '../store/listing_cache.dart';
 import '../store/lock_platform.dart';
@@ -368,6 +369,8 @@ class AppState extends ChangeNotifier {
     }
     // 前回の起動で残った転送を戻す。起動に失敗しても、台帳の行は接続後に動き出す
     _wireTransfers();
+    // 前回までの終了理由を端末に残す。起動を待たせない（#1 作業1）
+    unawaited(ExitLog.instance.collect());
     loading = false;
     notifyListeners();
   }

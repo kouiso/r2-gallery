@@ -10,8 +10,22 @@ appId: app.r2gallery
 - tapOn: "追加"
 # 端末の選択画面は Android の版で DocumentsUI か写真ピッカーになる。どちらでも選べるようにする
 - extendedWaitUntil:
-    visible: "(maestro-upload\\.jpg|Photo taken.*|Photos|Recent|Images)"
+    visible: "(maestro-upload\\.jpg|Photo taken.*|Photos|Recent|Images|Files|Browse|参照)"
     timeout: 30000
+# GET_CONTENT 系ではアプリの選択画面（チューザー）が先に出る。Files を選ぶと DocumentsUI へ進む
+- runFlow:
+    when:
+      visible: "^Files$|^ファイル$"
+    commands:
+      - tapOn:
+          text: "^Files$|^ファイル$"
+# 写真ピッカーへ直接入った時は、索引外のファイルを選ぶため Browse で DocumentsUI へ進む
+- runFlow:
+    when:
+      visible: "^Browse$|^参照$"
+    commands:
+      - tapOn:
+          text: "^Browse$|^参照$"
 - runFlow:
     when:
       visible: "maestro-upload.jpg"

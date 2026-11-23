@@ -7,7 +7,7 @@ import {
 } from "cloudflare:test";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { resetCatalogMemory } from "./lib/catalog";
+import { rebuildCatalog, resetCatalogMemory } from "./lib/catalog";
 import { purgeTrash } from "./lib/objects";
 import worker, { forbiddenHost, type Env } from "./index";
 import { ALLOWED_METHODS } from "./lib/http";
@@ -2078,8 +2078,20 @@ describe("一覧の索引", () => {
           : (real as (...a: unknown[]) => unknown)(k, ...rest)) as typeof env.META.put);
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
-      expect((await putVia("cat6/up.png")).status).toBe(201);
+      // やり直しの間隔を 0 にして、全部落ち切るまでの実時間の待ちを通さない
+      const res = await direct(
+        `/v1/a/objects?key=${encodeURIComponent("cat6/up.png")}`,
+        {
+          method: "PUT",
+          headers: { "content-type": "image/png", "content-length": String(PNG.byteLength) },
+          body: PNG,
+        },
+        cachedEnv({ JOURNAL_RETRY_AFTER_MS: "0" }),
+      );
+      expect(res.status).toBe(201);
       expect(log).toHaveBeenCalledWith("catalog_journal_failed", "a", expect.anything());
+      // direct は応答の後の仕事（waitUntil）まで待つので、やり直しも全部落ち切っている
+      expect(log).toHaveBeenCalledWith("catalog_journal_retry_failed", "a");
     } finally {
       spy.mockRestore();
       log.mockRestore();
@@ -2312,6 +2324,251 @@ describe("一覧の索引", () => {
     expect((await jsonPost("/v1/a/ops/mkdir", { prefix: "catbig/made" })).status).toBe(201);
     const res = await direct("/v1/a/folders?prefix=catbig%2F&sort=name", {}, cachedEnv());
     expect(((await res.json()) as Listing).folders).toContain("catbig/made/");
+  });
+
+  it("分割の完了の直前に同名が在ると 409 でも、在る物が全体の一覧に出る", async () => {
+    await rebuildNow();
+    const create = await jsonPost("/v1/a/objects/multipart", {
+      key: "cat11/clip.mp4",
+      contentType: "video/mp4",
+    });
+    const { uploadId } = (await create.json()) as { uploadId: string };
+    const part = await putBytes(
+      `/v1/a/objects/multipart/part?key=${encodeURIComponent("cat11/clip.mp4")}&uploadId=${uploadId}&part=1`,
+      new Uint8Array(6),
+      { "content-type": "application/octet-stream" },
+    );
+    const { etag } = (await part.json()) as { etag: string };
+    // 完了の直前に同名が置かれる（別の端末・別の経路が先に上げた）。完了済みの
+    // uploadId はサーバーに残らないので、再送される 409 はこの道を通る
+    await env.LIB_A.put("cat11/clip.mp4", PNG);
+    const done = await jsonPost("/v1/a/objects/multipart/complete", {
+      key: "cat11/clip.mp4",
+      uploadId,
+      parts: [{ partNumber: 1, etag }],
+    });
+    expect(done.status).toBe(409);
+    expect(await keysOf("recursive=1&sort=name&prefix=cat11/")).toEqual(["cat11/clip.mp4"]);
+  });
+
+  it("単発の PUT を送り直して 409 でも、在る物が全体の一覧に出る", async () => {
+    await rebuildNow();
+    const real = env.META.put.bind(env.META);
+    // 1回目は本体だけ保存されて応答が届かなかった、と同じ状態にする:
+    // 追記の書き込み（応答の後のやり直しも）を全部落とす
+    const spy = vi
+      .spyOn(env.META, "put")
+      .mockImplementation(((k: string, ...rest: unknown[]) =>
+        k.startsWith(".system/catalog/")
+          ? Promise.reject(new Error("meta down"))
+          : (real as (...a: unknown[]) => unknown)(k, ...rest)) as typeof env.META.put);
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      // やり直しの間隔を 0 にして、落ち切るまでの待ちを通さない
+      const res = await direct(
+        `/v1/a/objects?key=${encodeURIComponent("cat12/up.png")}`,
+        {
+          method: "PUT",
+          headers: { "content-type": "image/png", "content-length": String(PNG.byteLength) },
+          body: PNG,
+        },
+        cachedEnv({ JOURNAL_RETRY_AFTER_MS: "0" }),
+      );
+      expect(res.status).toBe(201);
+    } finally {
+      spy.mockRestore();
+      log.mockRestore();
+    }
+    resetCatalogMemory();
+    expect(await keysOf("recursive=1&sort=name&prefix=cat12/")).toEqual([]);
+    // 応答が届かなかったアプリの送り直しは 409 で断られるが、在る物が索引へ戻る
+    expect((await putVia("cat12/up.png")).status).toBe(409);
+    expect(await keysOf("recursive=1&sort=name&prefix=cat12/")).toEqual(["cat12/up.png"]);
+  });
+
+  it("索引への追記に3回失敗しても、応答の後のやり直しで全体の一覧に出る", async () => {
+    await rebuildNow();
+    const real = env.META.put.bind(env.META);
+    let dropped = 0;
+    const spy = vi
+      .spyOn(env.META, "put")
+      .mockImplementation(((k: string, ...rest: unknown[]) =>
+        k.startsWith(".system/catalog/") && dropped++ < 3
+          ? Promise.reject(new Error("meta down"))
+          : (real as (...a: unknown[]) => unknown)(k, ...rest)) as typeof env.META.put);
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const res = await direct(
+        `/v1/a/objects?key=${encodeURIComponent("cat13/up.png")}`,
+        {
+          method: "PUT",
+          headers: { "content-type": "image/png", "content-length": String(PNG.byteLength) },
+          body: PNG,
+        },
+        cachedEnv({ JOURNAL_RETRY_AFTER_MS: "0,0,0" }),
+      );
+      expect(res.status).toBe(201);
+      expect(log).toHaveBeenCalledWith("catalog_journal_failed", "a", expect.anything());
+    } finally {
+      spy.mockRestore();
+      log.mockRestore();
+    }
+    resetCatalogMemory();
+    expect(await keysOf("recursive=1&sort=name&prefix=cat13/")).toEqual(["cat13/up.png"]);
+  });
+
+  it("追記の一覧を取った後に作り直しが割り込んでも、その追記ぶんを落とさない", async () => {
+    await rebuildNow();
+    expect((await putVia("cat14/a.png")).status).toBe(201);
+    resetCatalogMemory();
+    const real = env.META.list.bind(env.META);
+    let once = true;
+    const spy = vi.spyOn(env.META, "list").mockImplementation((async (opts?: R2ListOptions) => {
+      const page = await real(opts);
+      // 追記の一覧を取った直後に cron の作り直しが割り込み、追記を索引へ畳んで消す。
+      // 先に取った追記の一覧と新しい索引を組んでも、上げた物が一覧から欠けない事を見る
+      if (once && opts?.prefix === ".system/catalog/a/j/" && page.objects.length > 0) {
+        once = false;
+        const ctrl = {
+          cron: "17 3 * * *",
+          scheduledTime: Date.now(),
+        } as unknown as ScheduledController;
+        await worker.scheduled(ctrl, cachedEnv());
+        // 10秒の時計ズレの守りで、今上がったばかりの追記は畳みでも消されない。
+        // 「一覧を取った後に消えた」を試すには索引へ入った分の追記を消して畳みを終わらせる
+        const folded = (await real({ prefix: ".system/catalog/a/j/" })).objects.map((o) => o.key);
+        expect(folded.length).toBeGreaterThan(0);
+        await env.META.delete(folded);
+      }
+      return page;
+    }) as typeof env.META.list);
+    try {
+      expect(await keysOf("recursive=1&sort=name&prefix=cat14/")).toEqual(["cat14/a.png"]);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("追記の本体を読んでいる途中で畳まれても、その追記ぶんを落とさない", async () => {
+    await rebuildNow();
+    expect((await putVia("cat15/a.png")).status).toBe(201);
+    resetCatalogMemory();
+    const real = env.META.get.bind(env.META);
+    let once = true;
+    const spy = vi.spyOn(env.META, "get").mockImplementation((async (
+      k: string,
+      ...rest: unknown[]
+    ) => {
+      // 追記の本体を読みに来た所で cron の作り直しが割り込み、追記を畳んで消す。
+      // 「一覧に在ったのに本体が消えた」追記なので、読み側は索引を取り直してやり直す
+      if (once && k.startsWith(".system/catalog/a/j/")) {
+        once = false;
+        const ctrl = {
+          cron: "17 3 * * *",
+          scheduledTime: Date.now(),
+        } as unknown as ScheduledController;
+        await worker.scheduled(ctrl, cachedEnv());
+        // 10秒の時計ズレの守りで、今上がったばかりの追記は畳みでも消されない。
+        // 「本体が消えた」を試すには索引へ入った分の追記を消して畳みを終わらせる
+        const folded = (await env.META.list({ prefix: ".system/catalog/a/j/" })).objects.map(
+          (o) => o.key,
+        );
+        expect(folded.length).toBeGreaterThan(0);
+        await env.META.delete(folded);
+      }
+      return (real as (...a: unknown[]) => unknown)(k, ...rest);
+    }) as typeof env.META.get);
+    try {
+      expect(await keysOf("recursive=1&sort=name&prefix=cat15/")).toEqual(["cat15/a.png"]);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("遅く終わった古い作り直しが、新しい索引を上書きしない", async () => {
+    await env.LIB_A.put("cat16/a.png", PNG);
+    await rebuildNow();
+    await env.LIB_A.delete("cat16/a.png");
+    const snapKey = ".system/catalog/a.json";
+    // 古い作り直しが索引の head を読んだ直後に、別 isolate の作り直し（v1）が
+    // 書き終わった状態を作る。v1 の startedAt は時計ズレの守りを越える未来にして、
+    // 書き込み側の etag 条件が必ず効く道を通す
+    const v1 = JSON.stringify({
+      version: 1,
+      startedAt: Date.now() + 60_000,
+      items: [["cat16/a.png", PNG.byteLength, Date.now(), "etag-v1", 0]],
+    });
+    const real = env.META.head.bind(env.META);
+    let once = true;
+    const spy = vi.spyOn(env.META, "head").mockImplementation((async (
+      k: string,
+      ...rest: unknown[]
+    ) => {
+      const r = await (real as (...a: unknown[]) => unknown)(k, ...rest);
+      if (once && k === snapKey) {
+        once = false;
+        await env.META.put(snapKey, v1);
+      }
+      return r;
+    }) as typeof env.META.head);
+    try {
+      // この作り直しは v0 の etag を読んでから列挙する。列挙の結果には a.png が無い
+      // ので、書けてしまうと v1 と一緒に一覧から消える
+      await rebuildCatalog(env, "a", env.LIB_A);
+    } finally {
+      spy.mockRestore();
+    }
+    resetCatalogMemory();
+    expect(await keysOf("recursive=1&sort=name&prefix=cat16/")).toEqual(["cat16/a.png"]);
+  });
+
+  it("5000件を上げても、全メディアの一覧に5000件出る", { timeout: 300_000 }, async () => {
+    await rebuildNow();
+    const n = 5000;
+    try {
+      for (let i = 0; i < n; i += 50) {
+        const rs = await Promise.all(
+          Array.from({ length: Math.min(50, n - i) }, (_, j) =>
+            putVia(`bulk/p-${String(i + j).padStart(5, "0")}.png`),
+          ),
+        );
+        expect(rs.every((r) => r.status === 201)).toBe(true);
+      }
+      // 追記が上限を超える間は、一覧は索引だけで先に答える（畳み直しは応答の後に回る）
+      // 畳みが済めば本体は全部索引に入るので、日次 cron と同じ作り直しを済ませてから数える
+      const ctrl = {
+        cron: "17 3 * * *",
+        scheduledTime: Date.now(),
+      } as unknown as ScheduledController;
+      await worker.scheduled(ctrl, cachedEnv());
+      const keys = await keysOf("recursive=1&sort=name&prefix=bulk/");
+      expect(keys.length).toBe(n);
+      expect(new Set(keys).size).toBe(n);
+      expect(keys[0]).toBe("bulk/p-00000.png");
+      expect(keys[n - 1]).toBe(`bulk/p-${String(n - 1).padStart(5, "0")}.png`);
+    } finally {
+      // 作り直しから 10 秒以内の追記は（間に書かれた分を消さない守りで）残る。
+      // 残ったままだと後の試験の一覧がずっと索引だけで答える状態になるので消す
+      const journal: string[] = [];
+      let cursor: string | undefined;
+      do {
+        const page = await env.META.list({ prefix: ".system/catalog/a/j/", cursor });
+        journal.push(...page.objects.map((o) => o.key));
+        cursor = page.truncated ? page.cursor : undefined;
+      } while (cursor);
+      for (let i = 0; i < journal.length; i += 1000) {
+        await env.META.delete(journal.slice(i, i + 1000));
+      }
+      const bulk: string[] = [];
+      for (let i = 0; i < n; i++) {
+        bulk.push(`bulk/p-${String(i).padStart(5, "0")}.png`);
+      }
+      for (let i = 0; i < bulk.length; i += 1000) {
+        await env.LIB_A.delete(bulk.slice(i, i + 1000));
+      }
+      await env.META.delete(".system/catalog/a.json");
+      resetCatalogMemory();
+    }
   });
 });
 

@@ -133,7 +133,7 @@ class MemKv implements SecretKv {
 
 TransferQueue _make(FakeTransferApi api, MemLedger ledger, MemKv kv,
     MemLegacyLedger legacy, Directory tmp,
-    {int stageParallel = 2}) {
+    {int stageParallel = 2, UriStager? uriStager}) {
   return TransferQueue(
     api: api,
     offline: OfflineStore(
@@ -146,6 +146,10 @@ TransferQueue _make(FakeTransferApi api, MemLedger ledger, MemKv kv,
     multipartThreshold: 1024 * 1024,
     netRetryDelay: const Duration(milliseconds: 50),
     stageParallel: stageParallel,
+    // URI の元を使わない試験では呼ばれない口。呼ばれたら分かるように失敗にする
+    uriStager: uriStager ??
+        (uri, dest) =>
+            throw UnimplementedError('URI stager not expected in this test'),
     configured: () => true,
   );
 }
@@ -339,6 +343,57 @@ void main() {
       expect(ledger.bytesWritten, lessThan(n * 512 * 8));
       // 記録のファイルも完了分は消えている
       expect(ledger.rows, isEmpty);
+    } finally {
+      q.dispose();
+      await tmp.delete(recursive: true);
+    }
+  }, timeout: const Timeout(Duration(minutes: 8)));
+
+  test('content の元5000件を2件ずつ写して全部送る', () async {
+    const n = 5000;
+    final tmp = await Directory.systemTemp.createTemp('r2g-scale-');
+    final api = FakeTransferApi();
+    final ledger = MemLedger();
+    var active = 0;
+    var maxActive = 0;
+    var copied = 0;
+    // content:// の写しは権利が切れないうちに順に済ませたい。同時に走る数を数えて
+    // 上限（stageParallel=2）を超えないことを確かめる
+    Future<void> stager(String uri, String dest) async {
+      active++;
+      if (active > maxActive) maxActive = active;
+      try {
+        // 写しの途中で別の1件が始まるよう、すぐ返さず1拍待つ
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+        await File(dest).writeAsBytes(const [1]);
+        copied++;
+      } finally {
+        active--;
+      }
+    }
+
+    final q =
+        _make(api, ledger, MemKv(), MemLegacyLedger(), tmp, uriStager: stager);
+    try {
+      await q.restore();
+      final sources = <UploadSource>[];
+      for (var i = 0; i < n; i++) {
+        sources.add(UploadSource(
+            name: 'p$i.jpg',
+            size: 1,
+            mime: 'image/jpeg',
+            uri: 'content://picked/p$i'));
+        if (i % 500 == 499) {
+          await q.enqueueUploads('lib', sources.sublist(i - 499));
+        }
+      }
+      await until(() => q.tasks.every((t) => t.finished),
+          what: 'all finished', tries: 9000);
+      expect(q.tasks.where((t) => t.status == TransferStatus.error), isEmpty);
+      expect(q.tasks.length, n);
+      expect(copied, n);
+      expect(maxActive, greaterThan(0));
+      expect(maxActive, lessThanOrEqualTo(2));
     } finally {
       q.dispose();
       await tmp.delete(recursive: true);

@@ -7,9 +7,13 @@ package app.r2gallery.r2_gallery;
 public final class PickSpec {
     private PickSpec() {}
 
-    /** ピッカーの action（android.content.Intent の同名定数と同じ文字列）。 */
+    /**
+     * ピッカーの action（android.content.Intent の同名定数と同じ文字列）。
+     * OPEN_DOCUMENT は DocumentsProvider しか選び先に出さず Google フォトが出ない。
+     * GET_CONTENT は「他のアプリで探す」側の選び先も残るのでこちらを使う。
+     */
     public static String action() {
-        return "android.intent.action.OPEN_DOCUMENT";
+        return "android.intent.action.GET_CONTENT";
     }
 
     /** 選ばせる MIME。一覧に出るのは画像・動画だけなのでこの2系統に限る。 */

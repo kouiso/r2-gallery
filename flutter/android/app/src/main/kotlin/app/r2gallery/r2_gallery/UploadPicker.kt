@@ -68,13 +68,14 @@ class UploadPicker(private val activity: MainActivity) {
             return
         }
         // Intent の形は PickSpec に集約して javac で検査できるようにした（Android 依存を
-        // ここに残すと probe から見えない）。action を変える時は PickSpec 側を変える
+        // ここに残すと probe から見えない）。action を変える時は PickSpec 側を変える。
+        // 持続権利を要求できるのは OPEN_DOCUMENT 系だけなので、GET_CONTENT では READ だけを取る
         val intent = Intent(PickSpec.action()).apply {
             addCategory(PickSpec.openableCategory())
             type = "*/*"
             putExtra(Intent.EXTRA_MIME_TYPES, PickSpec.mimeTypes())
             putExtra(Intent.EXTRA_ALLOW_MULTIPLE, PickSpec.allowMultiple())
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         pending = result
         try {
@@ -169,7 +170,9 @@ class UploadPicker(private val activity: MainActivity) {
             if (name == null) name = info.first
             if (size < 0) size = info.second
         }
-        if (name == null) name = uri.lastPathSegment ?: "media"
+        // GET_CONTENT 系の URI は表示名を持たず末尾が番号や通しのIDになることがある。
+        // 拡張子の無い名のままでは一覧に出ないので、MIME から拡張子を借りて名を整える
+        name = PickNaming.resolve(name ?: uri.lastPathSegment, mime)
         return mapOf(
             "uri" to uri.toString(),
             "name" to name,

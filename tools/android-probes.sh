@@ -13,6 +13,7 @@ javac -d "$OUT" \
   "$SRC/main/java/$PKG/PipPolicy.java" \
   "$SRC/main/java/$PKG/ForegroundPromotion.java" \
   "$SRC/main/java/$PKG/PickSpec.java" \
+  "$SRC/main/java/$PKG/PickNaming.java" \
   "$SRC/test/java/$PKG/PipPolicyProbe.java" \
   "$SRC/test/java/$PKG/ForegroundPromotionProbe.java" \
   "$SRC/test/java/$PKG/PickSpecProbe.java"

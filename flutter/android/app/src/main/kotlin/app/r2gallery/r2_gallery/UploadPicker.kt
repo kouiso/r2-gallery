@@ -67,13 +67,13 @@ class UploadPicker(private val activity: MainActivity) {
             result.success(emptyList<Any>())
             return
         }
-        // GET_CONTENT は機種によって写真ピッカーになり、返る URI が表示名を持たないことがある。
-        // OPEN_DOCUMENT は DocumentsUI を開き、表示名・大きさと持続する読み取り権利が取れる
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
+        // Intent の形は PickSpec に集約して javac で検査できるようにした（Android 依存を
+        // ここに残すと probe から見えない）。action を変える時は PickSpec 側を変える
+        val intent = Intent(PickSpec.action()).apply {
+            addCategory(PickSpec.openableCategory())
             type = "*/*"
-            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("image/*", "video/*"))
-            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            putExtra(Intent.EXTRA_MIME_TYPES, PickSpec.mimeTypes())
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, PickSpec.allowMultiple())
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
         }
         pending = result

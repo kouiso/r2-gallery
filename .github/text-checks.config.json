@@ -1,0 +1,13 @@
+{
+  "$comment": "r2-gallery 側の設定（#11）。判定の本体は .github/scripts/text-checks/（brain #110 の写し、見出しと規則は本体の定数）。ここには呼び出し側だけの設定を置く。追加の禁止語は公開リポに置かず、secret PUBLIC_TEXT_EXTRA から runner の一時ファイルに書いて渡す。",
+  "marker": "<!-- text-checks:11 -->",
+  "skipActors": [
+    "github-actions[bot]",
+    "dependabot[bot]",
+    "renovate[bot]",
+    "devin-ai-integration[bot]",
+    "kouiso-devin-automation[bot]"
+  ],
+  "skipIssueLabels": ["alert", "security-alert", "ci-failure"],
+  "skipIssueTitlePrefixes": ["[SBI]"]
+}

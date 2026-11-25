@@ -1,0 +1,104 @@
+name: Text Checks
+
+# issue・PR 本文の書き方チェックと公開内容チェック（#11）。Actions の分数を抑えるため、きっかけは本文の作成・編集だけ（コメントは見ない）。
+# 判定は brain #110 の本体の写し .github/scripts/text-checks/（Python 3 標準ライブラリのみ、出どころは
+# .github/text-checks.source.json）。呼び出しと知らせる文は .github/scripts/text-checks-caller.cjs、設定は .github/text-checks.config.json。
+# 本文の自動編集・自動削除はしない。目印つきのコメントを検査の種類ごとに1つ（最大2つ）作り、直れば同じコメントを更新する。
+# 公開内容チェックは起こしたのが誰でも必ず動く。ボットと [SBI] の件名の issue を飛ばすのは書き方チェックだけ（caller の shouldSkipFormat）。
+# pull_request_target でも PR 側のコードは取り出さない（checkout は既定ブランチのまま）。
+on:
+  issues:
+    types: [opened, edited, reopened]
+  pull_request_target:
+    types: [opened, edited, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: text-checks-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check issue / PR text
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout default branch (no PR code)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: |
+            .github/scripts/text-checks/public_text_check.py
+            .github/scripts/text-checks/format_check.py
+            .github/scripts/text-checks-caller.cjs
+            .github/text-checks.config.json
+            .github/text-checks.headings.json
+          sparse-checkout-cone-mode: false
+      - name: Run checks
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          # 追加の禁止語（顧客名・固有の語など、1行1語）。リポにもログにも置かない。
+          # runner の一時ファイルに書いて本体へ PUBLIC_TEXT_EXTRA_FILE で渡す。未設定なら一般の規則だけで判定する。
+          PUBLIC_TEXT_EXTRA: ${{ secrets.PUBLIC_TEXT_EXTRA }}
+        with:
+          script: |
+            const checks = require('./.github/scripts/text-checks-caller.cjs');
+            const config = require('./.github/text-checks.config.json');
+            const extraFile = checks.writeExtraFile(process.env.PUBLIC_TEXT_EXTRA, process.env.RUNNER_TEMP);
+            const { owner, repo } = context.repo;
+            const p = context.payload;
+
+            let number, body, author, kind, title = '', labels = [], draft = false;
+            if (p.pull_request) {
+              number = p.pull_request.number;
+              body = p.pull_request.body;
+              author = p.pull_request.user.login;
+              kind = 'pull_request';
+              draft = p.pull_request.draft;
+            } else {
+              number = p.issue.number;
+              body = p.issue.body;
+              author = p.issue.user.login;
+              kind = 'issue';
+              title = p.issue.title || '';
+              labels = (p.issue.labels || []).map((l) => l.name);
+            }
+
+            const existing = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number: number, per_page: 100,
+            });
+            // 同じ目印のコメントがあれば更新、なければ「要確認」のときだけ新規に作る。
+            async function upsert(key, text, ok) {
+              const marker = `${config.marker}:${key}`;
+              const found = existing.find((c) => (c.body || '').startsWith(marker + '\n'));
+              if (found) {
+                if (found.body !== text) await github.rest.issues.updateComment({ owner, repo, comment_id: found.id, body: text });
+              } else if (!ok) {
+                await github.rest.issues.createComment({ owner, repo, issue_number: number, body: text });
+              }
+            }
+
+            const failures = [];
+
+            const pub = checks.runPublicCheck(body, { extraFile });
+            const pubKey = 'public-body';
+            await upsert(pubKey, checks.formatReport('public', pub, config, pubKey), pub.ok);
+            if (!pub.ok) failures.push(`公開内容チェック: ${checks.groupHits(pub.hits).map((g) => g.rule).join(', ')}`);
+
+            if (!checks.shouldSkipFormat({ kind, author, labels, draft, title }, config)) {
+              const fmt = checks.runFormatCheck(body, kind === 'issue' ? 'issue' : 'pr');
+              await upsert('format', checks.formatReport('format', fmt, config), fmt.ok);
+              if (!fmt.ok) failures.push(`書き方チェック: ${fmt.problems.length}件不足`);
+            } else {
+              // 対象外でも upsert は通す。対象になる前の指摘コメントが残り続けるのを防ぐため
+              const skipped = `${config.marker}:format\n書き方チェック: 対象外（ボット・下書き・対象外ラベル・対象外の件名のため検査していません）`;
+              await upsert('format', skipped, true);
+            }
+
+            if (failures.length > 0) core.setFailed(failures.join(' / '));
+            else core.info('All text checks passed.');

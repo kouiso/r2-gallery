@@ -1,0 +1,75 @@
+{
+  "$comment": "brain #110 の本体（Python 3 標準ライブラリのみ）の写し。写しは一字も変えない。直すときは brain 側を直してから、commit を書き換えて写し直す。写しを手で直すと sha256 がずれて .github/scripts/text-checks.test.mjs が落ちる。",
+  "status": "vendored",
+  "repo": "kouiso/brain",
+  "issue": 110,
+  "branch": "main",
+  "commit": "151e113574de1d18a3856ee77806fa1291649ccd",
+  "files": [
+    {
+      "path": ".github/scripts/text-checks/examples/README.md",
+      "source": "script/checks/examples/README.md",
+      "sha256": "56df166bf7a014bd23134d6d75edf15ac78c0e4d1d737712b499697b6715da60"
+    },
+    {
+      "path": ".github/scripts/text-checks/examples/config_skillsheet_example.json",
+      "source": "script/checks/examples/config_skillsheet_example.json",
+      "sha256": "82dfbb2019bc14c2cbd615ecd6886eb4126ddb17432d3dd972cc328094ebf109"
+    },
+    {
+      "path": ".github/scripts/text-checks/examples/issue_ng.md",
+      "source": "script/checks/examples/issue_ng.md",
+      "sha256": "12f960c49afdff6a77a0cfa64f9fa392c07c657cc512c77104c23834883fa223"
+    },
+    {
+      "path": ".github/scripts/text-checks/examples/issue_ok.md",
+      "source": "script/checks/examples/issue_ok.md",
+      "sha256": "b037b29d576db63617fd61a01c65badfab8e044ff4f9b8b019a9f771b1d6b268"
+    },
+    {
+      "path": ".github/scripts/text-checks/examples/issue_skillsheet_empty.md",
+      "source": "script/checks/examples/issue_skillsheet_empty.md",
+      "sha256": "257c48a6ee93479a7751753571f4d2c0261357f5066bdd1aadcc7bcb7fd1098e"
+    },
+    {
+      "path": ".github/scripts/text-checks/examples/issue_skillsheet_example.md",
+      "source": "script/checks/examples/issue_skillsheet_example.md",
+      "sha256": "33a9abede6280f9b0ae25ed94fd1682df94f418119d07cca52dbfd1a3c877b47"
+    },
+    {
+      "path": ".github/scripts/text-checks/examples/issue_skillsheet_task_example.md",
+      "source": "script/checks/examples/issue_skillsheet_task_example.md",
+      "sha256": "e3d62303f47cac4dea00a29e47a554cf51b9afd62b998f88a9f0f3b8cf5dc12b"
+    },
+    {
+      "path": ".github/scripts/text-checks/examples/pr_ng.md",
+      "source": "script/checks/examples/pr_ng.md",
+      "sha256": "fa6be092e6098ccb487eb7baee0222168b6babe5b1b781eb9b5d0a36bcb43f60"
+    },
+    {
+      "path": ".github/scripts/text-checks/examples/pr_ok.md",
+      "source": "script/checks/examples/pr_ok.md",
+      "sha256": "c4cd65dcb15ee6152dd64f2821786b6754f1968006d973461f637e0775416fb0"
+    },
+    {
+      "path": ".github/scripts/text-checks/examples/pr_skillsheet_example.md",
+      "source": "script/checks/examples/pr_skillsheet_example.md",
+      "sha256": "5e63d0aecdceba8104f8c35f0a71a1589eed8ca623a6b4b22caf2eb3cf8e33ab"
+    },
+    {
+      "path": ".github/scripts/text-checks/examples/public_ok.md",
+      "source": "script/checks/examples/public_ok.md",
+      "sha256": "6425758d2a7cce5c084f059c5bc5f471ac2d7a5eb49a2f504e46d077d1820b05"
+    },
+    {
+      "path": ".github/scripts/text-checks/format_check.py",
+      "source": "script/checks/format_check.py",
+      "sha256": "6ca5447a4ba055050120b5c94b3c25e6e8fdd0b9edbefd4040c2f4b2443edfca"
+    },
+    {
+      "path": ".github/scripts/text-checks/public_text_check.py",
+      "source": "script/checks/public_text_check.py",
+      "sha256": "1c0cb4257cde4e87fa1fde608075bd567fa6474baf51e964163f0cc20c0851f4"
+    }
+  ]
+}

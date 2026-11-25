@@ -48,8 +48,10 @@ appId: app.r2gallery
     visible: "1件をアップロード"
     timeout: 20000
 - tapOn: "アップロード"
+# 一覧に出る名は選んだ側の URI が返す名で決まる。DocumentsUI なら実名、
+# 写真ピッカー系の URI なら番号や image:ID で、PickNaming が拡張子を足す
 - extendedWaitUntil:
-    visible: "maestro-upload.jpg"
+    visible: "(maestro-upload|image:.+|msf:.+|[0-9]+|media)\\.jpg"
     timeout: 60000
 - runScript:
     file: check.js

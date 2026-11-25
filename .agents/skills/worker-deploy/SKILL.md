@@ -18,8 +18,8 @@ the org's authenticated `cloudflare-unified-mcp` `execute` tool instead.
    body:<string>, contentType:"multipart/form-data; boundary=<b>", rawBody:true})`.
 4. Preserve the existing bindings verbatim — do NOT retype them: before deploy, fetch
    `GET /accounts/{aid}/workers/scripts/notes-sync/settings` and reuse the returned
-   `bindings[]` (R2 `LIB_P`/`LIB_R`/`META`, D1 `REVIEW_DB`, plain_text `LIBRARIES`,
-   `REVIEW_LIBS`, `TRASH_RETENTION_DAYS`, `URL_TTL_SECONDS`) in the metadata, minus
+   `bindings[]` (R2 `LIB_P`/`LIB_R`/`META`, D1 `REVIEW_DB`, images `IMAGES`, plain_text
+   `LIBRARIES`, `REVIEW_LIBS`, `TRASH_RETENTION_DAYS`, `URL_TTL_SECONDS`) in the metadata, minus
    the `secret_text` entries. Bucket names never enter the repo — read them from the
    live settings, not from memory or docs.
 5. Secrets `ACCESS_TOKEN`/`SIGNING_SECRET` are `secret_text`: omit them from metadata — they

@@ -18,7 +18,9 @@ instead, like `r2-web-deploy` does for the web build:
 2. When they differ it builds the Flutter release APK (`app-release.apk`, `applicationId app.r2gallery`) with
    `--dart-define=R2_BAKED_ENDPOINT/R2_BAKED_TOKEN` from that repository's secrets, so the app connects on
    first launch without asking for a token.
-3. The versionCode is `pubspec build number + run_number`, so every release installs as an update.
+3. The versionCode is `pubspec build base + git rev-list --count --first-parent HEAD`, printed by
+   `node tools/build-number.mjs` in the cloned repo and passed as `--build-number`, so every
+   release installs as an update and shares the web build's number for the same commit.
 4. It uploads to Firebase App Distribution (project `r2-gallery-c0ca`, app
    `1:380147062326:android:5a77ec11925136089c2a97`, tester = the owner only, see `ALLOWED_TESTERS` in `tools/app-distribute.sh`) and writes the
    distributed SHA to `fad-dist-state`.

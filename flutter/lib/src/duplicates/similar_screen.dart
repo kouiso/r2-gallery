@@ -189,12 +189,15 @@ class _SimilarScreenState extends State<SimilarScreen>
   Future<void> _commitSelected() async {
     final app = widget.app;
     if (!ensureWritable(context, app, widget.lib, WriteAction.trash)) return;
-    if (_c.selectedCount == 0 || _c.committing) return;
-    final ok = await _confirm();
+    if (_c.selectedCount == 0 || _c.committing || _c.loadingAll) return;
+    // 確かめで見せた物だけを送る。開いている間に選択が増えても（読み込みの続き・オリジナルの
+    // 付け直し）、確かめていない物は送らない
+    final picked = _c.selection();
+    final ok = await _confirm(picked);
     if (ok != true || !mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _showProgress = true);
-    final r = await _c.commit();
+    final r = await _c.commit(picked);
     if (mounted) setState(() => _showProgress = false);
     _afterCommit(messenger, r);
   }
@@ -255,10 +258,10 @@ class _SimilarScreenState extends State<SimilarScreen>
     if (r.needsReload && mounted) unawaited(_c.reload());
   }
 
-  Future<bool?> _confirm() {
-    final n = _c.selectedCount;
-    final kinds = _c.selectedKinds;
-    final variants = _c.selectedVariants;
+  Future<bool?> _confirm(SimilarSelection picked) {
+    final n = picked.count;
+    final kinds = picked.kinds;
+    final variants = picked.variants;
     final identical = kinds['identical'] ?? 0;
     final same = kinds['same'] ?? 0;
     final mirror = kinds['mirror'] ?? 0;
@@ -325,8 +328,9 @@ class _SimilarScreenState extends State<SimilarScreen>
 
   Future<void> _sheet(SimilarGroupView g, SimilarMember m, int index) async {
     final keeper = g.isKeeper(m);
-    // まとめて移している間は組の形が変わっていく。オリジナルの付け替えや1件の移動は終わってから
-    final busy = _c.committing;
+    // まとめて移している間は組の形が変わっていく。オリジナルの付け替えや1件の移動は終わってから。
+    // オリジナルを付け替えている途中の組も同じ（付け替える先を消すと、付け替えが空振りする）
+    final busy = _c.committing || g.relabeling;
     final canKeep = !_readOnly && !busy && !keeper && g.canSelect(m);
     final canTrash = !_readOnly && !busy && g.canSelect(m);
     final action = await showModalBottomSheet<String>(
@@ -742,7 +746,9 @@ class _SimilarScreenState extends State<SimilarScreen>
           child: SizedBox(
             width: double.infinity,
             child: FilledButton(
-              onPressed: n == 0 || _c.committing
+              // 「すべての重複」が残りを読んでいる間は押せない。読み終えると選択が増え、確かめで
+              // 見せた件数より多くを送ってしまう
+              onPressed: n == 0 || _c.committing || _c.loadingAll
                   ? null
                   : () => unawaited(_commitSelected()),
               child: Text('ゴミ箱に移動（${formatCount(n)}件 · ${formatBytes(bytes)}）'),
@@ -830,7 +836,7 @@ class _GroupCard extends StatelessWidget {
                     tristate: true,
                     value: c.groupState(g),
                     semanticLabel: 'この組をまとめて選ぶ',
-                    onChanged: c.committing
+                    onChanged: c.committing || g.relabeling
                         ? null
                         : (_) => c.setGroupSelected(g, c.groupState(g) != true),
                   )
@@ -868,7 +874,7 @@ class _GroupCard extends StatelessWidget {
                             now: now,
                             onTap: () => onOpen(i),
                             onLongPress: () => onMenu(members[i], i),
-                            onToggle: c.committing
+                            onToggle: c.committing || g.relabeling
                                 ? null
                                 : (on) => c.toggle(g, members[i], on),
                           ),

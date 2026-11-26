@@ -57,9 +57,37 @@ export function foldGhostsIntoOrder(album: GlobalAlbum) {
 // からアルバムを更新するので、元の key を見ないと、その間に戻している途中の物が落ちてしまう。
 // 控えの一覧と head の結果はリクエスト内で使い回し、mutateAlbums がやり直す時だけ捨てる
 // （並行した trash が書いた控えを見落として落とさないため）。
+//
+// ゴミ箱の実体は 1 件ずつ head せず、送った時刻の階（.trash/<時刻>/）ごとに 1 回 list して確かめる。
+// まとめて消す口は 40 件を同じ時刻で送るので、アルバムに数百件の跡が溜まっても数回の list で済む。
+// 1 件ずつ head すると、跡 1 件ごとに 2 回の外部呼び出しが毎回の書き込みで掛かり、同じアルバムから
+// 240 件ほど消した所で 1 リクエストの上限（1000 回）を超えていた。元の key の head は、ゴミ箱に
+// 実体が無い物（purge 済みか戻している途中）だけに行う。purge 済みならその書き込みで跡から外れるので、
+// 同じ物に何度も払わない。
 export function makeProbe(env: Env) {
   let lists = new Map<string, Promise<Map<string, string[]>>>();
   let heads = new Map<string, Promise<boolean>>();
+  let floors = new Map<string, Promise<Set<string>>>();
+  const trashFloor = (lib: string, bucket: R2Bucket, trashKey: string) => {
+    const at = trashKey.indexOf("/", TRASH_PREFIX.length);
+    const prefix = at < 0 ? trashKey : trashKey.slice(0, at + 1);
+    const id = `${lib}\n${prefix}`;
+    let p = floors.get(id);
+    if (!p) {
+      p = (async () => {
+        const out = new Set<string>();
+        let cursor: string | undefined;
+        do {
+          const listed = await bucket.list({ prefix, cursor });
+          for (const o of listed.objects) out.add(o.key);
+          cursor = listed.truncated ? listed.cursor : undefined;
+        } while (cursor);
+        return out;
+      })();
+      floors.set(id, p);
+    }
+    return p;
+  };
   const listSidecars = (lib: string) => {
     let p = lists.get(lib);
     if (!p) {
@@ -96,6 +124,7 @@ export function makeProbe(env: Env) {
     reset() {
       lists = new Map();
       heads = new Map();
+      floors = new Map();
     },
     async live(candidates: Set<string>): Promise<Set<string>> {
       const live = new Set<string>();
@@ -105,11 +134,10 @@ export function makeProbe(env: Env) {
         const t = bucketFor(env, lib);
         const trashKeys = t ? (await listSidecars(lib)).get(id) : undefined;
         if (!t || !trashKeys) continue;
-        const alive = await Promise.all([
-          head(lib, t.bucket, original),
-          ...trashKeys.map((k) => head(lib, t.bucket, k)),
-        ]);
-        if (alive.some(Boolean)) live.add(id);
+        const inTrash = await Promise.all(
+          trashKeys.map(async (k) => (await trashFloor(lib, t.bucket, k)).has(k)),
+        );
+        if (inTrash.some(Boolean) || (await head(lib, t.bucket, original))) live.add(id);
       }
       return live;
     },

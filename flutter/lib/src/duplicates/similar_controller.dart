@@ -194,6 +194,27 @@ class SimilarCommitResult {
 
 typedef _Target = ({SimilarGroupView group, SimilarMember member});
 
+/// 確かめの画面を開いた時の選択の写し。[SimilarController.commit] に渡すと、送るのはこの中の物だけになる
+/// （開いている間に「すべての重複」の読み込みが終わる・オリジナルを付け直す、で選択が増えても送らない）
+class SimilarSelection {
+  SimilarSelection._(this._targets);
+  final List<_Target> _targets;
+
+  int get count => _targets.length;
+
+  /// 種類ごとの件数（identical / same / mirror / similar）
+  Map<String, int> get kinds {
+    final out = <String, int>{};
+    for (final t in _targets) {
+      out[t.member.match] = (out[t.member.match] ?? 0) + 1;
+    }
+    return out;
+  }
+
+  /// うち「差分かも」
+  int get variants => _targets.where((t) => t.member.variant).length;
+}
+
 /// 重複・似ている写真の画面の状態。従来の SHA-256 の計算を進め切り、見た目の署名を補ってから組を読む
 class SimilarController extends ChangeNotifier {
   SimilarController({
@@ -567,6 +588,8 @@ class SimilarController extends ChangeNotifier {
       if (gen == _generation) loadingMore[tier] = false;
     }
     _notify();
+    // 後のページで読んだ組にも、前に選び直したオリジナルを当てる（読み直しで先頭のページに居なかった組）
+    if (gen == _generation) await _reapplyKeepers();
   }
 
   /// 組の数（ページに依らない全体）。削除して消えた組を差し引く
@@ -601,7 +624,12 @@ class SimilarController extends ChangeNotifier {
 
   /// 1件ずつの選択。オリジナルと、オリジナルと別物と分かった物は選べない
   void toggle(SimilarGroupView g, SimilarMember m, [bool? on]) {
-    if (readOnly || !g.canSelect(m) || g.member(m.key) == null) return;
+    if (readOnly ||
+        g.relabeling ||
+        !g.canSelect(m) ||
+        g.member(m.key) == null) {
+      return;
+    }
     final next = on ?? !selected.containsKey(m.key);
     if (next) {
       selected[m.key] = g.gid;
@@ -625,7 +653,7 @@ class SimilarController extends ChangeNotifier {
 
   /// 組のチェック。入れる時は段の決まりで拾える物だけ、外す時は1件ずつ選んだ物も含めて外す
   void setGroupSelected(SimilarGroupView g, bool on) {
-    if (readOnly) return;
+    if (readOnly || g.relabeling) return;
     if (on) {
       for (final m in g.members) {
         if (g.bulkEligible(m)) selected[m.key] = g.gid;
@@ -700,10 +728,16 @@ class SimilarController extends ChangeNotifier {
       _notify();
       return false;
     }
+    // 読んだ組に、前に選び直したオリジナルを当ててから選ぶ。当てないと、選び直したオリジナルが
+    // Worker の付けた残す物の「ほぼ同じ」のままで、残すと決めた物を選んでしまう
+    await _reapplyKeepers();
+    if (_disposed || run != _selectAllRun || gen != _generation) return false;
     loadingAll = false;
     for (final g in dupGroups) {
+      // 付け直しに失敗した組でも、選び直したオリジナルは選ばない
+      final chosen = keeperOverride[g.gid];
       for (final m in g.members) {
-        if (g.bulkEligible(m)) selected[m.key] = g.gid;
+        if (g.bulkEligible(m) && m.key != chosen) selected[m.key] = g.gid;
       }
     }
     _notify();
@@ -714,7 +748,9 @@ class SimilarController extends ChangeNotifier {
     for (final e in selected.entries) {
       final g = _find(e.value);
       final m = g?.member(e.key);
-      if (g == null || m == null || !g.canSelect(m)) continue;
+      // オリジナルを付け替えている途中の組は送らない。付け替える先を消す物として送ると、
+      // 付け替えの答えが返った時には居ない物をオリジナルにしてしまう
+      if (g == null || m == null || !g.canSelect(m) || g.relabeling) continue;
       yield (group: g, member: m);
     }
   }
@@ -775,7 +811,14 @@ class SimilarController extends ChangeNotifier {
     g.relabeling = false;
     if (twin != null) twin.relabeling = false;
     if (_disposed || gen != _generation) return null;
-    final keeperMember = _relabeled(g.member(key)!, 'keeper');
+    // 聞いている間に、付け替える先が組から外れた（1件だけゴミ箱へ送った・ビューアで消した）。
+    // 居ない物をオリジナルにはしない
+    final now = g.member(key);
+    if (now == null) {
+      _notify();
+      return 'この項目はオリジナルにできません';
+    }
+    final keeperMember = _relabeled(now, 'keeper');
     _applyKeeper(g, key, labels, keeperMember);
     if (twin != null && twinLabels != null) {
       _applyKeeper(twin, key, twinLabels, keeperMember);
@@ -865,12 +908,19 @@ class SimilarController extends ChangeNotifier {
     oh: m.oh,
   );
 
+  /// 選び直したオリジナルを、読み込んだ組に当て直す。読み直した後・続きのページを読んだ後に呼ぶ。
+  /// まだ読んでいないページの組の選び直しは捨てない（後で読んだ時に当てる）。捨てるのは、その段を
+  /// 読み切っても組が無い時と、組にその物が居ない時だけ
   Future<void> _reapplyKeepers() async {
     final gen = _generation;
     for (final e in [...keeperOverride.entries]) {
       if (_disposed || gen != _generation) return;
       final g = _find(e.key);
-      if (g == null || g.member(e.value) == null) {
+      if (g == null) {
+        if (cursorOf(e.key.tier) == null) keeperOverride.remove(e.key);
+        continue;
+      }
+      if (g.member(e.value) == null) {
         keeperOverride.remove(e.key);
         continue;
       }
@@ -880,16 +930,28 @@ class SimilarController extends ChangeNotifier {
 
   // ---------------------------------------------------------------- 削除
 
-  /// 選んだ物をまとめてゴミ箱へ送る。一覧からはすぐ外し、移せなかった物は元の場所へ戻す
-  Future<SimilarCommitResult> commit() {
-    final targets = _selectedTargets.toList();
+  /// 今の選択の写し。確かめの画面に件数を出し、同じ物を [commit] に渡す
+  SimilarSelection selection() => SimilarSelection._(_selectedTargets.toList());
+
+  /// 選んだ物をまとめてゴミ箱へ送る。一覧からはすぐ外し、移せなかった物は元の場所へ戻す。
+  /// [only] を渡すと、その写しのうち今も選んでいて送れる物だけを送る（写しより多くは送らない）
+  Future<SimilarCommitResult> commit([SimilarSelection? only]) {
+    final now = _selectedTargets.toList();
+    if (only == null) return _send(now);
+    final still = {for (final t in now) t.member.key: t};
+    final targets = <_Target>[
+      for (final t in only._targets)
+        if (still[t.member.key] case final cur?
+            when identical(cur.group, t.group))
+          cur,
+    ];
     return _send(targets);
   }
 
   /// 長押しの「この1件だけゴミ箱へ」。他の選択には触らない
   Future<SimilarCommitResult> trashOne(SimilarGroupView g, SimilarMember m) {
     final cur = g.member(m.key);
-    if (cur == null || !g.canSelect(cur)) {
+    if (cur == null || !g.canSelect(cur) || g.relabeling) {
       return Future.value(const SimilarCommitResult());
     }
     return _send([(group: g, member: cur)]);

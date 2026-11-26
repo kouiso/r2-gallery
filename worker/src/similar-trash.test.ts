@@ -1212,3 +1212,70 @@ describe("1 件ずつのゴミ箱で元の物が無い", () => {
     expect(await sidecars(lib)).toEqual([]);
   });
 });
+
+describe("同じアルバムから何百件も消しても、1 回の外部呼び出しは増え続けない", () => {
+  const lib = "tn";
+  // Worker が R2 に出す呼び出しを数える（本番では 1 リクエスト 1000 回が上限）
+  const COUNTED = new Set(["get", "put", "head", "delete", "list", "createMultipartUpload"]);
+  let calls = 0;
+  const counted = (b: R2Bucket): R2Bucket =>
+    new Proxy(b, {
+      get(target, prop) {
+        const v = Reflect.get(target, prop) as unknown;
+        if (typeof v !== "function") return v;
+        return (...a: unknown[]) => {
+          if (COUNTED.has(String(prop))) calls++;
+          return (v as (...a: unknown[]) => unknown).apply(target, a);
+        };
+      },
+    });
+  const base = libEnv(lib);
+  const e = {
+    ...base,
+    LIB_TN: counted(base.LIB_TN as R2Bucket),
+    META: counted(base.META),
+  } as Env;
+
+  it("消した物の跡がアルバムに溜まっても、後の回の呼び出しは最初の回とほぼ同じ", async () => {
+    const BATCH = 40;
+    const N = BATCH * 5;
+    const d = (i: number) => `${lib}/d${i}.png`;
+    const k = (i: number) => `${lib}/k${i}.png`;
+    for (let i = 0; i < N; i++) {
+      const body = pngBytes(10, 10, i, 48);
+      await put(d(i), body);
+      await put(k(i), body);
+    }
+    const album = await mkAlbum(
+      e,
+      lib,
+      "tn-1",
+      Array.from({ length: N }, (_, i) => d(i)),
+    );
+    // アプリは中身の確認を終えてから束を出す
+    for (let i = 0; i < 20; i++) {
+      const r = await ok<{ pending: number }>(post(e, `/v1/${lib}/duplicates/scan`, {}));
+      if (r.pending === 0) break;
+    }
+    const perBatch: number[] = [];
+    for (let b = 0; b < N / BATCH; b++) {
+      const items = Array.from({ length: BATCH }, (_, j) => ({
+        key: d(b * BATCH + j),
+        keep: k(b * BATCH + j),
+      }));
+      calls = 0;
+      const results = await trash(e, lib, items);
+      perBatch.push(calls);
+      expect(
+        results.every((r) => r.ok),
+        JSON.stringify(results),
+      ).toBe(true);
+    }
+    expect(await albumKeys(album)).toEqual(Array.from({ length: N }, (_, i) => k(i)));
+    // 跡 1 件ごとに head すると、前の回 1 回につき 80 回ずつ増えていた
+    const growth = perBatch[perBatch.length - 1]! - perBatch[0]!;
+    expect(growth, perBatch.join()).toBeLessThanOrEqual(perBatch.length * 2);
+    // env.ts の上限 40 件の根拠（1 件あたり約 12 回）に収まる
+    expect(Math.max(...perBatch), perBatch.join()).toBeLessThanOrEqual(BATCH * 13);
+  }, 120_000);
+});

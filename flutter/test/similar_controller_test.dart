@@ -275,6 +275,21 @@ class _Api extends ApiClient {
   }
 }
 
+/// 付け直しの答えを [gate] が開くまで返さない
+class _GatedRelabelApi extends _Api {
+  final Completer<void> gate = Completer<void>();
+
+  @override
+  Future<Map<String, SimilarLabel>> similarRelabel(
+    String libId,
+    String keep,
+    List<String> keys,
+  ) async {
+    await gate.future;
+    return super.similarRelabel(libId, keep, keys);
+  }
+}
+
 class _Source implements SignatureSource {
   Duration delay = Duration.zero;
   int calls = 0;
@@ -714,6 +729,164 @@ void main() {
       await c.reload();
       expect(c.dupGroups.single.keeper, 'a');
       expect(api.relabelCalls, hasLength(2));
+    });
+
+    test('先頭のページに無い組の選び直しも、読み直して続きを読んだ時に当て直し、すべての重複で選ばない', () async {
+      final api = _Api()
+        ..pages = {
+          'dup': [
+            [
+              _g('dup', [_m('p', 'keeper'), _m('q', 'identical')]),
+            ],
+            [
+              _g('dup', [_m('k', 'keeper'), _m('a', 'same'), _m('b', 'same')]),
+            ],
+          ],
+          'similar': [const []],
+        }
+        ..labels = {
+          'k': const SimilarLabel(match: 'same'),
+          'b': const SimilarLabel(match: 'same'),
+        };
+      final c = _ctl(api);
+      await c.start();
+      await c.loadMore('dup');
+      final g2 = c.dupGroups.firstWhere((g) => g.id == 'k');
+      expect(await c.setKeeper(g2, 'a'), isNull);
+      // 取り消しの後などで読み直す。2 ページ目の組はまだ読んでいないが、選び直しは捨てない
+      await c.reload();
+      expect(c.keeperOverride[(tier: 'dup', id: 'k')], 'a');
+      await c.loadMore('dup');
+      final again = c.dupGroups.firstWhere((g) => g.id == 'k');
+      expect(again.keeper, 'a');
+      await c.reload();
+      // 続きを読まずに「すべての重複」を押しても、読んだ組に当て直してから選ぶ
+      expect(await c.selectAllDup(true), isTrue);
+      expect(c.dupGroups.firstWhere((g) => g.id == 'k').keeper, 'a');
+      expect(c.isSelected('a'), isFalse);
+      expect(c.selected.keys.toSet(), {'q', 'k', 'b'});
+    });
+
+    test('段を読み切っても組が無ければ、選び直しを捨てる', () async {
+      final api = _Api()
+        ..pages = {
+          'dup': [
+            [
+              _g('dup', [_m('k', 'keeper'), _m('a', 'identical')]),
+            ],
+          ],
+          'similar': [const []],
+        }
+        ..labels = {'k': const SimilarLabel(match: 'identical')};
+      final c = _ctl(api);
+      await c.start();
+      await c.setKeeper(c.dupGroups.single, 'a');
+      api.pages = {
+        'dup': [const []],
+        'similar': [const []],
+      };
+      await c.reload();
+      expect(c.keeperOverride, isEmpty);
+    });
+
+    test('付け直しの途中で付け替える先が組から外れても落ちず、居ない物をオリジナルにしない', () async {
+      final api = _GatedRelabelApi()
+        ..pages = {
+          'dup': [
+            [
+              _g('dup', [_m('k', 'keeper'), _m('a', 'same'), _m('b', 'same')]),
+            ],
+          ],
+          'similar': [const []],
+        }
+        ..labels = {
+          'k': const SimilarLabel(match: 'same'),
+          'b': const SimilarLabel(match: 'same'),
+        };
+      final c = _ctl(api);
+      await c.start();
+      final g = c.dupGroups.single;
+      c.toggle(g, g.member('b')!);
+      final keeping = c.setKeeper(g, 'a');
+      expect(g.relabeling, isTrue);
+      // 付け直しの間は、その組の物を1件だけ送る・選ぶ・まとめて送ることもしない
+      final one = await c.trashOne(g, g.member('a')!);
+      expect(one.trashed, 0);
+      c.toggle(g, g.member('a')!);
+      expect(c.isSelected('a'), isFalse);
+      expect(c.selectedCount, 0);
+      expect(api.trashCalls, isEmpty);
+      // ビューアなど別の口で消えた
+      g.members.removeWhere((m) => m.key == 'a');
+      api.gate.complete();
+      expect(await keeping, isNotNull);
+      expect(g.keeper, 'k');
+      expect(g.relabeling, isFalse);
+      expect(c.keeperOverride, isEmpty);
+      expect(c.selectedCount, 1);
+    });
+  });
+
+  group('確かめの後に送る物', () {
+    test('確かめを開いた時の選択だけを送り、開いている間に増えた分は送らない', () async {
+      final api = _Api()
+        ..pages = {
+          'dup': [
+            [
+              _g('dup', [_m('k0', 'keeper'), _m('a0', 'identical')]),
+            ],
+            [
+              for (var g = 1; g <= 30; g++)
+                _g('dup', [_m('k$g', 'keeper'), _m('a$g', 'identical')]),
+            ],
+          ],
+          'similar': [const []],
+        };
+      final c = _ctl(api);
+      await c.start();
+      c.toggle(c.dupGroups.single, c.dupGroups.single.member('a0')!);
+      final hold = Completer<void>();
+      api.holdNextCursor = hold;
+      final all = c.selectAllDup(true);
+      await Future<void>.delayed(Duration.zero);
+      expect(c.loadingAll, isTrue);
+      final picked = c.selection();
+      expect(picked.count, 1);
+      expect(picked.kinds, {'identical': 1});
+      hold.complete();
+      await all;
+      expect(c.selectedCount, 31);
+      await c.commit(picked);
+      expect(api.trashCalls.expand((ch) => ch).toList(), [
+        (key: 'a0', keep: 'k0'),
+      ]);
+      // 送らなかった分は選んだまま残る
+      expect(c.selectedCount, 30);
+    });
+
+    test('確かめの間に選択から外れた物は、写しにあっても送らない', () async {
+      final api = _Api()
+        ..pages = {
+          'dup': [
+            [
+              _g('dup', [
+                _m('k', 'keeper'),
+                _m('a', 'identical'),
+                _m('b', 'identical'),
+              ]),
+            ],
+          ],
+          'similar': [const []],
+        };
+      final c = _ctl(api);
+      await c.start();
+      final g = c.dupGroups.single;
+      c.setGroupSelected(g, true);
+      final picked = c.selection();
+      expect(picked.count, 2);
+      c.toggle(g, g.member('b')!, false);
+      await c.commit(picked);
+      expect(api.trashCalls.single, [(key: 'a', keep: 'k')]);
     });
   });
 

@@ -413,6 +413,32 @@ void main() {
     await _leave(tester);
   });
 
+  testWidgets('「すべての重複」が残りを読んでいる間は、選んだ物があっても下のボタンを押せない', (tester) async {
+    final gate = Completer<void>();
+    final api = _Api()..pageGate = gate;
+    await _show(tester, _app(api));
+    await tester.tap(find.byKey(const ValueKey('select:b/flip.jpg')));
+    await tester.pump();
+    expect(find.text('ゴミ箱に移動（1件 · 1.0 MB）'), findsOneWidget);
+    await tester.tap(find.text('すべての重複'));
+    await _pumps(tester, 3);
+    expect(find.text('全件を読み込んでいます…'), findsOneWidget);
+    // 押せると、確かめの画面を出している間に読み終えて、確かめた件数より多く送ってしまう
+    expect(
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      isNull,
+    );
+    gate.complete();
+    await _pumps(tester);
+    expect(find.text('ゴミ箱に移動（4件 · 5.0 MB）'), findsOneWidget);
+    expect(
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      isNotNull,
+    );
+    expect(api.trashCalls, isEmpty);
+    await _leave(tester);
+  });
+
   testWidgets('確かめの文に種類ごとの件数と30日のゴミ箱を出し、送る間は進み具合、後で元に戻せる', (tester) async {
     final api = _Api()
       ..pages = _onePage()

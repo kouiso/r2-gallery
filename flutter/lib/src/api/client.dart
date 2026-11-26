@@ -611,6 +611,17 @@ class ApiClient {
     }
   }
 
+  /// 署名 URL の物の etag だけを HEAD で聞く（本文は取らない）。etag が無ければ null。
+  /// 置き場に残ったサムネが今の物と同じ版かを、署名を作る前に確かめるのに使う
+  Future<String?> headEtag(String url) async {
+    try {
+      final res = await _dio.head<void>(url);
+      return res.headers.value('etag');
+    } catch (e) {
+      throw _toApiError(e);
+    }
+  }
+
   /// 任意メソッドで JSON を送る。アルバム編集など機能ごとのファイルから、認証とエラー変換を揃えて使うため。
   Future<dynamic> sendJson(String method, String path,
       {Object? body, Map<String, dynamic>? query}) async {

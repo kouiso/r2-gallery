@@ -68,16 +68,38 @@ abstract interface class SignatureSource {
   Future<SignatureOutcome> sign(SimilarTodoItem item);
 }
 
-typedef ThumbCacheReader = Future<Uint8List?> Function(String cacheKey);
+/// 置き場にあったサムネと、それを取った時の応答の etag（サムネの版）。etag が無ければ版が分からない
+typedef CachedThumb = ({Uint8List bytes, String? etag});
+typedef ThumbCacheReader = Future<CachedThumb?> Function(String cacheKey);
+
+/// 今 Worker が出すサムネの etag を聞く（本文は取らない）。分からなければ null
+typedef ThumbVersionReader = Future<String?> Function(String url);
 typedef ThumbMaker = Future<Uint8List?> Function(Uint8List original);
 typedef SignatureEncoder =
     Future<Uint8List?> Function(Uint8List bytes, {bool fromOriginal});
 
 /// 一覧と同じ置き場から読む。一覧で一度見たサムネは取り直さずに済み、初回の通信量（最大 2 GB 級）が減る
-Future<Uint8List?> readStoredThumbCache(String cacheKey) async {
+Future<CachedThumb?> readStoredThumbCache(String cacheKey) async {
   final info = await thumbCache.getFileFromCache(cacheKey);
   if (info == null) return null;
-  return info.file.readAsBytes();
+  final meta = await thumbCache.store.retrieveCacheData(cacheKey);
+  return (bytes: await info.file.readAsBytes(), etag: meta?.eTag);
+}
+
+/// 弱い印（W/）と引用符を外して比べる。どちらかが無ければ同じとは言わない
+bool sameThumbVersion(String? a, String? b) {
+  String? norm(String? v) {
+    if (v == null) return null;
+    var s = v.trim();
+    if (s.startsWith('W/')) s = s.substring(2);
+    if (s.length >= 2 && s.startsWith('"') && s.endsWith('"')) {
+      s = s.substring(1, s.length - 1);
+    }
+    return s.isEmpty ? null : s;
+  }
+
+  final x = norm(a);
+  return x != null && x == norm(b);
 }
 
 /// 本物の取得経路。どの端末も「保存済みの 512px サムネ」のバイト列から署名を作るので、
@@ -89,10 +111,12 @@ class ApiSignatureSource implements SignatureSource {
     required this.writable,
     bool? isWeb,
     ThumbCacheReader? readCache,
+    ThumbVersionReader? thumbVersion,
     ThumbMaker? makeThumb,
     SignatureEncoder? encode,
   }) : isWeb = isWeb ?? kIsWeb,
        _readCache = readCache ?? readStoredThumbCache,
+       _thumbVersion = thumbVersion ?? api.headEtag,
        _makeThumb = makeThumb ?? makeImageThumb,
        _encode = encode ?? vs1FromEncoded;
 
@@ -103,6 +127,7 @@ class ApiSignatureSource implements SignatureSource {
   final bool writable;
   final bool isWeb;
   final ThumbCacheReader _readCache;
+  final ThumbVersionReader _thumbVersion;
   final ThumbMaker _makeThumb;
   final SignatureEncoder _encode;
 
@@ -119,7 +144,7 @@ class ApiSignatureSource implements SignatureSource {
     Uint8List? bytes;
     if (!isWeb) {
       try {
-        bytes = await _readCache(thumbCacheKey(url));
+        bytes = await _cachedIfCurrent(url);
       } on Object catch (e) {
         // 置き場が壊れていても通信で取れば済む
         debugPrint('signature cache read failed: ${t.key}: $e');
@@ -137,6 +162,26 @@ class ApiSignatureSource implements SignatureSource {
     final sig = await _encode(bytes);
     if (sig == null) return SignatureOutcome.failed(t, 't', 'decode');
     return SignatureOutcome.signed(t, 't', sig);
+  }
+
+  /// 置き場のサムネを、今 Worker が出すサムネと同じ版の時だけ返す。
+  /// 置き場はパス（ライブラリと key）だけで引くので、key を使い回すと（ゴミ箱へ送った後に同じ名前で
+  /// 上げ直す・名前を変えて重ねる）、前に同じ key に居た別の絵のサムネが残っている。それで作った署名を
+  /// 新しい etag で送ると、Worker は別の絵を「ほぼ同じ」と判定し、まとめてゴミ箱へ送ってしまう
+  Future<Uint8List?> _cachedIfCurrent(String url) async {
+    final cached = await _readCache(thumbCacheKey(url));
+    if (cached == null || cached.bytes.isEmpty || cached.etag == null) {
+      return null;
+    }
+    String? current;
+    try {
+      current = await _thumbVersion(url);
+    } on Object catch (e) {
+      // 版を確かめられない時は置き場を使わず取り直す
+      debugPrint('signature thumb version check failed: $url: $e');
+      return null;
+    }
+    return sameThumbVersion(cached.etag, current) ? cached.bytes : null;
   }
 
   Future<SignatureOutcome> _fromOriginal(SimilarTodoItem t) async {

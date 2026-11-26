@@ -162,9 +162,11 @@ void main() {
       _Api api, {
       bool isWeb = false,
       bool writable = true,
-      Map<String, Uint8List> cache = const {},
+      Map<String, CachedThumb> cache = const {},
       List<String>? cacheReads,
       Uint8List? thumb,
+      String? Function(String url)? version,
+      List<String>? versionChecks,
     }) => ApiSignatureSource(
       api: api,
       lib: 'a',
@@ -173,6 +175,10 @@ void main() {
       readCache: (k) async {
         cacheReads?.add(k);
         return cache[k];
+      },
+      thumbVersion: (url) async {
+        versionChecks?.add(url);
+        return version?.call(url);
       },
       makeThumb: (_) async => thumb,
       encode: (b, {bool fromOriginal = false}) async {
@@ -183,20 +189,28 @@ void main() {
 
     setUp(encodedFromOriginal.clear);
 
-    test('保存済みサムネは置き場を先に見て、あれば通信しない', () async {
+    test('保存済みサムネは置き場を先に見て、今のサムネと同じ版なら本文を取り直さない', () async {
       final api = _Api();
       final reads = <String>[];
+      final checks = <String>[];
       final t = _todo('x/1.jpg');
       final src = sourceOf(
         api,
         cache: {
-          'https://w.test/t/a/x/1.jpg': Uint8List.fromList([9]),
+          'https://w.test/t/a/x/1.jpg': (
+            bytes: Uint8List.fromList([9]),
+            etag: '"thumb-1"',
+          ),
         },
         cacheReads: reads,
+        version: (_) => '"thumb-1"',
+        versionChecks: checks,
       );
       final out = await src.sign(t);
       // 署名 URL のクエリは毎回変わるので、一覧と同じくパスだけの鍵で引く
       expect(reads, ['https://w.test/t/a/x/1.jpg']);
+      // 版は署名 URL のまま HEAD で聞く（本文は取らない）
+      expect(checks, ['https://w.test/t/a/x/1.jpg?e=1&s=x']);
       expect(api.fetched, isEmpty);
       expect(out.kind, SignatureOutcomeKind.signed);
       expect(out.upload!.toJson(), {
@@ -205,6 +219,68 @@ void main() {
         'src': 't',
         'sig': encodeVs1(_sig),
       });
+    });
+
+    test('同じ key に前に居た別の絵のサムネが置き場に残っていても、それで署名を作らない', () async {
+      // cam/1.jpg を A のままゴミ箱へ送り、後で別の写真 B を同じ名前で上げた。置き場はパスだけで
+      // 引くので A のサムネが残る。それで B の etag の署名を作ると、B が A の写しと「ほぼ同じ」になる
+      final oldThumb = Uint8List.fromList([1, 1, 1]);
+      final newThumb = Uint8List.fromList([2, 2, 2]);
+      final api = _Api()..fetchBody = newThumb;
+      final encoded = <List<int>>[];
+      for (final cached in <CachedThumb>[
+        (bytes: oldThumb, etag: '"thumb-A"'),
+        // 版の分からない古い置き場も信じない
+        (bytes: oldThumb, etag: null),
+      ]) {
+        api.fetched.clear();
+        final src = ApiSignatureSource(
+          api: api,
+          lib: 'a',
+          writable: true,
+          isWeb: false,
+          readCache: (_) async => cached,
+          thumbVersion: (_) async => '"thumb-B"',
+          encode: (b, {bool fromOriginal = false}) async {
+            encoded.add(b);
+            return _sig;
+          },
+        );
+        final out = await src.sign(_todo('cam/1.jpg'));
+        expect(api.fetched, ['https://w.test/t/a/cam/1.jpg?e=1&s=x']);
+        expect(out.upload!.etag, 'etag-cam/1.jpg');
+        expect(encoded.last, newThumb);
+      }
+      expect(encoded.where((b) => b == oldThumb), isEmpty);
+    });
+
+    test('サムネの版を聞けない時は置き場を使わず取り直す', () async {
+      final api = _Api()..fetchBody = Uint8List.fromList([5]);
+      final encoded = <List<int>>[];
+      final out = await ApiSignatureSource(
+        api: api,
+        lib: 'a',
+        writable: true,
+        isWeb: false,
+        readCache: (_) async =>
+            (bytes: Uint8List.fromList([9]), etag: '"thumb-1"'),
+        thumbVersion: (_) async => throw const ApiError(0, 'offline'),
+        encode: (b, {bool fromOriginal = false}) async {
+          encoded.add(b);
+          return _sig;
+        },
+      ).sign(_todo('x/1.jpg'));
+      expect(api.fetched, ['https://w.test/t/a/x/1.jpg?e=1&s=x']);
+      expect(encoded.single, [5]);
+      expect(out.kind, SignatureOutcomeKind.signed);
+    });
+
+    test('etag の引用符と弱い印は比べる時に外す', () {
+      expect(sameThumbVersion('"a"', 'a'), isTrue);
+      expect(sameThumbVersion('W/"a"', '"a"'), isTrue);
+      expect(sameThumbVersion('"a"', '"b"'), isFalse);
+      expect(sameThumbVersion(null, null), isFalse);
+      expect(sameThumbVersion('""', '""'), isFalse);
     });
 
     test('置き場に無ければサムネを通信で取る（原本は取らない）', () async {

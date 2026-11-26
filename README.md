@@ -225,10 +225,12 @@ Worker は画素を読まない（wasm も、課金のある Cloudflare Images �
 
 - ゴミ箱の画面から 1 件戻す時（`/ops/restore`）は従来どおり。「同じファイル」として消した物は、オリジナルが残っている
   アルバムへは戻らない。それ以外は元の位置へ戻り、オリジナルも残る（その分アルバムの枚数が増える）。
-- 予算: 署名の POST は 200 件で原本の先頭読み約 200 回と置き場の読み書き 1〜2 回、まとめてゴミ箱は 1 件約 12 回
-  （40 件で約 500 回）。どちらも 1 リクエストの外部呼び出しの上限 1000 回に収まるよう、件数の上限は設定で上げられない。
-- 設定（任意。`worker/wrangler.example.toml` に注記あり）: `SIMILAR_MAX_NODES`（既定 150000。超えると
-  `GET /similar` は 413 `too_many_for_similar`）、`SIMILAR_SIG_BATCH`（既定・最大 200）、`SIMILAR_TRASH_BATCH`（既定・最大 40）。
+- 予算: 署名の POST は 200 件で原本の先頭読み約 200 回と、触れた置き場ごとの読み書き 2 回（置き場は 2 つずつ書き直す）。
+  まとめてゴミ箱は 1 件約 12 回（40 件で約 500 回。同じアルバムから何百件消しても、前の回の跡 1 回ぶんにつき list 1 回しか
+  増えない）。どちらも 1 リクエストの外部呼び出しの上限 1000 回に収まるよう、件数の上限は設定で上げられない。
+- 設定（任意。`worker/wrangler.example.toml` に注記あり）: `SIMILAR_MAX_NODES`（既定 50000。超えると
+  `GET /similar` は 413 `too_many_for_similar`。束ねる途中の記憶が 5 万件で約 75 MB、10 万件で isolate の上限 128 MB を
+  超えるため）、`SIMILAR_SIG_BATCH`（既定・最大 200）、`SIMILAR_TRASH_BATCH`（既定・最大 40）。
   下げた値は `/similar/status` の `sigBatch`・`trashBatch` でアプリに伝わり、アプリはその件数で分けて送る
   （その値を返さない Worker には、アプリの上限 200 / 40 で送る）。
 - 見た目の照合に対応していない古い Worker（`/similar/status` が 404）と、`GET /similar` が 413 `too_many_for_similar` の

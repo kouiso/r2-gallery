@@ -910,3 +910,56 @@ describe("消した後もカーソルがずれない", () => {
     expect(last.cursor).toBeNull();
   });
 });
+
+describe("署名の置き場は少しずつ書き直す", () => {
+  const lib = "sw";
+  // 置き場を読んでから書き終えるまでの間を数える（その間、読み解いた置き場の中身を持っている）
+  const open = new Set<string>();
+  let most = 0;
+  const shardPrefix = `.system/similar/${lib}/`;
+  const meta = new Proxy(env.META, {
+    get(target, prop) {
+      const v = Reflect.get(target, prop) as unknown;
+      if (typeof v !== "function") return v;
+      if (prop === "get") {
+        return async (k: string, ...rest: unknown[]) => {
+          if (k.startsWith(shardPrefix)) {
+            open.add(k);
+            most = Math.max(most, open.size);
+          }
+          return (v as (...a: unknown[]) => unknown).call(target, k, ...rest);
+        };
+      }
+      if (prop === "put") {
+        return async (k: string, ...rest: unknown[]) => {
+          try {
+            return await (v as (...a: unknown[]) => Promise<unknown>).call(target, k, ...rest);
+          } finally {
+            open.delete(k);
+          }
+        };
+      }
+      return (v as (...a: unknown[]) => unknown).bind(target);
+    },
+  });
+  const e = { ...libEnv(lib), META: meta } as Env;
+
+  it("200 件がほぼ全部の置き場に散っても、同時に持つ置き場は 2 つまで", async () => {
+    const keys = Array.from({ length: 200 }, (_, i) => `${lib}/p${i}.png`);
+    for (const [i, k] of keys.entries()) await put(k, pngBytes(64, 48, i));
+    const touched = new Set(keys.map(shardOf));
+    expect(touched.size).toBeGreaterThan(24);
+    open.clear();
+    most = 0;
+    const r = await sign(
+      e,
+      lib,
+      keys.map((k, i) => [k, sigOf(look(i))]),
+    );
+    expect(r).toEqual({ stored: 200, stale: 0, failRecorded: 0 });
+    // 全部を同時に書くと、触れた置き場の数（ほぼ 32）だけ同時に持っていた
+    expect(most).toBeGreaterThan(0);
+    expect(most).toBeLessThanOrEqual(2);
+    for (const k of keys) expect((await shardItems(lib, k))[k]).toBeDefined();
+  });
+});

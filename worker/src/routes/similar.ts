@@ -61,6 +61,8 @@ const GROUP_ITEMS_MAX = 60;
 const RELABEL_MAX = 60;
 // 原本の先頭を読む本数。同時に開ける接続には上限がある
 const PROBE_PARALLEL = 6;
+// 署名の置き場を同時に書き直す数（読み解いた置き場の JSON を同時に幾つ持つか）
+const SHARD_WRITE_PARALLEL = 2;
 
 /** 同時に limit 本まで走らせる（Promise.all に全部投げると接続の上限で詰まる） */
 async function forEachLimit<T>(
@@ -324,33 +326,34 @@ export async function handleSimilarSignatures(
 
   let stored = 0;
   let failRecorded = 0;
-  await Promise.all(
-    [...byShard].map(async ([n, list]) => {
-      // やり直しで何度呼ばれても同じ結果になるよう、数えるのは最後に書けた回の分だけ
-      let s = 0;
-      let f = 0;
-      await mutateShard(
-        env,
-        lib,
-        n,
-        (items) => {
-          s = 0;
-          f = 0;
-          for (const [key, item] of list) {
-            const have = items[key];
-            // 同じ中身に有効な署名があるなら、別の端末の「読めなかった」で潰さない
-            if (item[1] === null && have && have[0] === item[0] && have[1] !== null) continue;
-            items[key] = item;
-            if (item[1] === null) f++;
-            else s++;
-          }
-        },
-        catalog,
-      );
-      stored += s;
-      failRecorded += f;
-    }),
-  );
+  // 置き場は少しずつ書き直す。200 件はほぼ 32 の置き場全部に散るので、全部を同時に書くと
+  // 署名の置き場まるごとの JSON（5 万件で 20 MB 余り）を一度に読み解いて持ち、大きなライブラリで
+  // isolate のメモリ（128 MB）を超える。1 つ書き終えれば読み解いた中身は手放す
+  await forEachLimit([...byShard], SHARD_WRITE_PARALLEL, async ([n, list]) => {
+    // やり直しで何度呼ばれても同じ結果になるよう、数えるのは最後に書けた回の分だけ
+    let s = 0;
+    let f = 0;
+    await mutateShard(
+      env,
+      lib,
+      n,
+      (items) => {
+        s = 0;
+        f = 0;
+        for (const [key, item] of list) {
+          const have = items[key];
+          // 同じ中身に有効な署名があるなら、別の端末の「読めなかった」で潰さない
+          if (item[1] === null && have && have[0] === item[0] && have[1] !== null) continue;
+          items[key] = item;
+          if (item[1] === null) f++;
+          else s++;
+        }
+      },
+      catalog,
+    );
+    stored += s;
+    failRecorded += f;
+  });
   return json({ stored, stale, failRecorded });
 }
 
@@ -386,7 +389,16 @@ export function resetSimilarMemory(): void {
   resetSimilarStoreMemory();
 }
 
-function buildModel(
+/** 有効な署名の在りか（単色も含む）。画像でない・署名が無い・失敗の印なら null */
+function validSigAt(shards: readonly Shard[], row: CatalogRow): { shard: Shard; i: number } | null {
+  if (!IMAGE_EXT.test(row[0])) return null;
+  const shard = shards[shardOf(row[0])]!;
+  const i = validIndex(shard, row);
+  return i >= 0 && !isFailKind(shard.kind[i]!) ? { shard, i } : null;
+}
+
+/** テスト用に外へ出す（記憶の量を Node で測る: tools/similar-model-memory.test.mjs） */
+export function buildModel(
   catalog: Catalog,
   shards: readonly Shard[],
   hashes: HashesFile,
@@ -394,13 +406,24 @@ function buildModel(
   maxNodes: number,
 ): Model {
   const coverage = coverageOf(catalog, shards);
+  const exact = duplicateState(catalog, hashes, maxObjectBytes);
+  const inExact = new Set<string>();
+  for (const g of exact.groups) for (const r of g.rows) inExact.add(r[0]);
+  // 節の数を、節・署名の表を作る前に数える。作ってから断ると、断る前に大きなライブラリで
+  // isolate のメモリを使い切る（節は同じ中身の束 1 つと、束に入らない単色でない署名 1 件ずつ）
+  let nodeCount = exact.groups.length;
+  for (const row of catalog.rows.values()) {
+    if (inExact.has(row[0])) continue;
+    const v = validSigAt(shards, row);
+    if (v && !isFlatAt(v.shard, v.i)) nodeCount++;
+  }
+  if (nodeCount > maxNodes) throw new HttpError(413, "too_many_for_similar");
+
   // 有効な署名の在りかを 1 回で集める（単色も含む: 同じ中身の束はどれかの署名を使う）
   const valid = new Map<string, { row: CatalogRow; shard: Shard; i: number }>();
   for (const row of catalog.rows.values()) {
-    if (!IMAGE_EXT.test(row[0])) continue;
-    const shard = shards[shardOf(row[0])]!;
-    const i = validIndex(shard, row);
-    if (i >= 0 && !isFailKind(shard.kind[i]!)) valid.set(row[0], { row, shard, i });
+    const v = validSigAt(shards, row);
+    if (v) valid.set(row[0], { row, ...v });
   }
   const memberOf = (row: CatalogRow): MemberMeta => {
     const v = valid.get(row[0]);
@@ -414,16 +437,13 @@ function buildModel(
     };
   };
 
-  const exact = duplicateState(catalog, hashes, maxObjectBytes);
   const nodes: GroupNodeInput[] = [];
   const tableRows: { shard: Shard; i: number }[] = [];
-  const inExact = new Set<string>();
   for (const g of exact.groups) {
     // 同じ中身の束は 1 つの節。動画もここに入り、見た目の辺は持たない。
     // 署名は古い順で最初の単色でない物（ゴミ箱・付け直しの exactSide と同じ決まり）
     let sig = -1;
     for (const r of g.rows) {
-      inExact.add(r[0]);
       const v = valid.get(r[0]);
       if (sig < 0 && v && !isFlatAt(v.shard, v.i)) sig = tableRows.push(v) - 1;
     }
@@ -441,7 +461,6 @@ function buildModel(
     if (inExact.has(key) || isFlatAt(v.shard, v.i)) continue;
     nodes.push({ members: [memberOf(v.row)], sig: tableRows.push(v) - 1 });
   }
-  if (nodes.length > maxNodes) throw new HttpError(413, "too_many_for_similar");
 
   const table = newSigTable(tableRows.length);
   tableRows.forEach((v, n) => setSig(table, n, sigAtRow(v.shard, v.i)!));

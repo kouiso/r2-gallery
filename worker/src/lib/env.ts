@@ -32,8 +32,10 @@ export interface Env {
   /** これより大きい物は重複の確認で中身を計算しない（既定 1 GiB）。 */
   DUP_MAX_OBJECT_BYTES?: string;
   /**
-   * 似ている写真を束ねる時の節の数の上限（既定 150000）。超えると GET /similar は 413 too_many_for_similar。
-   * 署名を全部読んで束ねるので、これより大きいライブラリは Worker のメモリと CPU 時間に収まらない。
+   * 似ている写真を束ねる時の節の数の上限（既定 50000）。超えると GET /similar は 413 too_many_for_similar。
+   * 署名を全部読んで束ねるので、これより大きいライブラリは Worker のメモリ（128 MB）と CPU 時間に収まらない。
+   * 測った値（一覧・32 の置き場・束ねる途中の物の合計）: 5 万件で約 75 MB、10 万件で約 145 MB
+   * （tools/similar-model-memory.test.mjs が既定の上限で確かめる）。上げる時は先に測ること。
    */
   SIMILAR_MAX_NODES?: string;
   /** POST /similar/signatures の 1 回の件数の上限（既定 200、最大 200。原本の先頭を 1 件ずつ読むので外部呼び出しの上限に効く）。 */
@@ -96,7 +98,7 @@ export function similarLimits(env: Env): SimilarLimits {
     return raw !== undefined && raw !== "" && Number.isInteger(n) && n > 0 ? n : fallback;
   };
   return {
-    maxNodes: num(env.SIMILAR_MAX_NODES, 150_000),
+    maxNodes: num(env.SIMILAR_MAX_NODES, 50_000),
     sigBatch: Math.min(200, num(env.SIMILAR_SIG_BATCH, 200)),
     trashBatch: Math.min(40, num(env.SIMILAR_TRASH_BATCH, 40)),
   };

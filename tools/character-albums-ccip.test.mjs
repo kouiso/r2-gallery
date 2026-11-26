@@ -1,6 +1,7 @@
-import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { homedir } from "node:os";
+import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { describe as suite, expect, it } from "vitest";
 import {
@@ -8,14 +9,26 @@ import {
   ccipInput,
   ccipMerge,
   ccipParams,
+  cmykToRgbPil,
   cropBox,
   cropRgb,
   dbscan,
   decideCrop,
   decideImage,
+  dropAlpha,
+  eligiblePersons,
   evalMetrics,
+  evaluateLoo,
   flattenWhite,
+  gifTransparentColor,
+  itemId,
+  makeRef,
   nms,
+  openSetMetrics,
+  openSetSample,
+  pillowAlphaRule,
+  pngColorType,
+  refId,
   resizePil,
   roundHalfEven,
   sampleStable,
@@ -23,11 +36,13 @@ import {
   scoreImage,
   selectPersons,
   sweep,
+  withThreshold,
   yoloDecode,
 } from "./character-albums-ccip-core.mjs";
 import { applyPlan } from "./character-albums-core.mjs";
 
 const P = ccipParams();
+const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "character-albums");
 
 suite("ccip: 前処理", () => {
   it("同じ大きさへの resize は画素を変えない", () => {
@@ -83,6 +98,70 @@ suite("ccip: 前処理", () => {
     const c = cropRgb(src, 4, { left: 1, top: 2, width: 2, height: 1 });
     expect([...c]).toEqual([...src.subarray((2 * 4 + 1) * 3, (2 * 4 + 3) * 3)]);
   });
+});
+
+suite("ccip: 画像の読み込み（imgutils の load_image と同じ透過・CMYK の扱い）", () => {
+  it("PNG の色の型を IHDR から読む", () => {
+    const png = readFileSync(join(FIXTURES, "decode", "p_palette_trns.png"));
+    expect(pngColorType(png)).toBe(3);
+    expect(pngColorType(readFileSync(join(FIXTURES, "decode", "p_rgb_trns.png")))).toBe(2);
+    expect(pngColorType(readFileSync(join(FIXTURES, "decode", "p_la_real.png")))).toBe(4);
+    expect(pngColorType(Buffer.from("GIF89a"))).toBeNull();
+  });
+
+  it("Pillow の mode ごとに透過の扱いを分ける", () => {
+    const png = (ct) => {
+      const b = Buffer.alloc(32);
+      Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(b);
+      b.write("IHDR", 12, "ascii");
+      b[25] = ct;
+      return b;
+    };
+    const m = (format, hasAlpha, space = "srgb") => ({ format, hasAlpha, space });
+    expect(pillowAlphaRule(png(6), m("png", true))).toBe("white");
+    expect(pillowAlphaRule(png(4), m("png", true))).toBe("white");
+    // パレットと RGB の tRNS は paste の mask にできず、imgutils は透過を捨てて元の色を残す
+    expect(pillowAlphaRule(png(3), m("png", true))).toBe("keep");
+    expect(pillowAlphaRule(png(2), m("png", true))).toBe("keep");
+    expect(pillowAlphaRule(png(0), m("png", true))).toBe("selfMask");
+    expect(pillowAlphaRule(Buffer.from("GIF89a"), m("gif", true))).toBe("gifKey");
+    expect(pillowAlphaRule(Buffer.alloc(4), m("jpeg", false, "cmyk"))).toBe("cmyk");
+    expect(pillowAlphaRule(Buffer.alloc(4), m("webp", true))).toBe("white");
+    expect(pillowAlphaRule(png(3), m("png", false))).toBe("white");
+  });
+
+  it("透過を捨てる時、GIF の透明な画素はパレットの透過色にする", () => {
+    const rgba = Uint8Array.from([1, 2, 3, 0, 4, 5, 6, 255]);
+    expect([...dropAlpha(rgba, 2, 1)]).toEqual([1, 2, 3, 4, 5, 6]);
+    expect([...dropAlpha(rgba, 2, 1, [9, 9, 9])]).toEqual([9, 9, 9, 4, 5, 6]);
+    expect(gifTransparentColor(readFileSync(join(FIXTURES, "decode", "g_trans.gif")))).toHaveLength(
+      3,
+    );
+  });
+
+  it("灰色の tRNS は画像自身の濃淡を不透明度として白へ重ねる", () => {
+    // 灰 100: 255*(155) + 100*100 → 194
+    const rgba = Uint8Array.from([100, 100, 100, 0]);
+    expect([...flattenWhite(rgba, 1, 1, 0)]).toEqual([194, 194, 194]);
+  });
+
+  it("CMYK は Pillow の素朴な式で RGB にする", () => {
+    expect([
+      ...cmykToRgbPil(Uint8Array.from([0, 0, 0, 0, 255, 0, 0, 0, 0, 0, 0, 255]), 3, 1),
+    ]).toEqual([255, 255, 255, 0, 255, 255, 0, 0, 0]);
+  });
+
+  // 期待値は imgutils 0.19.0 の load_image(mode="RGB")（wheel の関数本体をそのまま実行）と Pillow 13 で出した物
+  const expected = JSON.parse(readFileSync(join(FIXTURES, "decode", "expected.json"), "utf8"));
+  for (const name of readdirSync(join(FIXTURES, "decode")).filter((n) => n !== "expected.json")) {
+    it(`decodeRgb は ${name}（Pillow の mode ${expected[name].pillowMode}）で imgutils と同じ画素になる`, async () => {
+      const { decodeRgb } = await import("./character-albums-ccip.mjs");
+      const img = await decodeRgb(readFileSync(join(FIXTURES, "decode", name)));
+      const want = Buffer.from(expected[name].rgb, "base64");
+      expect([img.width, img.height]).toEqual([expected[name].width, expected[name].height]);
+      expect(Buffer.from(img.data).equals(want)).toBe(true);
+    });
+  }
 });
 
 suite("ccip: 人物検出の後処理", () => {
@@ -194,6 +273,41 @@ suite("ccip: 判定", () => {
     expect(P.threshold).toBeCloseTo(0.17847511429108218, 12);
   });
 
+  it("--threshold を下げたら high も閾値以下に決め直し、sweep の同じ閾値と確信度が揃う", () => {
+    const files = {
+      metrics: { threshold: 0.1785 },
+      cluster: { dbscan_2: { eps: 0.1292, min_samples: 2 } },
+    };
+    const p = ccipParams(files, { threshold: 0.1 });
+    expect(p.threshold).toBe(0.1);
+    expect(p.high).toBe(0.1);
+    const scoredLow = [
+      { albumId: "a", albumTitle: "A", score: 0.099, centroid: 0.09 },
+      { albumId: "b", albumTitle: "B", score: 0.3, centroid: 0.3 },
+    ];
+    expect(decideCrop(scoredLow, p).rationale).toMatch(/high の上限 0\.1 以下/);
+    // 閾値を上げた時は eps（0.1292）のまま
+    expect(ccipParams(files, { threshold: 0.2 }).high).toBe(0.1292);
+    // sweep は withThreshold で同じ規則を使う
+    const base = ccipParams(files);
+    expect(withThreshold(base, 0.1, 0.03).high).toBe(p.high);
+    expect(withThreshold(base, 0.2, 0.03).high).toBe(0.1292);
+  });
+
+  it("NaN や範囲外の値は通さない（通すと閾値と margin の歯止めが外れる）", () => {
+    expect(() => ccipParams({}, { threshold: Number("0.18x") })).toThrow(/threshold/);
+    expect(() => ccipParams({}, { margin: Number("abc") })).toThrow(/margin/);
+    expect(() => ccipParams({}, { threshold: 0 })).toThrow(/threshold/);
+    expect(() => ccipParams({}, { threshold: 1.5 })).toThrow(/threshold/);
+    expect(() => ccipParams({}, { margin: -0.01 })).toThrow(/margin/);
+    const far = [
+      { albumId: "a", albumTitle: "A", score: 0.45, centroid: 0.45 },
+      { albumId: "b", albumTitle: "B", score: 0.9, centroid: 0.9 },
+    ];
+    expect(() => decideCrop(far, { ...P, threshold: Number.NaN })).toThrow(RangeError);
+    expect(() => decideCrop(far, { ...P, margin: Number.NaN })).toThrow(RangeError);
+  });
+
   it("近い参照 topK 枚の平均で採点し、差の小さい順に並べる", () => {
     const s = scoreAlbums(
       [
@@ -260,6 +374,23 @@ suite("ccip: 判定", () => {
     });
   });
 
+  it("上限人数で切った人物がいたら、照合した全員が揃っていても要確認", () => {
+    const six = Array.from({ length: 6 }, () => scored(0.1, 0.4));
+    expect(decideImage(six, params, { detected: 6 }).decision).toBe("match");
+    const r = decideImage(six, params, { detected: 8 });
+    expect(r).toMatchObject({ decision: "review", persons: 6, detected: 8 });
+    expect(r.rationale).toMatch(/8 人中 6 人だけ照合/);
+    // 1 人だけ照合した場合も同じ（maxPersons 1 で 2 人写っていた）
+    expect(decideImage([scored(0.1, 0.4)], params, { detected: 2 }).decision).toBe("review");
+    // 枠の数は eligiblePersons（切る前）で数える
+    const dets = Array.from({ length: 8 }, (_, i) => ({
+      box: [i * 10, 0, i * 10 + 9, 50],
+      score: 0.5 + i / 100,
+    }));
+    expect(eligiblePersons(dets, 100, 100, { minPersonFrac: 0.01 })).toHaveLength(8);
+    expect(selectPersons(dets, 100, 100, { minPersonFrac: 0.01, maxPersons: 6 })).toHaveLength(6);
+  });
+
   it("対象自身は参照からも代表からも外して照合する（leave-one-out）", async () => {
     const a = album("a", "A", [0.0, 0.5, 0.6, 0.7]);
     const self = { feat: pos(0.0) };
@@ -280,6 +411,13 @@ suite("ccip: 判定", () => {
     expect(loo[0][0].score).toBeCloseTo(0.5);
     // 代表も自分抜き（0.5,0.6,0.7 の平均に向かう）で作り直す
     expect(loo[0][0].centroid).toBeGreaterThan(0.5);
+  });
+
+  it("参照の id（makeRef）と照合する側の id（itemId）は同じ形になる", () => {
+    const it = { key: "x/a.png" };
+    expect(refId(makeRef(it, "personal", pos(0)))).toBe(itemId(it, "personal"));
+    const other = { key: "x/a.png", lib: "shared" };
+    expect(refId(makeRef(other, "personal", pos(0)))).toBe(itemId(other, "personal"));
   });
 
   it("ccip_merge は向きを平均して長さを元の平均に戻す", () => {
@@ -391,6 +529,37 @@ suite("ccip: plan", () => {
     expect(JSON.stringify(plan)).not.toMatch(/"feat"/);
   });
 
+  it("取れない・読めない画像は failed に残し、どのグループにも入れない", async () => {
+    const plan = await buildCcipPlan({
+      lib: "personal",
+      planId: "run3",
+      params,
+      differences: fakeDiff,
+      assigned: new Set(),
+      targets: [
+        { key: "broken.png", result: { decision: "error", rationale: "画像を読めない（x）" } },
+        { key: "bg.png", result: result("nochar"), persons: [] },
+      ],
+    });
+    expect(plan.failed).toEqual([
+      expect.objectContaining({
+        key: "broken.png",
+        decision: "error",
+        rationale: "画像を読めない（x）",
+      }),
+    ]);
+    const all = [
+      ...plan.groups.flatMap((g) => g.items),
+      ...plan.unclassified,
+      ...plan.nochar,
+      ...plan.failed,
+      ...plan.skipped,
+    ];
+    // 渡した全件がどこかのバケツにちょうど 1 回だけ入る
+    expect(all.map((i) => i.key).sort()).toEqual(["bg.png", "broken.png"]);
+    expect(plan.groups).toEqual([]);
+  });
+
   it("CCIP の plan も既存の apply で承認分だけ反映でき、キャラなしは書き込まない", async () => {
     const plan = await buildCcipPlan({
       lib: "personal",
@@ -488,6 +657,122 @@ suite("ccip: 精度評価", () => {
     const at = (th, mg) => t.find((x) => x.threshold === th && x.margin === mg);
     expect(at(0.1, 0).micro.abstainRate).toBe(1);
     expect(at(0.16, 0).micro).toMatchObject({ recall: 0.5, precision: 1 });
+    expect(at(0.16, 0).openSet).toHaveProperty("falseMatchRate");
+  });
+
+  it("open-set: 自分のアルバムを候補から外し、残りへ一致と出したら誤一致として数える", () => {
+    const crop = (sa, sb) =>
+      [
+        { albumId: "a", albumTitle: "さくら", score: sa, centroid: sa },
+        { albumId: "b", albumTitle: "ひなた", score: sb, centroid: sb },
+      ].sort((x, y) => x.score - y.score);
+    const samples = [
+      // さくら。自分を外すとひなた 0.3 → 未マッチ（正しい）
+      { truth: "a", crops: [crop(0.05, 0.3)] },
+      // さくら。自分を外すとひなた 0.15 → 閾値 0.18 以下で誤一致
+      { truth: "a", crops: [crop(0.05, 0.15)] },
+      // ひなた。自分を外すとさくら 0.4 → 未マッチ
+      { truth: "b", crops: [crop(0.4, 0.06)] },
+    ];
+    expect(openSetSample(samples[1]).crops[0].map((x) => x.albumId)).toEqual(["b"]);
+    const o = openSetMetrics(samples, albums, { ...P, threshold: 0.18, high: 0.13 });
+    expect(o).toMatchObject({ n: 3, falseMatch: 1, falseMatchRate: 0.333 });
+    expect(o.perAlbum.find((r) => r.albumId === "a")).toMatchObject({
+      n: 2,
+      falseMatch: 1,
+      unmatched: 1,
+    });
+    expect(o.matchedTo).toEqual({ "さくら→ひなた": 1 });
+    // 両方のアルバムに入っている画像は両方を外す（残りが無いので未マッチ）
+    const both = openSetMetrics(
+      [{ truth: "a", truths: ["a", "b"], crops: [crop(0.05, 0.06)] }],
+      albums,
+      P,
+    );
+    expect(both.falseMatch).toBe(0);
+    // 閾値を緩めると誤一致が増える（sweep の open-set 列で見える）
+    const t = sweep(samples, albums, P, { thresholds: [0.1, 0.35], margins: [0.03] });
+    expect(t[0].openSet.falseMatchRate).toBe(0);
+    expect(t[1].openSet.falseMatchRate).toBe(0.667);
+  });
+
+  // 1 次元の偽の特徴量。各画像は自分自身と差 0 になる（自分と照合したら必ず一番近い）
+  const evalFixture = () => {
+    const lib = "personal";
+    const itemsA = [0, 0.02, 0.04, 0.06].map((x, i) => ({ key: `a${i}.png`, x }));
+    const itemsB = [1, 1.02, 1.04].map((x, i) => ({ key: `b${i}.png`, x }));
+    // 両方のアルバムに入っている画像（B の 1.06）
+    const shared = { key: "s.png", x: 1.06 };
+    itemsB.push(shared);
+    const analyses = new Map(
+      [...itemsA, ...itemsB].map((it) => [
+        itemId(it, lib),
+        { persons: [{ feat: pos(it.x) }], detected: 1 },
+      ]),
+    );
+    const profile = (id, title, items) => {
+      const refs = items.map((it) => makeRef(it, lib, pos(it.x)));
+      return { id, title, refs, centroid: ccipMerge(refs.map((r) => r.feat)) };
+    };
+    const membership = new Map();
+    for (const [id, items] of [
+      ["a", [...itemsA, shared]],
+      ["b", itemsB],
+    ]) {
+      for (const it of items) {
+        const k = itemId(it, lib);
+        membership.set(k, [...(membership.get(k) ?? []), id]);
+      }
+    }
+    return {
+      lib,
+      refAlbums: [
+        { id: "a", title: "さくら" },
+        { id: "b", title: "ひなた" },
+      ],
+      evalSets: new Map([
+        ["a", [...itemsA, shared]],
+        ["b", itemsB],
+      ]),
+      profiles: [profile("a", "さくら", [...itemsA, shared]), profile("b", "ひなた", itemsB)],
+      analyses,
+      membership,
+    };
+  };
+
+  it("eval の本体は自分自身と照合しない（参照と照合側の id が揃っている）", async () => {
+    const f = evalFixture();
+    // topK 1 なので、自分自身を外し損ねると score が必ず 0 になる
+    const params = { ...P, topK: 1, threshold: 0.5, high: 0.3, margin: 0 };
+    const { records, samples } = await evaluateLoo({ ...f, differences: fakeDiff, params });
+    for (const s of samples) {
+      for (const c of s.crops) expect(c.every((a) => a.score > 0)).toBe(true);
+    }
+    expect(records.every((r) => r.score > 0)).toBe(true);
+    expect(records.filter((r) => r.decision === "match").length).toBeGreaterThan(0);
+  });
+
+  it("2 つの参照アルバムに入っている画像は 1 回だけ評価し、取れなかった画像は failed に出す", async () => {
+    const f = evalFixture();
+    f.analyses.delete(itemId({ key: "b1.png" }, f.lib));
+    const params = { ...P, topK: 1, threshold: 0.5, high: 0.3, margin: 0 };
+    const { records, duplicates, failed } = await evaluateLoo({
+      ...f,
+      differences: fakeDiff,
+      params,
+    });
+    expect(records.filter((r) => r.key === "s.png")).toHaveLength(1);
+    expect(records.find((r) => r.key === "s.png")).toMatchObject({
+      truth: "a",
+      truths: ["a", "b"],
+    });
+    expect(duplicates).toEqual([{ key: "s.png", albumId: "b" }]);
+    expect(failed).toEqual([{ key: "b1.png", albumId: "b" }]);
+    const m = evalMetrics(records, f.refAlbums);
+    // a は 4 枚 + 共有 1 枚、b は共有を除いた 3 枚から取れなかった 1 枚を引いた 2 枚
+    expect(m.perAlbum.find((r) => r.albumId === "a").n).toBe(5);
+    expect(m.perAlbum.find((r) => r.albumId === "b").n).toBe(2);
+    expect(m.micro.n).toBe(7);
   });
 });
 
@@ -502,6 +787,27 @@ const hasModels = [
 ].every((f) => existsSync(join(MODEL_DIR, f)));
 
 suite.skipIf(!hasModels)("ccip: 実モデル", () => {
+  // reference.json は imgutils 0.19.0 の関数本体（wheel から取り出した物）と Python の onnxruntime で出した値。
+  // 検出の後処理や前処理が崩れると、枠か特徴量のどちらかがここでずれる
+  it("人物の写った画像で、検出の枠・切り出し・特徴量・差が imgutils の値と合う", async () => {
+    const { openCcip } = await import("./character-albums-ccip.mjs");
+    const engine = await openCcip({ modelDir: MODEL_DIR, offline: true });
+    const ref = JSON.parse(readFileSync(join(FIXTURES, "reference.json"), "utf8"));
+    const a = await engine.analyze(readFileSync(join(FIXTURES, "person.webp")));
+    expect([a.width, a.height]).toEqual(ref.size);
+    expect(a.persons.map((p) => p.box)).toEqual(ref.boxes);
+    expect(a.detected).toBe(ref.boxes.length);
+    expect(a.persons[0].score).toBeCloseTo(ref.scores[0], 2);
+    expect(a.persons[0].crop).toEqual(ref.crop);
+    const crop = a.persons[0].feat;
+    ref.cropFeatHead.forEach((v, i) => expect(Math.abs(crop[i] - v)).toBeLessThan(1e-3));
+    expect(Math.abs(Math.hypot(...crop) - ref.cropFeatNorm)).toBeLessThan(1e-2);
+    const [full] = await engine.embed([ccipInput(a.rgb, a.width, a.height)]);
+    ref.fullFeatHead.forEach((v, i) => expect(Math.abs(full[i] - v)).toBeLessThan(1e-3));
+    const d = await engine.differences([crop, full]);
+    expect(Math.abs(d(0, 1) - ref.diffCropFull)).toBeLessThan(1e-3);
+  }, 60_000);
+
   it("キャラのいない合成画像は人物 0（キャラなし）で、特徴量は 768 次元", async () => {
     const { openCcip } = await import("./character-albums-ccip.mjs");
     const engine = await openCcip({ modelDir: MODEL_DIR, offline: true });

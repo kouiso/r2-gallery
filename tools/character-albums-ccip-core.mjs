@@ -25,7 +25,8 @@ export const CCIP_FALLBACK = Object.freeze({
 /**
  * 判定に使う値をまとめる。既定値はモデル付属の評価値から取り、勘で決めた数は理由を添える。
  * - threshold: 同キャラとみなす差の上限。deepghs の評価で F1 が最大（0.917）になった値
- * - high: 確信度 high の上限。cluster.json の dbscan_2 の eps（同キャラ同士が密に集まる距離）
+ * - high: 確信度 high の上限。cluster.json の dbscan_2 の eps（同キャラ同士が密に集まる距離）。
+ *   閾値より緩いと high の意味が無くなるので、threshold を上書きした後で min(highCap, threshold) にする
  * - margin: 1 位と 2 位のアルバムの差がこれ未満なら要確認。似た別キャラ（髪色の近い 2 人）を
  *   勝手に寄せないための安全側の幅。eval の sweep で実データに合わせて変える前提
  * - topK: アルバムごとの近い参照何枚の平均で測るか。1 枚だけ似た参照に引っ張られないため 3
@@ -33,16 +34,17 @@ export const CCIP_FALLBACK = Object.freeze({
  * - minPersonFrac: 画像面積に対してこれ未満の人物枠は捨てる。512px のサムネで約 51px 角未満は
  *   CCIP の入力（384px）に引き伸ばしても顔が判別できず、背景の小さな人影で複数人扱いになるため
  * - cropMargin: 人物枠の外へ広げる割合。検出枠が髪の先や頭頂を切りがちなため少しだけ広げる
- * - maxPersons: 1 枚で照合する人数の上限。群衆画は要確認に回るので全員を測る意味が薄い
+ * - maxPersons: 1 枚で照合する人数の上限。これより多く写った画像は、残りを見ていないので必ず要確認にする
  */
 export function ccipParams({ metrics, cluster } = {}, overrides = {}) {
-  const threshold = metrics?.threshold ?? CCIP_FALLBACK.threshold;
+  const set = Object.fromEntries(Object.entries(overrides).filter(([, v]) => v !== undefined));
   const eps = cluster?.dbscan_2?.eps ?? CCIP_FALLBACK.clusterEps;
-  return {
-    threshold,
-    high: Math.min(eps, threshold),
+  const { high: highOverride, ...rest } = set;
+  const base = {
+    threshold: metrics?.threshold ?? CCIP_FALLBACK.threshold,
     margin: 0.03,
     topK: 3,
+    highCap: highOverride ?? eps,
     clusterEps: eps,
     clusterMinSamples: cluster?.dbscan_2?.min_samples ?? CCIP_FALLBACK.clusterMinSamples,
     detConf: 0.3,
@@ -50,8 +52,42 @@ export function ccipParams({ metrics, cluster } = {}, overrides = {}) {
     minPersonFrac: 0.01,
     cropMargin: 0.05,
     maxPersons: 6,
-    ...Object.fromEntries(Object.entries(overrides).filter(([, v]) => v !== undefined)),
+    ...rest,
   };
+  const p = withThreshold(base, base.threshold, base.margin);
+  assertParams(p);
+  return p;
+}
+
+/**
+ * threshold と margin を差し替え、high をそれに合わせて決め直す。plan と eval の sweep が同じ規則で
+ * high を決めるように、両方ここを通す（片方だけ min を取ると同じ閾値で確信度の表示が食い違う）
+ */
+export function withThreshold(params, threshold, margin) {
+  return {
+    ...params,
+    threshold,
+    margin,
+    high: Math.min(params.highCap ?? params.high, threshold),
+  };
+}
+
+/**
+ * 判定の値を確かめる。NaN を通すと `差 > NaN` も `差 < NaN` も偽になり、閾値と margin の歯止めが
+ * 両方外れて、どんなに遠いアルバムにも一致と出してしまう。そうなる前に止める
+ */
+export function assertParams(p) {
+  const bad = [];
+  const num = (name, ok, want) => {
+    if (!(Number.isFinite(p[name]) && ok(p[name]))) bad.push(`${name}=${p[name]}（${want}）`);
+  };
+  num("threshold", (v) => v > 0 && v <= 1, "0 より大きく 1 以下");
+  num("margin", (v) => v >= 0 && v < 1, "0 以上 1 未満");
+  num("high", (v) => v > 0 && v <= p.threshold, "0 より大きく threshold 以下");
+  num("topK", (v) => Number.isInteger(v) && v >= 1, "1 以上の整数");
+  num("maxPersons", (v) => Number.isInteger(v) && v >= 1, "1 以上の整数");
+  num("clusterEps", (v) => v > 0, "0 より大きい");
+  if (bad.length) throw new RangeError(`判定の値が不正: ${bad.join(", ")}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -194,19 +230,122 @@ export function resizePil(src, width, height, outW, outH, filterName) {
 
 /**
  * RGBA を白背景に重ねて RGB にする。imgutils の add_background_for_rgba（Pillow の paste）と同じく
- * 整数の DIV255 で丸める。sharp の flatten は浮動小数で合成するため ±1 ずれる
+ * 整数の DIV255 で丸める。sharp の flatten は浮動小数で合成するため ±1 ずれる。
+ * maskChannel は不透明度に使うチャンネル。灰色の tRNS 画像では Pillow が画像自身（濃淡）を mask にするので 0 を渡す
  */
-export function flattenWhite(rgba, width, height) {
+export function flattenWhite(rgba, width, height, maskChannel = 3) {
   const n = width * height;
   const out = new Uint8Array(n * 3);
   for (let i = 0; i < n; i++) {
-    const a = rgba[i * 4 + 3];
+    const a = rgba[i * 4 + maskChannel];
     for (let c = 0; c < 3; c++) {
       const tmp = 255 * (255 - a) + rgba[i * 4 + c] * a + 128;
       out[i * 3 + c] = ((tmp >> 8) + tmp) >> 8;
     }
   }
   return out;
+}
+
+/** RGBA の透過を捨てて RGB にする。key があれば、完全に透明な画素をその色にする（透過 GIF 用）。 */
+export function dropAlpha(rgba, width, height, key = null) {
+  const n = width * height;
+  const out = new Uint8Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const clear = key && rgba[i * 4 + 3] === 0;
+    for (let c = 0; c < 3; c++) out[i * 3 + c] = clear ? key[c] : rgba[i * 4 + c];
+  }
+  return out;
+}
+
+/** Pillow の CMYK→RGB（Convert.c の cmyk2rgb）。ICC を使わない素朴な式で、imgutils はこれを通る。 */
+export function cmykToRgbPil(cmyk, width, height) {
+  const n = width * height;
+  const out = new Uint8Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const nk = 255 - cmyk[i * 4 + 3];
+    for (let c = 0; c < 3; c++) {
+      const tmp = cmyk[i * 4 + c] * nk + 128;
+      const v = nk - (((tmp >> 8) + tmp) >> 8);
+      out[i * 3 + c] = v < 0 ? 0 : v;
+    }
+  }
+  return out;
+}
+
+/** PNG の IHDR の色の型（0 灰・2 RGB・3 パレット・4 灰+α・6 RGBA）。PNG でなければ null。 */
+export function pngColorType(bytes) {
+  const sig = [137, 80, 78, 71, 13, 10, 26, 10];
+  if (bytes.length < 26 || sig.some((b, i) => bytes[i] !== b)) return null;
+  // IHDR は必ず最初のチャンク（長さ 4 + "IHDR" 4 + 幅 4 + 高さ 4 + ビット深度 1 の次）
+  if (String.fromCharCode(bytes[12], bytes[13], bytes[14], bytes[15]) !== "IHDR") return null;
+  return bytes[25];
+}
+
+/**
+ * GIF の最初の画像の透過色（パレット上の色）を返す。透過が無ければ null。
+ * Pillow は透過 GIF をパレットのまま RGB にするので、透明な画素は透過番号の色になる。
+ * sharp は透明な画素の色を別の値で埋めるため、そのままでは imgutils と合わない
+ */
+export function gifTransparentColor(bytes) {
+  const ascii = String.fromCharCode(...bytes.subarray(0, 6));
+  if (ascii !== "GIF87a" && ascii !== "GIF89a") return null;
+  let p = 13;
+  const packed = bytes[10];
+  let table = null;
+  if (packed & 0x80) {
+    const size = 3 * 2 ** ((packed & 7) + 1);
+    table = bytes.subarray(p, p + size);
+    p += size;
+  }
+  let trans = null;
+  const skipSubBlocks = () => {
+    while (p < bytes.length && bytes[p] !== 0) p += bytes[p] + 1;
+    p++;
+  };
+  while (p < bytes.length) {
+    const b = bytes[p];
+    if (b === 0x21) {
+      const label = bytes[p + 1];
+      if (label === 0xf9 && bytes[p + 2] === 4) {
+        trans = bytes[p + 3] & 1 ? bytes[p + 6] : null;
+        p += 8;
+      } else {
+        p += 2;
+        skipSubBlocks();
+      }
+    } else if (b === 0x2c) {
+      const lp = bytes[p + 9];
+      if (lp & 0x80) table = bytes.subarray(p + 10, p + 10 + 3 * 2 ** ((lp & 7) + 1));
+      break;
+    } else {
+      return null;
+    }
+  }
+  if (trans == null || !table || trans * 3 + 2 >= table.length) return null;
+  return [table[trans * 3], table[trans * 3 + 1], table[trans * 3 + 2]];
+}
+
+/**
+ * imgutils の load_image(mode="RGB") が透過をどう扱うかを、Pillow が開いた時の mode で決める。
+ * add_background_for_rgba は `paste(image, mask=image)` を try し、mask にできない mode では
+ * ValueError で白塗りを諦めて convert("RGB") だけする。その結果、形式によって扱いが分かれる。
+ * - "white": RGBA・LA（PNG の色の型 6/4、透過 WebP など）。白へ重ねる
+ * - "keep": パレット（色の型 3）と RGB（色の型 2）の tRNS。mask にできず、透過を捨てて元の色を残す
+ * - "selfMask": 灰色（色の型 0）の tRNS。mode L は mask にできるので、画像自身の濃淡を不透明度として白へ重ねる
+ * - "gifKey": 透過 GIF（mode P）。透過を捨て、透明な画素はパレットの透過色になる
+ * - "cmyk": CMYK の JPEG。Pillow の素朴な式で RGB にする
+ * meta は sharp の metadata()（format・hasAlpha・space）。
+ */
+export function pillowAlphaRule(bytes, meta) {
+  if (meta.format === "jpeg" && meta.space === "cmyk") return "cmyk";
+  if (!meta.hasAlpha) return "white";
+  if (meta.format === "gif") return "gifKey";
+  if (meta.format === "png") {
+    const ct = pngColorType(bytes);
+    if (ct === 2 || ct === 3) return "keep";
+    if (ct === 0) return "selfMask";
+  }
+  return "white";
 }
 
 /** RGB 画素の矩形を切り出す（Pillow の crop と同じく右端・下端は含まない）。 */
@@ -324,16 +463,20 @@ export function yoloDecode(data, rows, count, { conf, iou, oldSize, newSize }) {
   }));
 }
 
-/** 小さすぎる枠を捨て、信頼度の高い順に上限人数まで残す。 */
-export function selectPersons(detections, width, height, { minPersonFrac, maxPersons }) {
+/** 小さすぎる枠を捨て、信頼度の高い順に並べる（上限人数で切る前。何人写っていたかの数に使う）。 */
+export function eligiblePersons(detections, width, height, { minPersonFrac }) {
   const total = width * height;
   return detections
     .filter((d) => {
       const [x0, y0, x1, y1] = d.box;
       return x1 > x0 && y1 > y0 && ((x1 - x0) * (y1 - y0)) / total >= minPersonFrac;
     })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, maxPersons);
+    .sort((a, b) => b.score - a.score);
+}
+
+/** 小さすぎる枠を捨て、信頼度の高い順に上限人数まで残す。 */
+export function selectPersons(detections, width, height, params) {
+  return eligiblePersons(detections, width, height, params).slice(0, params.maxPersons);
 }
 
 /** 人物枠を margin の割合だけ広げ、画像の内側に収めた切り出し矩形にする。 */
@@ -374,6 +517,15 @@ export function ccipMerge(feats) {
 }
 
 export const refId = (r) => `${r.lib ?? ""}:${r.key}`;
+
+/**
+ * 画像の id（`${lib}:${key}`）。参照を作る側（makeRef）と照合する側（selfId）が同じ式を通るよう、
+ * ここだけで組み立てる。形がずれると自分自身と照合して差がほぼ 0 になり、評価が水増しされる
+ */
+export const itemId = (it, lib) => `${it.lib ?? lib}:${it.key}`;
+
+/** 参照 1 枚。refId(makeRef(it, lib, f)) === itemId(it, lib) になる。 */
+export const makeRef = (it, lib, feat) => ({ key: it.key, lib: it.lib ?? lib, feat });
 
 /**
  * 1 人分の切り出しを、各アルバムの参照との差で採点する。差は小さいほど同キャラに近い。
@@ -431,6 +583,12 @@ const r4 = (x) => (x == null ? null : Math.round(x * 10000) / 10000);
 
 /** 1 人分の採点結果から判定する。ここで決めるのは「どのアルバムか／保留か」だけ。 */
 export function decideCrop(scored, params) {
+  // sweep などで ccipParams を通らない値が来ても、NaN で歯止めが外れないようにここでも止める
+  if (![params.threshold, params.margin, params.high].every(Number.isFinite)) {
+    throw new RangeError(
+      `判定の値が数ではない（threshold=${params.threshold}, margin=${params.margin}, high=${params.high}）`,
+    );
+  }
   const [best, second] = scored;
   if (!best) return { decision: "unmatched", rationale: "照合できる参照アルバムがない" };
   const base = {
@@ -475,8 +633,10 @@ export function decideCrop(scored, params) {
  * 人物 0 → キャラなし（照合しない）。CCIP はキャラの写っていない絵同士をほぼ同一とみなすので、
  * ここで止めないと背景画やテキスト画像が 1 つのキャラにまとまってしまう。
  * 複数人 → 全員が同じアルバムに match した時だけ match、それ以外は要確認。
+ * detected は上限人数（maxPersons）で切る前に写っていた人数。切った人物は照合していないので、
+ * 照合した全員が揃っていても要確認にする（見ていない人物が別キャラかもしれない）。
  */
-export function decideImage(crops, params) {
+export function decideImage(crops, params, { detected } = {}) {
   if (!crops.length) {
     return {
       decision: "nochar",
@@ -486,8 +646,22 @@ export function decideImage(crops, params) {
     };
   }
   const decided = crops.map((c) => decideCrop(c, params));
-  if (decided.length === 1) return { ...decided[0], persons: 1, crops: decided };
   const persons = decided.length;
+  const total = Math.max(detected ?? persons, persons);
+  if (total > persons) {
+    const matched = decided.find((d) => d.decision === "match");
+    return {
+      decision: "review",
+      albumId: matched?.albumId,
+      albumTitle: matched?.albumTitle,
+      score: r4(Math.min(...decided.map((d) => d.score ?? Infinity))),
+      rationale: `${total} 人中 ${persons} 人だけ照合した（上限 ${params.maxPersons} 人）。残りの人物は見ていないので要確認`,
+      persons,
+      detected: total,
+      crops: decided,
+    };
+  }
+  if (persons === 1) return { ...decided[0], persons: 1, crops: decided };
   const matched = decided.filter((d) => d.decision === "match");
   const albumIds = new Set(matched.map((d) => d.albumId));
   if (matched.length === persons && albumIds.size === 1) {
@@ -591,6 +765,7 @@ const planEntry = (key, r) => ({
   centroid: r.centroid ?? null,
   second: r.second ?? null,
   persons: r.persons ?? 0,
+  ...(r.detected ? { detected: r.detected } : {}),
   rationale: r.rationale,
   crops: (r.crops ?? []).map((c, i) => ({
     index: i,
@@ -603,6 +778,8 @@ const planEntry = (key, r) => ({
 /**
  * 判定済みの対象から plan（version 1）を作る。apply の形は色の判定と同じなので apply はそのまま使える。
  * targets: [{ key, result: decideImage の戻り値, persons: [{ box, crop, feat }] }]
+ *   取れなかった・読めなかった画像は result: { decision: "error", rationale } で渡すと failed に入る。
+ *   黙って落とすと、どのバケツにも無い画像が「判定済み」に見えてしまうため
  * differences: async (feats) => (i, j) => number（未マッチ同士の束ねに使う）
  */
 export async function buildCcipPlan({
@@ -620,6 +797,7 @@ export async function buildCcipPlan({
   const unclassified = [];
   const nochar = [];
   const skipped = [];
+  const failed = [];
   const singles = [];
   for (const t of targets) {
     if (assigned.has(`${lib}:${t.key}`)) {
@@ -627,6 +805,10 @@ export async function buildCcipPlan({
       continue;
     }
     const r = t.result;
+    if (r.decision === "error") {
+      failed.push({ key: t.key, decision: "error", persons: 0, rationale: r.rationale, crops: [] });
+      continue;
+    }
     const entry = { ...planEntry(t.key, r), persons: t.persons?.length ?? r.persons ?? 0 };
     entry.crops = entry.crops.map((c) => ({ ...c, box: t.persons?.[c.index]?.box ?? null }));
     if (r.decision === "nochar") {
@@ -688,6 +870,7 @@ export async function buildCcipPlan({
     groups: [...groups.values(), ...created],
     unclassified,
     nochar,
+    failed,
     skipped,
   };
 }
@@ -767,20 +950,151 @@ export function evalMetrics(records, albums) {
 }
 
 /**
+ * 開いた集合（open-set）の評価。leave-one-out だけでは評価する画像が必ずどこかの参照アルバムのキャラで、
+ * 「どのアルバムにもいないキャラ」（新しくアップロードされる画像で一番多い場合）を一度も試さない。
+ * そこで画像ごとに自分のキャラのアルバム（truths 全部）を候補から外して採点し直し、
+ * 残りのアルバムへ一致と出したら誤一致として数える。期待する答えは未マッチか要確認。
+ * 外したアルバムの採点だけを消せばよく、他のアルバムの参照と代表はそのままなので推論はやり直さない。
+ */
+export function openSetSample(s) {
+  const own = new Set(s.truths ?? [s.truth]);
+  return { ...s, crops: s.crops.map((c) => c.filter((a) => !own.has(a.albumId))) };
+}
+
+/** samples を open-set で判定し、アルバムごとと全体の誤一致率を出す。 */
+export function openSetMetrics(samples, albums, params) {
+  const perAlbum = new Map(
+    albums.map((a) => [
+      a.id,
+      { albumId: a.id, title: a.title, n: 0, falseMatch: 0, review: 0, unmatched: 0, nochar: 0 },
+    ]),
+  );
+  const matchedTo = {};
+  for (const s of samples) {
+    const d = decideImage(openSetSample(s).crops, params, { detected: s.detected });
+    const row = perAlbum.get(s.truth);
+    row.n++;
+    if (d.decision === "match") {
+      row.falseMatch++;
+      const key = `${row.title}→${d.albumTitle}`;
+      matchedTo[key] = (matchedTo[key] ?? 0) + 1;
+    } else if (d.decision === "review") row.review++;
+    else if (d.decision === "nochar") row.nochar++;
+    else row.unmatched++;
+  }
+  const ratio = (a, b) => (b ? Math.round((a / b) * 1000) / 1000 : null);
+  const rows = [...perAlbum.values()].map((r) => ({
+    ...r,
+    falseMatchRate: ratio(r.falseMatch, r.n),
+  }));
+  const n = rows.reduce((s, r) => s + r.n, 0);
+  const fm = rows.reduce((s, r) => s + r.falseMatch, 0);
+  const rates = rows.map((r) => r.falseMatchRate).filter((x) => x != null);
+  return {
+    perAlbum: rows,
+    matchedTo,
+    n,
+    falseMatch: fm,
+    falseMatchRate: ratio(fm, n),
+    macroFalseMatchRate: rates.length
+      ? Math.round((rates.reduce((s, x) => s + x, 0) / rates.length) * 1000) / 1000
+      : null,
+  };
+}
+
+/**
  * 保存した採点結果を閾値・margin の組合せごとに判定し直す（推論はやり直さない）。
- * samples: [{ truth, truths, crops: scoreAlbums の配列 }]
+ * samples: [{ truth, truths, crops: scoreAlbums の配列, detected }]
+ * 各行に閉じた集合（leave-one-out）の precision / recall と、open-set の誤一致率を並べる。
+ * 閾値を緩めると recall は上がるが、知らないキャラを既存アルバムへ寄せる誤一致も増えるので、両方を見て決める。
  */
 export function sweep(samples, albums, params, { thresholds, margins }) {
   const out = [];
   for (const threshold of thresholds) {
     for (const margin of margins) {
-      const p = { ...params, threshold, margin, high: Math.min(params.high, threshold) };
-      const records = samples.map((s) => ({ ...s, ...pick(decideImage(s.crops, p)) }));
+      const p = withThreshold(params, threshold, margin);
+      const records = samples.map((s) => ({
+        ...s,
+        ...pick(decideImage(s.crops, p, { detected: s.detected })),
+      }));
       const m = evalMetrics(records, albums);
-      out.push({ threshold: r4(threshold), margin: r4(margin), micro: m.micro, macro: m.macro });
+      const o = openSetMetrics(samples, albums, p);
+      out.push({
+        threshold: r4(threshold),
+        margin: r4(margin),
+        micro: m.micro,
+        macro: m.macro,
+        openSet: { falseMatchRate: o.falseMatchRate, macroFalseMatchRate: o.macroFalseMatchRate },
+      });
     }
   }
   return out;
 }
 
 const pick = (d) => ({ decision: d.decision, albumId: d.albumId });
+
+/**
+ * eval の本体（推論済みの結果から leave-one-out の判定を作る）。I/O は持たない。
+ * refAlbums: [{ id, title }]、evalSets: Map<albumId, items[]>、profiles: buildProfiles の結果、
+ * analyses: Map<itemId, { persons, detected }>（取れなかった画像は入っていない）、
+ * membership: Map<itemId, albumId[]>（その画像が入っている参照アルバム）。
+ * - 自分自身は参照からも代表からも外す（selfId は itemId で作り、参照の id と同じ式にする）
+ * - 2 つの参照アルバムに入っている画像は 1 回だけ評価する（正解は最初のアルバム、truths は両方）。
+ *   2 回数えると micro の件数と取り違え表が水増しされる
+ */
+export async function evaluateLoo({
+  lib,
+  refAlbums,
+  evalSets,
+  profiles,
+  analyses,
+  membership,
+  differences,
+  params,
+}) {
+  const profileIds = new Set(profiles.map((p) => p.id));
+  const seen = new Set();
+  const records = [];
+  const samples = [];
+  const failed = [];
+  const duplicates = [];
+  for (const a of refAlbums) {
+    for (const it of evalSets.get(a.id) ?? []) {
+      const id = itemId(it, lib);
+      if (seen.has(id)) {
+        duplicates.push({ key: it.key, albumId: a.id });
+        continue;
+      }
+      seen.add(id);
+      const an = analyses.get(id);
+      if (!an) {
+        failed.push({ key: it.key, albumId: a.id });
+        continue;
+      }
+      const crops = await scoreImage({
+        persons: an.persons,
+        albums: profiles,
+        selfId: id,
+        differences,
+        topK: params.topK,
+      });
+      const truths = (membership.get(id) ?? [a.id]).filter((x) => profileIds.has(x));
+      const detected = an.detected ?? an.persons.length;
+      const r = decideImage(crops, params, { detected });
+      records.push({
+        key: it.key,
+        truth: a.id,
+        truths,
+        decision: r.decision,
+        albumId: r.decision === "match" ? r.albumId : null,
+        albumTitle: r.albumTitle ?? null,
+        score: r.score ?? null,
+        second: r.second ?? null,
+        persons: r.persons,
+        ...(r.detected ? { detected: r.detected } : {}),
+      });
+      samples.push({ truth: a.id, truths, crops, detected });
+    }
+  }
+  return { records, samples, failed, duplicates };
+}

@@ -36,9 +36,16 @@ onnxruntime-node はルートの devDependency。インストール時に CUDA �
 
 ## 判定のしかた（CCIP）
 
-1. 画像を RGB にする。透過は白で塗り、ICC と EXIF の回転は無視する（imgutils の `load_image` と同じ）
+1. 画像を RGB にする。ICC と EXIF の回転は無視する。透過の扱いは imgutils の `load_image(mode="RGB")` と同じで、形式によって違う
+   （imgutils は `paste(mask=画像)` で白を敷こうとし、mask にできない mode では白を敷かずに `convert("RGB")` だけする）
+   - RGBA・灰+α（PNG の色の型 6・4、透過 WebP など）: 白へ重ねる
+   - パレット PNG の tRNS・RGB PNG の tRNS: 透過を捨てて元の色を残す（透明な所も白にならない）
+   - 灰色 PNG の tRNS: 画像自身の濃淡を不透明度として白へ重ねる（Pillow の mode L が mask になるため）
+   - 透過 GIF: 透過を捨て、透明な画素は GIF のパレットの透過色にする
+   - CMYK の JPEG: ICC を使わず Pillow の素朴な式（`255-K - C*(255-K)/255`）で RGB にする
 2. 人物検出: 640×640 へ BICUBIC で引き伸ばし（letterbox なし）、YOLOv8 の出力を conf 0.3・IoU 0.5 で NMS して元の座標へ戻す
-3. 画像の 1% 未満の枠は捨て、信頼度順に最大 6 人。枠を 5% 広げて切り出す
+3. 画像の 1% 未満の枠は捨て、信頼度順に最大 6 人。枠を 5% 広げて切り出す。7 人以上写っていた画像は、照合しなかった人物が
+   別キャラかもしれないので、照合した 6 人が揃っていても要確認にする
 4. 切り出しを 384×384 BILINEAR → CHW → /255 → CLIP の mean/std で正規化し、CCIP で 768 次元の特徴量にする
 5. 参照アルバム（`--ref-albums`）ごとに、人物が 1 人だけ写った画像の切り出しを sha1(key) 順に最大 `--ref-per-album` 枚集める。
    複数人の画像はどの人物がアルバムのキャラか分からないので参照に使わない。代表は `ccip_merge` と同じ式で作る
@@ -55,7 +62,9 @@ onnxruntime-node はルートの devDependency。インストール時に CUDA �
    - 複数人 → 全員が同じアルバムに一致した時だけ一致。揃わなければ要確認。全員未マッチなら未分類
 9. 1 人だけ写った未マッチ同士を DBSCAN（eps 0.1292・min_samples 2、差は metric モデル）で束ね、
    2 枚以上の塊は「キャラクターA（仮・実行 id）」の新規アルバム候補（low）。残りは未分類
-10. `preview.html` に判定に使った人物の切り出し・判定・CCIP の差（1 位・2 位・代表）・根拠と、キャラなしの枠を出す
+10. 取れない・読めない画像は plan.json の `failed` に理由つきで残す（どのグループにも入らない）。
+    対象の枚数 = 配属済み + 候補 + 未分類 + キャラなし + `failed` になる
+11. `preview.html` に判定に使った人物の切り出し・判定・CCIP の差（1 位・2 位・代表）・根拠と、キャラなし・判定できなかった画像の枠を出す
     （画像は data URI でローカルに閉じる）
 
 ### 閾値と理由
@@ -63,15 +72,20 @@ onnxruntime-node はルートの devDependency。インストール時に CUDA �
 | 名前                 | 既定      | 理由                                                                                      |
 | -------------------- | --------- | ----------------------------------------------------------------------------------------- |
 | `threshold`          | 0.1785    | `metrics.json` の値。deepghs の評価で同キャラ判定の F1 が最大（0.917、precision 0.933）   |
-| `high`               | 0.1292    | `cluster.json` の dbscan_2 の eps。同キャラ同士が密に集まる距離                           |
+| `high`               | 0.1292    | `cluster.json` の dbscan_2 の eps。同キャラ同士が密に集まる距離。閾値の方が小さい時は閾値 |
 | `margin`             | 0.03      | 似た 2 キャラを勝手に寄せないための安全側の幅。`eval` の sweep で実データに合わせて変える |
 | `topK`               | 3         | 1 枚だけ似た参照に引っ張られないため                                                      |
 | `clusterEps`         | 0.1292    | `cluster.json` の dbscan_2（deepghs が束ねの成績で選んだ値）                              |
 | `detConf` / `detIou` | 0.3 / 0.5 | imgutils の `detect_person` の既定                                                        |
 | `minPersonFrac`      | 0.01      | 512px のサムネで約 51px 角未満は顔が判別できず、背景の小さな人影で複数人扱いになるため    |
 | `cropMargin`         | 0.05      | 検出枠が髪の先や頭頂を切りがちなため                                                      |
+| `maxPersons`         | 6         | 1 枚で照合する人数の上限。超えた画像は要確認                                              |
 
-`--threshold` と `--margin` で上書きできる。他の値は `tools/character-albums-ccip-core.mjs` の `ccipParams`。
+`--threshold`（0 より大きく 1 以下）と `--margin`（0 以上 1 未満）で上書きできる。`high` は上書きの後で `min(0.1292, threshold)` に決め直す
+（plan と eval の sweep は同じ式を使う）。他の値は `tools/character-albums-ccip-core.mjs` の `ccipParams`。
+数のオプション（`--threshold`・`--margin`・`--ref-per-album`・`--max-per-album`・`--recent`・`--threads`）は、
+数として読めない値や範囲外の値を渡すと実行せずに止まる。`0.18x` を NaN のまま通すと、閾値と margin の比較が
+いつも偽になり、どんなに遠いアルバムにも一致と出してしまうため。
 
 ### imgutils との一致
 
@@ -83,6 +97,19 @@ Python（onnxruntime 1.32・numpy 2.5・Pillow 13）と Node で比べた結果�
 - デコード後の画素・CCIP の入力・YOLO の入力・YOLO の生出力・特徴量・差の表: すべて最大差 0（ビット一致、cos 1.0000000）
 - 縮小だけを任意の大きさ 40 通り（bilinear / bicubic、20〜2500px）で比べても全一致
 - metric モデルは組ごとに独立（2 枚だけ流しても全部まとめても同じ値）
+
+透過と CMYK の扱い（上の手順 1）は、imgutils 0.19.0 の wheel から `load_image` / `add_background_for_rgba` の関数本体を
+そのまま取り出して実行した結果と比べた（2026-11-27、Pillow 13.0.0）。パレット PNG の tRNS（全部・一部）、RGB PNG の tRNS、
+灰色 PNG（透過なし・tRNS）、灰+α PNG、透過 GIF・不透明 GIF、CMYK JPEG、RGBA PNG 2 枚・RGBA WebP、16bit PNG、EXIF 回転つき JPEG の 14 通りを、
+320×400〜900×640 と 16×12 の 2 つの大きさで比べ、すべて画素の最大差 0。直す前はパレット PNG の tRNS で最大差 255
+（透明な所を白にしていた）、CMYK で 130、透過 GIF で 179 ずれていた。
+
+単体テストにも固定の期待値を置いている（`tools/fixtures/character-albums/`）。
+
+- `decode/`: 上の形式のうち 7 通りの 16×12 の画像と、imgutils で RGB にした画素（`expected.json`）。モデル無しで CI でも走る
+- `person.webp` と `reference.json`: 人物 1 人の合成画像と、imgutils の検出枠・切り出し・CCIP の特徴量の先頭 8 個・差。
+  モデルがある時だけ走り、枠は完全一致、特徴量と差は 1e-3 以内を確かめる。YOLO の出力の読み違え・CCIP の正規化の値・
+  縮小の種類を 1 つずつ壊すと、どれもこのテストで落ちることを確かめた
 
 Pillow 10 以前は常に横から先にかけるので、古い Pillow の imgutils とは画素が ±1 ずれることがある（特徴量の cos は 0.99998 程度）。
 
@@ -121,11 +148,21 @@ node tools/character-albums.mjs analyze a.png b.webp
 
 - 各参照アルバムから sha1(key) 順の先頭 `--max-per-album` 枚を評価する。千枚を超えるアルバムと数十枚のアルバムを同じ規則で間引け、
   画像が増えても既存の標本は入れ替わらない
-- 参照は同じ順で人物が 1 人だけの画像を最大 `--ref-per-album` 枚。評価する画像自身は参照からも代表からも外す（leave-one-out）
+- 参照は同じ順で人物が 1 人だけの画像を最大 `--ref-per-album` 枚。評価する画像自身は参照からも代表からも外す（leave-one-out）。
+  参照の id と照合側の id は同じ関数（`makeRef` / `itemId`）で作り、自分自身と照合しないことを単体テストで確かめている
 - アルバムごとの precision・recall・保留率（要確認・未マッチ・キャラなし）・誤り率、全体（枚数平均）とアルバム平均、取り違え表
-- 閾値 0.10〜0.25 × margin 0〜0.08 の sweep。推論はやり直さず、保存した差から判定し直す
-- 2 つの参照アルバムに入っている画像は、どちらに入れても正解として数える
+- **open-set**: 画像ごとに自分のキャラのアルバムを候補から外して判定し直し、残りのアルバムへ一致と出した率（誤一致率）。
+  leave-one-out の評価はどの画像も必ずどこかの参照アルバムのキャラなので、「どのアルバムにもいないキャラ」
+  （新しくアップロードされる画像で一番多い場合）を試せない。その代わりの目安で、期待する答えは未マッチか要確認
+- 閾値 0.10〜0.25 × margin 0〜0.08 の sweep（`--threshold` / `--margin` で渡した値の行も入る）。推論はやり直さず、保存した差から判定し直す。
+  各行に precision / recall と open-set の誤一致率を並べる
+- 2 つの参照アルバムに入っている画像は 1 回だけ評価し（正解は先のアルバム）、どちらに入れても正解として数える。件数は `sampling.duplicates`
+- 取れない・読めないため評価できなかった画像は `sampling.failed` に出す
 - 結果は `<out>/eval.json`（1 枚ごとの判定と差も入る）と、画面の要約
+
+sweep の表から閾値を選ぶと、選ぶのに使った画像そのもので成績を読むことになり、数字が楽観的になる。
+そのため `eval.json` の `sweepHalves` に、評価した画像を交互に 2 つへ分けた sweep を入れている。`tune` で閾値と margin を選び、
+同じ組合せの `test` の値をその設定の成績として読む。
 
 ## CPU 時間（2026-11-27、Ryzen 9 9900X・WSL2、12 スレッド）
 
@@ -152,10 +189,11 @@ GPU は要らない。200 枚の plan は参照の推論込みで 1 分前後の
 - 2 人並び（別キャラ）は要確認、風景と検出漏れの絵はキャラなし
 - 参照から外したキャラは DBSCAN で新規アルバム候補（2 枚）にまとまった
 - apply は承認した 2 グループだけ追加し、再実行は追加 0 枚。apply 後の plan は配属済みとして触らない
-- 描いた絵は人物検出の取りこぼしが多かった（24 枚中 14 枚）。実際のアニメ絵での検出率は `eval` の「キャラなし」で確かめる
+- 描いた絵は人物検出の取りこぼしが多かった（1 人の絵 24 枚中 10 枚。plan.json のキャラなし 13 枚は、この 10 枚と風景 3 枚）。
+  実際のアニメ絵での検出率は `eval` の「キャラなし」で確かめる
 
 実データ（personal の さくら / ひなた / ダウナーお姉さん）での CCIP の精度はまだ測っていない。
-`eval` を回して、sweep を見て `--threshold` / `--margin` を決める。
+`eval` を回し、`sweepHalves.tune` で `--threshold` / `--margin` を選んで、`sweepHalves.test` と open-set の誤一致率で確かめてから使う。
 
 ## 限界
 

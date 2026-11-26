@@ -1,0 +1,51 @@
+{
+  "g_trans.gif": {
+    "pillowMode": "P",
+    "transparency": true,
+    "width": 16,
+    "height": 12,
+    "rgb": "TGlxTGlxTGlxTGlxTGlxTGlx//7n//7n//7n//7n//7n//7n//7n//7n//7n//7nTGlxTGlxTGlxTGlxTGlxTGlx///p//3m//7n//7o/vzh+fHM9PLa/f3n//7n//7nTGlxTGlxTGlxTGlxTGlxTGlx///s//vm//3l///w++aw/diO+eWw/fzi///p//7nTGlxTGlxTGlxTGlxTGlxTGlx///q//zm/vzm///q4d7RzcG+6uDN/v3l///o//7nTGlxTGlxTGlxTGlxTGlxTGlx///r//zm/fzm///r2NXOopmp7OjZ///q/v3n//7nTGlxTGlxTGlxTGlxTGlxTGlx//3m//7n+vrm///plZW0FCOJycDD///o/v7n//7n//7n//7n/Pnk9PTt/Pz79PPl///n//7n+fnl///veX+tCReFvr7H///o//7n//7n//7n///n/Pvl7Ovl7evq7+7h///o/v3m/fzn//7kd32oHCaEsrXA///n///o//7n//7n//7n///p+PTe59nH/Pfg///o//7n//3m///q9O3X69/L/Pnj///o//7n//7n//7n//7n///q9vPd2s+89fHb///p/v3m/v3m///q7efS3dTB+ffh///p//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n"
+  },
+  "j_cmyk.jpg": {
+    "pillowMode": "CMYK",
+    "transparency": false,
+    "width": 16,
+    "height": 12,
+    "rgb": "/v/o+vrj/f7o/v/o+vrk+/zj+/zo/P3k+v3l/fzl/v7n/v7p/fzm/P7o+vzl/v7n/f7o+fnj/v/m7uTb7dbX9PHb+/zm/v/p/f3m+f3q+Pnd8OrI9PPW9vni/f3n9/nl/P3j/vzr8+bk9o/j+Jvf7L7c/v7q+fji/v/o+fvr9Omv8+GG8uqw+vrl/f7p/v7o/v/p+/zn8tbdzbaszreq9Lve/P3n+/no9/nk/fvn29zPycDC4tzI+fvk/v7o+Pvh+/zm/f3m9ujj6LbV6tfZ9Mbg/f7n+/zm/P3m///s09PMn5e15+nX///o+/vo/Prq/f3n/P3m8/Pc7+3o+fj37e3Z/vzq/P3l9ffj9Pjnlp/YAhf5yL3I+Prn+fzh/v7m/f7m/P3o+vni9PDt///+8u7h/v7r+vvi/fzo/v7scYniAgv7wMPL+//m//zq+Pnm+vvl/vzn+frj5+ji6ufo7ezh+/zj/v7p+vrm+PvjcYXbBBn0ub3K/Pnj+/7p/v/l+/vl+/zm/f7n9fDd39rH+Pbg/v/o+/zm/P3n+/rl7+vX4+DL+Pbh/f3n/f7n+/zl/Pzl/v/p/v/o7+zY2NXC7+3Y/Pzm/v/o/v/p/Pzm5+XQ2dfD9fTf/f7o+/zl/v/o/v/o+vvl/v/p/v7n+Pji/v7o/P3m+frj+frj/f7o/v7n+Pjh/v7o/f7o/f7n/P3m/v/o+Pnk+vvl+/zl+/zl/P3n+/zm/v/o/v/n+/zm/v/o+vvj+vvk+frk/v/o+/zl"
+  },
+  "p_gray_trns.png": {
+    "pillowMode": "L",
+    "transparency": true,
+    "width": 16,
+    "height": 12,
+    "rgb": "/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz87+/v39/f8fHx/Pz8+/v7/Pz8/Pz8+fn58PDw8fHx+vr6/Pz8/Pz8/Pz8/Pz86+vrysrKzc3N2dnZ/f39+vr6+/v7/f396Ojo4ODg6Ojo+fn5/Pz8/Pz8/Pz8+/v74+Pjzs7O0NDQ19fX/Pz8+vr6+vr6/Pz84uLi0tLS5eXl+vr6/Pz8/Pz8/Pz8/Pz86urq1NTU3t7e3d3d/f39+vr6+vr6/f393Nzcw8PD6enp/Pz8+/v7/Pz8/Pz8/Pz89fX18fHx+/v77+/v+/v7/Pz8+Pj4/Pz8wsLC3d3d0dHR/Pz8+/v7/Pz8/Pz8/Pz89/f39PT0+/v78vLy/Pz8/Pz89/f3/f39v7+/5eXlz8/P/Pz8/Pz8/Pz8/Pz8/Pz8+fn57Ozs7e3t7u7u/Pz8+/v7+vr6+/v7v7+/29vbysrK/Pz8/Pz8/Pz8/Pz8/Pz8/Pz89PT04ODg9vb2/Pz8/Pz8+/v7/Pz87e3t5OTk9/f3/Pz8/Pz8/Pz8/Pz8/Pz8/Pz88vLy2dnZ8fHx/Pz8+/v7+/v7/Pz86Ojo29vb9fX1/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8/Pz8"
+  },
+  "p_la_real.png": {
+    "pillowMode": "LA",
+    "transparency": false,
+    "width": 16,
+    "height": 12,
+    "rgb": "/////////v7+/v7+/f39/f39/Pz8/////////v7+/v7+/f39/f39/Pz8/////v7+/v7+/v7+/f398vLy3d3d/v7+/v7+/v7+/v7+/f39+vr68fHx/v7+/v7+/v7+/v7+/f39/f396+vr+/v78fHx7+/v/v7+/Pz8/Pz8/f39/f399/f39vb2/Pz8/f39/f39/Pz8////+Pj45ubm39/f3t7e/f39+vr6/////v7+8vLy4ODg6+vr+/v7/Pz8/////v7+/v7+8/Pz2tra39/f2NjY/////v7+/f39/v7+4uLirKys5+fn/////v7+/v7+/f39/f399vb28PDw/v7++vr6/f39/f39+vr6/Pz8/v7+3t7e7e3t/v7+/f39/f39/Pz8/////v7++/v7/f399/f3/f39/Pz8////////1tbWlpaW19fX/f39/Pz8/////v7+/v7+/Pz88vLy8PDw7+/v/////v7+/f39/f39rq6uWlpau7u7/////v7+/v7+/f39/f39/f399PT0/Pz8/f39/v7+/f39/Pz8/f397e3t/Pz8/f39/v7+/f39/f39/f39/Pz8/////Pz87e3t9/f3/f39/Pz8+/v7////+fn57u7u+vr6/f39/Pz8/Pz8/////v7+/v7+/f39/f39/Pz8/Pz8/////v7+/v7+/f39/f39/Pz8/////////v7+/v7+/f39/f39/Pz8/////////v7+/v7+/f39/f39/Pz8/////v7+/v7+/v7+/f39"
+  },
+  "p_palette_trns.png": {
+    "pillowMode": "P",
+    "transparency": true,
+    "width": 16,
+    "height": 12,
+    "rgb": "/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////6qq/6qq//////////////////////+q//+q//+q/////////////////////////6qq/6qq/6r///////////////////////+q/////////////////////////////6r/////////////////////////////qqqq////////////////////////////////////////////////////////qqqqAACq////////////////////////////////////////////////////////VVWqAACqqqr/////////////////////////////////////////////////////VVWqAACqqqr///////////////////////////////////////////////////////////////////////////////////////////////+q////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////"
+  },
+  "p_rgb_trns.png": {
+    "pillowMode": "RGB",
+    "transparency": true,
+    "width": 16,
+    "height": 12,
+    "rgb": "//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n///o+uvc7tLI9vLa///p//3m//7n//7o/vzh+fHM9PLa/f3n//7n//7n//7n///p/OPZ8Jiv8qGy88LF///s//vm//3l///w++aw/diO+eWw/fzi///p//7n///n//3o99bS07ap1bur9LzC///q//zm/vzm///q4d7RzcG+6uDN/v3l///o//7n//7n///o+uPY6bvB6tLL+MrL///r//zm/fzm///r2NXOopmp7OjZ///q/v3n//7n//7n//7n/Pbh9u/l/Pv69e7d//3m//7n+vrm///plZW0FCOJycDD///o/v7n//7n//7n//7n/Pnk9PTt/Pz79PPl///n//7n+fnl///veX+tCReFvr7H///o//7n//7n//7n///n/Pvl7Ovl7evq7+7h///o/v3m/fzn//7kd32oHCaEsrXA///n///o//7n//7n//7n///p+PTe59nH/Pfg///o//7n//3m///q9O3X69/L/Pnj///o//7n//7n//7n//7n///q9vPd2s+89fHb///p/v3m/v3m///q7efS3dTB+ffh///p//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n//7n"
+  },
+  "w_rgba.webp": {
+    "pillowMode": "RGBA",
+    "transparency": false,
+    "width": 16,
+    "height": 12,
+    "rgb": "///z///z///z///z///z///z///z///z///z///z///z///z///z///z///z///z///z///z///0/fXu9+nk+/nt///0//7z///z///0//7w/Pjm+vnt/v7z///z///z///z///0/vHs+MzX+dDZ+eHi///2//3z//7y///4/fPY/uzH/PLY/v7x///0///z///z//70++vp6dvU6t3V+t7h///1//7z//7z///18O/o5uDf9fDm//7y///0///z///z///0/fHs9N3g9enl/OXl///1//7z/v7z///17Orn0czU9vTs///1//7z///z///z///z/vvw+/fy/v39+vfu//7z///z/f3z///0ysraipHE5ODh///0///z///z///z///z/vzy+vr2/v79+vny///z///z/Pzy///3vL/WhIvC39/j///0///z///z///z///z/v3y9vXy9vX19/fw///0//7z/v7z///yu77UjpPC2drg///z///0///z///z///z///0/Prv8+zj/vvw///0///z//7z///1+vbr9e/l/vzx///0///z///z///z///z///1+/nu7efe+vjt///0//7z//7z///19vPp7urg/Pvw///0///z///z///z///z///z///z///z///z///z///z///z///z///z///z///z///z///z///z///z///z///z///z///z///z///z///z///z///z///z///z///z///z///z///z"
+  }
+}

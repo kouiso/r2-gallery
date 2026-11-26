@@ -22,7 +22,6 @@ import {
 import { availableParallelism, homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { performance } from "node:perf_hooks";
-import ort from "onnxruntime-node";
 import sharp from "sharp";
 import {
   CCIP_MODEL,
@@ -31,10 +30,14 @@ import {
   DETECTOR_SIZE,
   ccipInput,
   ccipParams,
+  cmykToRgbPil,
   cropBox,
   cropRgb,
+  dropAlpha,
+  eligiblePersons,
   flattenWhite,
-  selectPersons,
+  gifTransparentColor,
+  pillowAlphaRule,
   yoloDecode,
   yoloInput,
 } from "./character-albums-ccip-core.mjs";
@@ -126,10 +129,30 @@ async function ensureFile(dir, spec, { offline, log }) {
 }
 
 /**
- * 画像バイト列を RGB 画素にする。imgutils の load_image(mode="RGB") に合わせて、
- * 透過は白で塗り、ICC は無視し（Pillow は色変換しない）、EXIF の回転もかけない。
+ * 画像バイト列を RGB 画素にする。imgutils の load_image(mode="RGB") に合わせる。
+ * ICC は無視し（Pillow は色変換しない）、EXIF の回転もかけない。透過の扱いは形式で変わる
+ * （RGBA は白へ重ね、パレットや RGB の tRNS は透過を捨てる等。pillowAlphaRule を参照）。
+ * CMYK の JPEG も ICC を使わず Pillow と同じ素朴な式で RGB にする。
  */
 export async function decodeRgb(bytes) {
+  const meta = await sharp(bytes).metadata();
+  const rule = pillowAlphaRule(bytes, meta);
+  if (rule === "cmyk") {
+    // pipelineColourspace を cmyk にしないと sharp が途中で sRGB へ変換してしまい、元の CMYK 値が取れない
+    const { data, info } = await sharp(bytes, { ignoreIcc: true })
+      .pipelineColourspace("cmyk")
+      .toColourspace("cmyk")
+      .raw({ depth: "uchar" })
+      .toBuffer({ resolveWithObject: true });
+    if (info.channels !== 4) throw new Error(`CMYK として読めない画像（${info.channels} ch）`);
+    const cmyk = new Uint8Array(data.buffer, data.byteOffset, data.length);
+    return {
+      data: cmykToRgbPil(cmyk, info.width, info.height),
+      width: info.width,
+      height: info.height,
+      rule,
+    };
+  }
   const { data, info } = await sharp(bytes, { ignoreIcc: true })
     .toColourspace("srgb")
     .ensureAlpha()
@@ -137,12 +160,14 @@ export async function decodeRgb(bytes) {
     .toBuffer({ resolveWithObject: true });
   if (info.channels !== 4) throw new Error(`RGB にできない画像（${info.channels} ch）`);
   const rgba = new Uint8Array(data.buffer, data.byteOffset, data.length);
-  // 不透明な画素は白と重ねても値が変わらないので、透過の有無で分けずに同じ式を通す
-  return {
-    data: flattenWhite(rgba, info.width, info.height),
-    width: info.width,
-    height: info.height,
-  };
+  const { width, height } = info;
+  let rgb;
+  if (rule === "keep") rgb = dropAlpha(rgba, width, height);
+  else if (rule === "gifKey") rgb = dropAlpha(rgba, width, height, gifTransparentColor(bytes));
+  else if (rule === "selfMask") rgb = flattenWhite(rgba, width, height, 0);
+  // 不透明な画素は白と重ねても値が変わらないので、透過の無い画像も同じ式を通す
+  else rgb = flattenWhite(rgba, width, height);
+  return { data: rgb, width, height, rule };
 }
 
 /**
@@ -156,6 +181,8 @@ export async function openCcip({
   log = () => {},
   overrides = {},
 } = {}) {
+  // onnxruntime はここで初めて読む。decodeRgb だけを使う単体テストや --engine color でネイティブの実行系を載せないため
+  const { default: ort } = await import("onnxruntime-node");
   const files = {};
   for (const [name, spec] of Object.entries(MODEL_FILES)) {
     files[name] = await ensureFile(modelDir, spec, { offline, log });
@@ -218,12 +245,16 @@ export async function openCcip({
     });
   }
 
-  /** 1 枚を「人物の枠・切り出し・特徴量」にする。人物がいなければ persons は空。 */
+  /**
+   * 1 枚を「人物の枠・切り出し・特徴量」にする。人物がいなければ persons は空。
+   * detected は上限人数で切る前の人数。切った人物を判定で無かったことにしないために残す。
+   */
   async function analyze(bytes) {
     const t0 = performance.now();
     const img = await decodeRgb(bytes);
     const t1 = performance.now();
-    const persons = selectPersons(await detect(img), img.width, img.height, params).map((d) => ({
+    const eligible = eligiblePersons(await detect(img), img.width, img.height, params);
+    const persons = eligible.slice(0, params.maxPersons).map((d) => ({
       box: d.box,
       score: Math.round(d.score * 1000) / 1000,
       crop: cropBox(d.box, img.width, img.height, params.cropMargin),
@@ -241,6 +272,8 @@ export async function openCcip({
       height: img.height,
       rgb: img.data,
       persons,
+      detected: eligible.length,
+      decodeRule: img.rule,
       timings: { decode: t1 - t0, detect: t2 - t1, embed: t3 - t2, total: t3 - t0 },
     };
   }

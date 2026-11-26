@@ -38,7 +38,10 @@ import {
   ccipMerge,
   decideImage,
   evalMetrics,
-  refId,
+  evaluateLoo,
+  itemId,
+  makeRef,
+  openSetMetrics,
   sampleStable,
   scoreImage,
   sweep,
@@ -76,6 +79,46 @@ function fail(msg) {
   console.error(`error: ${msg}`);
   process.exit(1);
 }
+
+/**
+ * 数のオプションを読む。打ち間違い（"0.18x" など）を Number() に通すと NaN になり、
+ * NaN の閾値は「どんなに遠くても一致」と同じ働きをするので、読めない値はここで止める
+ */
+function numberArg(
+  name,
+  { integer = false, min, max, minExclusive = false, maxExclusive = false },
+) {
+  const raw = args[name];
+  if (raw === undefined) return undefined;
+  const v = Number(raw);
+  const inRange =
+    (min === undefined || (minExclusive ? v > min : v >= min)) &&
+    (max === undefined || (maxExclusive ? v < max : v <= max));
+  if (
+    String(raw).trim() === "" ||
+    !Number.isFinite(v) ||
+    (integer && !Number.isInteger(v)) ||
+    !inRange
+  ) {
+    const range = [
+      min === undefined ? null : `${min} ${minExclusive ? "より大きい" : "以上"}`,
+      max === undefined ? null : `${max} ${maxExclusive ? "未満" : "以下"}`,
+    ]
+      .filter(Boolean)
+      .join("・");
+    fail(`--${name} は ${range}の${integer ? "整数" : "数"}で渡す（受け取った値: ${raw}）`);
+  }
+  return v;
+}
+
+const opts = {
+  refPerAlbum: numberArg("ref-per-album", { integer: true, min: 1 }),
+  maxPerAlbum: numberArg("max-per-album", { integer: true, min: 1 }),
+  recent: numberArg("recent", { integer: true, min: 1 }) ?? 200,
+  threads: numberArg("threads", { integer: true, min: 1 }),
+  threshold: numberArg("threshold", { min: 0, minExclusive: true, max: 1 }),
+  margin: numberArg("margin", { min: 0, max: 1, maxExclusive: true }),
+};
 
 const endpoint = (process.env.R2G_ENDPOINT ?? "").replace(/\/$/, "");
 const token = process.env.R2G_TOKEN ?? "";
@@ -221,6 +264,7 @@ const DECISION_LABEL = {
   review: "要確認",
   unmatched: "未マッチ",
   nochar: "キャラなし",
+  error: "判定できず",
 };
 
 /** CCIP 用の preview。判定に使った人物の切り出しと、CCIP の差（小さいほど同キャラ）を並べる。 */
@@ -234,7 +278,9 @@ function previewHtmlCcip(plan, media, covers) {
       )
       .join("");
     const second = i.second ? `<br>2位 ${escapeHtml(i.second.albumTitle)} 差${i.second.score}` : "";
-    return `<figure class="${escapeHtml(i.decision)}"><img src="${m.thumb}"><figcaption><b>${escapeHtml(DECISION_LABEL[i.decision] ?? i.decision)}${i.confidence ? `（${escapeHtml(i.confidence)}）` : ""}</b> 人物 ${i.persons}${i.score != null ? `<br>CCIP の差 ${i.score}（代表 ${i.centroid ?? "-"}）` : ""}${second}<div>${crops}</div>${escapeHtml(i.rationale)}<br><code>${escapeHtml(i.key)}</code></figcaption></figure>`;
+    const persons =
+      i.detected && i.detected > i.persons ? `${i.detected}（照合 ${i.persons}）` : i.persons;
+    return `<figure class="${escapeHtml(i.decision)}"><img src="${m.thumb}"><figcaption><b>${escapeHtml(DECISION_LABEL[i.decision] ?? i.decision)}${i.confidence ? `（${escapeHtml(i.confidence)}）` : ""}</b> 人物 ${persons}${i.score != null ? `<br>CCIP の差 ${i.score}（代表 ${i.centroid ?? "-"}）` : ""}${second}<div>${crops}</div>${escapeHtml(i.rationale)}<br><code>${escapeHtml(i.key)}</code></figcaption></figure>`;
   };
   const section = (g) =>
     `<section><h2>${escapeHtml(g.title)}（${g.action === "add" ? "既存アルバムへ追加" : "新規アルバム候補"}・${g.items.length}枚）</h2>${
@@ -247,13 +293,14 @@ function previewHtmlCcip(plan, media, covers) {
     }<div>${g.items.map(card).join("")}</div></section>`;
   const p = plan.params;
   return `<!doctype html><meta charset="utf-8"><title>キャラ別アルバム仕分けプレビュー</title>
-<style>body{font-family:sans-serif;margin:16px}figure{display:inline-block;width:220px;vertical-align:top;margin:4px;font-size:11px;border:1px solid #ddd;padding:4px}figure>img{width:200px;height:200px;object-fit:contain;background:#f4f4f4}.crop{display:inline-block;width:64px;margin:2px;font-size:10px;vertical-align:top}.crop img{width:64px;height:64px;object-fit:contain;background:#fff;border:1px solid #ccc}img.ref{width:64px;height:64px;object-fit:contain}code{word-break:break-all}figure.review{border-color:#d90}figure.nochar{border-color:#999}</style>
+<style>body{font-family:sans-serif;margin:16px}figure{display:inline-block;width:220px;vertical-align:top;margin:4px;font-size:11px;border:1px solid #ddd;padding:4px}figure>img{width:200px;height:200px;object-fit:contain;background:#f4f4f4}.crop{display:inline-block;width:64px;margin:2px;font-size:10px;vertical-align:top}.crop img{width:64px;height:64px;object-fit:contain;background:#fff;border:1px solid #ccc}img.ref{width:64px;height:64px;object-fit:contain}code{word-break:break-all}figure.review{border-color:#d90}figure.nochar{border-color:#999}figure.error{border-color:#c00}</style>
 <h1>キャラ別アルバム仕分けプレビュー（${escapeHtml(plan.lib)}・CCIP）</h1>
 <p>反映するグループは plan.json の approved を true にしてから apply する。ここに出ている画像はまだどのアルバムにも入っていない。</p>
 <p>CCIP の差は小さいほど同じキャラ。閾値 ${p.threshold.toFixed(4)} 以下で一致、${p.high.toFixed(4)} 以下かつ代表との差も閾値以下で high。1 位と 2 位の差が ${p.margin} 未満は要確認。人物の切り出しごとに判定し、複数人で揃わない画像は要確認に回す。</p>
 ${plan.groups.map(section).join("")}
 <section><h2>未分類／要確認（${plan.unclassified.length}枚）</h2><div>${plan.unclassified.map(card).join("")}</div></section>
 <section><h2>キャラなし（${plan.nochar.length}枚）</h2><p>人物が検出されなかった画像。CCIP はキャラのいない絵同士をほぼ同一とみなすため照合しない。人物がいるのにここへ来た画像は検出漏れ。</p><div>${plan.nochar.map(card).join("")}</div></section>
+<section><h2>判定できなかった画像（${plan.failed.length}枚）</h2><p>取れない・読めないため照合していない。どのアルバムにも入れていないので、必要なら手で仕分ける。</p><div>${plan.failed.map(card).join("")}</div></section>
 <p>既にアルバムに入っていて触らなかった画像: ${plan.skipped.length}枚</p>`;
 }
 
@@ -312,9 +359,7 @@ async function targetItemsFor(lib) {
     if (notFound.length) console.warn(`warn: 一覧に見つからないキー ${notFound.length} 件は対象外`);
   } else {
     // recent は画像だけ数える。動画で枠が埋まると指定より少ない枚数しか照合しない
-    targetItems = await api.recentKeys(lib, Number(args.recent ?? 200), (i) =>
-      IMAGE_RE.test(i.key),
-    );
+    targetItems = await api.recentKeys(lib, opts.recent, (i) => IMAGE_RE.test(i.key));
   }
   return targetItems.filter((i) => IMAGE_RE.test(i.key));
 }
@@ -322,7 +367,7 @@ async function targetItemsFor(lib) {
 async function runPlanColor() {
   const lib = args.lib;
   const refTitles = refTitlesArg();
-  const perAlbum = Number(args["ref-per-album"]);
+  const perAlbum = opts.refPerAlbum;
   const { assigned, refAlbums } = await loadAlbums(lib, refTitles);
   const refs = [];
   const covers = new Map();
@@ -364,20 +409,24 @@ function writePlan(plan, html, count) {
   writeFileSync(join(args.out, "preview.html"), html);
   const summary = plan.groups.map((g) => `${g.title}=${g.items.length}`).join(" ");
   console.log(
-    `対象 ${count} 枚 / 配属済み ${plan.skipped.length} / 候補 ${summary || "なし"} / 未分類 ${plan.unclassified.length}${plan.nochar ? ` / キャラなし ${plan.nochar.length}` : ""}`,
+    `対象 ${count} 枚 / 配属済み ${plan.skipped.length} / 候補 ${summary || "なし"} / 未分類 ${plan.unclassified.length}${plan.nochar ? ` / キャラなし ${plan.nochar.length}` : ""}${plan.failed ? ` / 判定できず ${plan.failed.length}` : ""}`,
   );
+  if (plan.failed?.length) {
+    console.warn(
+      `warn: ${plan.failed.length} 枚は取れない・読めないため判定していない（plan.json の failed と preview の「判定できなかった画像」）`,
+    );
+  }
   console.log(`plan: ${join(args.out, "plan.json")}  preview: ${join(args.out, "preview.html")}`);
 }
 
 async function openEngine() {
   const { openCcip, defaultModelDir } = await import("./character-albums-ccip.mjs");
-  const num = (v) => (v === undefined ? undefined : Number(v));
   return openCcip({
     modelDir: args["model-dir"] ?? defaultModelDir(),
-    threads: args.threads,
+    threads: opts.threads,
     offline: args.offline,
     log: (m) => console.log(m),
-    overrides: { threshold: num(args.threshold), margin: num(args.margin) },
+    overrides: { threshold: opts.threshold, margin: opts.margin },
   });
 }
 
@@ -404,10 +453,12 @@ async function* prefetch(items, ahead = 4) {
 
 const timingsLog = [];
 
-async function analyzeItems(engine, items, onEach) {
+/** onError は取れない・読めない画像ごとに呼ぶ。呼び手が plan や eval に「判定できなかった」と残すため。 */
+async function analyzeItems(engine, items, onEach, onError = () => {}) {
   for await (const { it, bytes, error } of prefetch(items)) {
     if (error) {
       console.warn(`warn: ${it.key} を取れない（${error.message}）`);
+      onError(it, `画像を取れない（${error.message}）`);
       continue;
     }
     let a;
@@ -415,6 +466,7 @@ async function analyzeItems(engine, items, onEach) {
       a = await engine.analyze(bytes);
     } catch (e) {
       console.warn(`warn: ${it.key} を読めない（${e.message}）`);
+      onError(it, `画像を読めない（${e.message}）`);
       continue;
     }
     timingsLog.push(a.timings);
@@ -436,8 +488,9 @@ async function buildProfiles(engine, lib, refAlbums, perAlbum, cache = new Map()
     // 複数人やキャラなしが多いアルバムで延々と落とさないよう、試す枚数に上限を置く
     const candidates = ordered.slice(0, perAlbum * 3);
     const take = async (it, an) => {
-      if (an.persons.length !== 1) return true;
-      refs.push({ key: it.key, lib: it.lib ?? lib, feat: an.persons[0].feat });
+      if (an.persons.length !== 1 || (an.detected ?? 1) !== 1) return true;
+      // 参照の id は itemId と同じ式（makeRef）で作る。eval の selfId と食い違うと自分自身と照合してしまう
+      refs.push(makeRef(it, lib, an.persons[0].feat));
       // eval で使い回す推論結果は画素を落としてあるので、代表の切り出しは作らない
       if (coverUris.length < 6 && an.rgb) {
         const { cropDataUri } = await import("./character-albums-ccip.mjs");
@@ -448,14 +501,14 @@ async function buildProfiles(engine, lib, refAlbums, perAlbum, cache = new Map()
     const uncached = [];
     for (const it of candidates) {
       if (refs.length >= perAlbum) break;
-      const hit = cache.get(`${it.lib ?? lib}:${it.key}`);
+      const hit = cache.get(itemId(it, lib));
       if (hit) {
         if ((await take(it, hit)) === false) break;
       } else uncached.push(it);
     }
     if (refs.length < perAlbum) {
       await analyzeItems(engine, uncached, async (it, an) => {
-        cache.set(`${it.lib ?? lib}:${it.key}`, stripRgb(an));
+        cache.set(itemId(it, lib), stripRgb(an));
         return take(it, an);
       });
     }
@@ -491,7 +544,7 @@ function timingSummary() {
 async function runPlanCcip() {
   const lib = args.lib;
   const refTitles = refTitlesArg();
-  const perAlbum = Number(args["ref-per-album"]);
+  const perAlbum = opts.refPerAlbum;
   const engine = await openEngine();
   const { cropDataUri } = await import("./character-albums-ccip.mjs");
   const { assigned, refAlbums } = await loadAlbums(lib, refTitles);
@@ -505,16 +558,27 @@ async function runPlanCcip() {
     .filter((it) => effectiveAssigned.has(`${lib}:${it.key}`))
     .map((it) => ({ key: it.key, result: { decision: "skipped" } }));
   const media = new Map();
-  await analyzeItems(engine, todo, async (it, an) => {
+  const onError = (it, rationale) => {
+    targets.push({ key: it.key, result: { decision: "error", rationale } });
+  };
+  await analyzeItems(
+    engine,
+    todo,
+    async (it, an) => {
+      await judgeTarget(it, an);
+    },
+    onError,
+  );
+  async function judgeTarget(it, an) {
     const crops = await scoreImage({
       persons: an.persons,
       albums: profiles,
       // --ignore-assigned で参照に入っている画像を照合する時、自分自身とは比べない
-      selfId: `${it.lib ?? lib}:${it.key}`,
+      selfId: itemId(it, lib),
       differences: engine.differences,
       topK: engine.params.topK,
     });
-    const result = decideImage(crops, engine.params);
+    const result = decideImage(crops, engine.params, { detected: an.detected });
     media.set(it.key, {
       thumb: await cropDataUri(an, { left: 0, top: 0, width: an.width, height: an.height }, 200),
       crops: await Promise.all(an.persons.map((p) => cropDataUri(an, p.crop, 64))),
@@ -524,7 +588,7 @@ async function runPlanCcip() {
       result,
       persons: an.persons.map(({ box, crop, feat }) => ({ box, crop, feat })),
     });
-  });
+  }
   const plan = await buildCcipPlan({
     lib,
     targets,
@@ -547,61 +611,67 @@ async function runEval() {
   const lib = args.lib;
   const refTitles = refTitlesArg();
   if (refTitles.length < 2) fail("eval には参照アルバムが 2 つ以上いる（取り違えを測るため）");
-  const perAlbum = Number(args["ref-per-album"]);
-  const maxPerAlbum = Number(args["max-per-album"]);
+  const perAlbum = opts.refPerAlbum;
+  const maxPerAlbum = opts.maxPerAlbum;
   const engine = await openEngine();
   const { refAlbums, membership } = await loadAlbums(lib, refTitles);
   const cache = new Map();
   const evalSets = new Map();
+  const fetchErrors = [];
   // 評価する画像（アルバムごとにハッシュ順の先頭 maxPerAlbum 枚）を先に推論しておき、
   // 参照選びでも同じ推論を使い回す。参照はその先頭部分に入るので二度推論しない
   for (const a of refAlbums) {
     const evalSet = sampleStable(a.items, maxPerAlbum);
     evalSets.set(a.id, evalSet);
     let done = 0;
-    await analyzeItems(engine, evalSet, async (it, an) => {
-      cache.set(`${it.lib ?? lib}:${it.key}`, stripRgb(an));
-      done++;
-      if (done % 20 === 0) console.log(`  ${a.title}: ${done}/${evalSet.length}`);
-    });
+    await analyzeItems(
+      engine,
+      // 2 つの参照アルバムに入っている画像は 1 回だけ推論する（評価も 1 回だけ。evaluateLoo 参照）
+      evalSet.filter((it) => !cache.has(itemId(it, lib))),
+      async (it, an) => {
+        cache.set(itemId(it, lib), stripRgb(an));
+        done++;
+        if (done % 20 === 0) console.log(`  ${a.title}: ${done}/${evalSet.length}`);
+      },
+      (it, rationale) => fetchErrors.push({ key: it.key, albumId: a.id, rationale }),
+    );
   }
   const { profiles } = await buildProfiles(engine, lib, refAlbums, perAlbum, cache);
-  const records = [];
-  const samples = [];
-  for (const a of refAlbums) {
-    for (const it of evalSets.get(a.id)) {
-      const id = `${it.lib ?? lib}:${it.key}`;
-      const an = cache.get(id);
-      if (!an) continue;
-      const crops = await scoreImage({
-        persons: an.persons,
-        albums: profiles,
-        selfId: id,
-        differences: engine.differences,
-        topK: engine.params.topK,
-      });
-      const truths = (membership.get(id) ?? [a.id]).filter((x) => profiles.some((p) => p.id === x));
-      const r = decideImage(crops, engine.params);
-      records.push({
-        key: it.key,
-        truth: a.id,
-        truths,
-        decision: r.decision,
-        albumId: r.decision === "match" ? r.albumId : null,
-        albumTitle: r.albumTitle ?? null,
-        score: r.score ?? null,
-        second: r.second ?? null,
-        persons: r.persons,
-      });
-      samples.push({ truth: a.id, truths, crops });
-    }
-  }
+  const { records, samples, failed, duplicates } = await evaluateLoo({
+    lib,
+    refAlbums,
+    evalSets,
+    profiles,
+    analyses: cache,
+    membership,
+    differences: engine.differences,
+    params: engine.params,
+  });
   const albums = profiles.map((p) => ({ id: p.id, title: p.title }));
   const metrics = evalMetrics(records, albums);
-  const table = sweep(samples, albums, engine.params, {
+  const openSet = openSetMetrics(samples, albums, engine.params);
+  const grid = {
     thresholds: [...new Set([...SWEEP_THRESHOLDS, engine.params.threshold])].sort((x, y) => x - y),
-    margins: SWEEP_MARGINS,
-  });
+    // --margin で渡した値も表に入れる。無いと使っている margin の行が sweep に出ない
+    margins: [...new Set([...SWEEP_MARGINS, engine.params.margin])].sort((x, y) => x - y),
+  };
+  const table = sweep(samples, albums, engine.params, grid);
+  // 閾値を sweep から選ぶと、選んだ画像そのもので成績を測ることになり楽観的になる。
+  // ハッシュ順で交互に 2 つへ分け、片方（tune）で選んで、もう片方（test）の値で確かめられるようにする
+  const halves = {
+    tune: sweep(
+      samples.filter((_, i) => i % 2 === 0),
+      albums,
+      engine.params,
+      grid,
+    ),
+    test: sweep(
+      samples.filter((_, i) => i % 2 === 1),
+      albums,
+      engine.params,
+      grid,
+    ),
+  };
   const result = {
     version: 1,
     engine: "ccip",
@@ -617,13 +687,25 @@ async function runEval() {
         id: a.id,
         title: a.title,
         images: a.items.length,
-        evaluated: evalSets.get(a.id).length,
+        sampled: evalSets.get(a.id).length,
+        evaluated: records.filter((r) => r.truth === a.id).length,
         refs: profiles.find((p) => p.id === a.id).refs.length,
+      })),
+      // 2 つの参照アルバムに入っていて、先のアルバムで評価済みだった画像（2 回数えない）
+      duplicates,
+      // 取れない・読めないため評価できなかった画像
+      failed: failed.map((f) => ({
+        ...f,
+        rationale: fetchErrors.find((e) => e.key === f.key)?.rationale ?? null,
       })),
     },
     timing: timingSummary(),
     metrics,
+    // 自分のキャラのアルバムを候補から外した時に、他のアルバムへ一致と出した率（新キャラの誤一致の目安）
+    openSet,
     sweep: table,
+    // sweep を交互に 2 つへ分けた物。tune で閾値を選び、test の値をその閾値の成績として読む
+    sweepHalves: halves,
     records,
   };
   mkdirSync(args.out, { recursive: true });
@@ -653,6 +735,22 @@ function printEval(r) {
   console.log(
     `アルバム平均      precision ${pct(macro.precision)} recall ${pct(macro.recall)} 保留 ${pct(macro.abstainRate)}`,
   );
+  console.log(
+    `open-set（自分のアルバムを外した時に他へ一致と出した率）: 全体 ${pct(r.openSet.falseMatchRate)} アルバム平均 ${pct(r.openSet.macroFalseMatchRate)}`,
+  );
+  for (const row of r.openSet.perAlbum) {
+    console.log(
+      `  ${row.title.padEnd(18)} 誤一致 ${String(row.falseMatch).padStart(4)}/${String(row.n).padEnd(4)} ${pct(row.falseMatchRate)}  要確認 ${row.review} 未マッチ ${row.unmatched} キャラなし ${row.nochar}`,
+    );
+  }
+  const { duplicates, failed } = r.sampling;
+  if (duplicates.length) {
+    console.log(
+      `2 つの参照アルバムに入っていて 1 回だけ評価した画像: ${duplicates.length} 枚（後のアルバムの件数から外した）`,
+    );
+  }
+  if (failed.length)
+    console.warn(`warn: 取れない・読めないため評価できなかった画像: ${failed.length} 枚`);
   console.log("\n取り違え表（行 = 正解、列 = 判定）");
   for (const [truth, cols] of Object.entries(r.metrics.confusion)) {
     console.log(
@@ -677,6 +775,19 @@ function printEval(r) {
     });
     console.log(`  ${t.toFixed(4).padEnd(16)} ${cells.join("")}`);
   }
+  console.log("\nsweep の open-set 誤一致率（全体。低いほど新キャラを既存アルバムへ寄せない）");
+  console.log(`  threshold\\margin ${margins.map((m) => m.toFixed(2).padStart(8)).join("")}`);
+  for (const t of thresholds) {
+    const cells = margins.map((m) => {
+      const s = r.sweep.find((x) => x.threshold === t && x.margin === m);
+      const mark = t === def && m === r.params.margin ? "*" : " ";
+      return `${mark}${pct(s.openSet.falseMatchRate).trim()}`.padStart(8);
+    });
+    console.log(`  ${t.toFixed(4).padEnd(16)} ${cells.join("")}`);
+  }
+  console.log(
+    "\n閾値を sweep から選ぶ時は eval.json の sweepHalves.tune で選び、同じ組合せの sweepHalves.test を成績として読む",
+  );
   if (r.timing)
     console.log(`\nCPU 時間 ${JSON.stringify(r.timing.msPerImage)} ms/枚（${r.timing.images} 枚）`);
 }
@@ -695,6 +806,8 @@ async function runAnalyze() {
       JSON.stringify({
         file: f,
         size: [a.width, a.height],
+        decode: a.decodeRule,
+        detected: a.detected,
         persons: a.persons.map((p) => ({ box: p.box, score: p.score, crop: p.crop })),
         ms: Object.fromEntries(Object.entries(a.timings).map(([k, v]) => [k, Math.round(v)])),
       }),

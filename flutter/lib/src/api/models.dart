@@ -244,3 +244,387 @@ class ObjectCheck {
   final int pending;
   const ObjectCheck({required this.results, this.pending = 0});
 }
+
+// ---- 見た目の照合（重複・似ている写真）----
+
+/// 署名の方式名。Worker と食い違うと 409 alg_mismatch で弾かれ、アプリの更新が要ると分かる
+const similarAlg = 'vs1';
+
+// 数の欄は Worker が省いたり null を返したりしても画面を落とさず 0 として扱う
+int _n(Map j, String k) => (j[k] as num?)?.toInt() ?? 0;
+int? _optN(Map j, String k) => (j[k] as num?)?.toInt();
+Map _obj(Object? v) => v is Map ? v : const {};
+
+/// 見た目の照合がどこまで済んだか。照合の前に通信量を見積もって同意を取るのに使う
+class SimilarStatus {
+  final String alg;
+  final String params;
+  final int images;
+  final int signed;
+  final int failed;
+  final int flat;
+  final int pending;
+  final int pendingWithThumb;
+  final int pendingNoThumb;
+  final int pendingBytesEstimate;
+
+  /// Worker が 1 回に受ける署名の件数（SIMILAR_SIG_BATCH）。載っていなければ null（上限の 200 を使う）
+  final int? sigBatch;
+
+  /// Worker が 1 回に受けるゴミ箱・取り消しの件数（SIMILAR_TRASH_BATCH）。載っていなければ null（40）
+  final int? trashBatch;
+  const SimilarStatus({
+    this.alg = similarAlg,
+    this.params = '',
+    this.images = 0,
+    this.signed = 0,
+    this.failed = 0,
+    this.flat = 0,
+    this.pending = 0,
+    this.pendingWithThumb = 0,
+    this.pendingNoThumb = 0,
+    this.pendingBytesEstimate = 0,
+    this.sigBatch,
+    this.trashBatch,
+  });
+
+  factory SimilarStatus.fromJson(Map j) => SimilarStatus(
+        alg: (j['alg'] as String?) ?? similarAlg,
+        params: (j['params'] as String?) ?? '',
+        images: _n(j, 'images'),
+        signed: _n(j, 'signed'),
+        failed: _n(j, 'failed'),
+        flat: _n(j, 'flat'),
+        pending: _n(j, 'pending'),
+        pendingWithThumb: _n(j, 'pendingWithThumb'),
+        pendingNoThumb: _n(j, 'pendingNoThumb'),
+        pendingBytesEstimate: _n(j, 'pendingBytesEstimate'),
+        sigBatch: _batch(j['sigBatch']),
+        trashBatch: _batch(j['trashBatch']),
+      );
+
+  static int? _batch(Object? v) => v is num && v >= 1 ? v.toInt() : null;
+}
+
+/// まだ署名の無い画像1件。[etag] は署名を送る時に添え、Worker が入れ替わりを見分ける
+class SimilarTodoItem {
+  final MediaItem item;
+  final String etag;
+  final int size;
+  final String ext;
+  const SimilarTodoItem({
+    required this.item,
+    required this.etag,
+    required this.size,
+    required this.ext,
+  });
+
+  /// todo は画像しか返さず type や lib を省くことがあるので、既定をここで補う
+  factory SimilarTodoItem.fromJson(Map<String, dynamic> j, {String? lib}) =>
+      SimilarTodoItem(
+        item: MediaItem.fromJson({'type': 'image', 'lib': ?lib, ...j}),
+        etag: (j['etag'] as String?) ?? '',
+        size: _n(j, 'size'),
+        ext: (j['ext'] as String?) ?? '',
+      );
+
+  String get key => item.key;
+}
+
+/// todo の1ページ。[next] が null ならその shard は読み切った
+class SimilarTodoPage {
+  final int shard;
+  final List<SimilarTodoItem> items;
+  final String? next;
+  final int pendingInShard;
+  const SimilarTodoPage({
+    required this.shard,
+    required this.items,
+    this.next,
+    this.pendingInShard = 0,
+  });
+
+  factory SimilarTodoPage.fromJson(Map j, {String? lib}) => SimilarTodoPage(
+        shard: _n(j, 'shard'),
+        items: ((j['items'] as List?) ?? const [])
+            .map((e) =>
+                SimilarTodoItem.fromJson(e as Map<String, dynamic>, lib: lib))
+            .toList(),
+        next: j['next'] as String?,
+        pendingInShard: _n(j, 'pendingInShard'),
+      );
+}
+
+/// 署名1件ぶんの送信内容。読めなかった物も [fail] で送り、次回から取り直さないようにする
+class SignatureUpload {
+  final String key;
+  final String etag;
+
+  /// "t" は保存済みサムネ、"o" は原本から作った物
+  final String src;
+
+  /// 297 バイトの署名を base64url（パディング無し）にした物
+  final String? sig;
+
+  /// "decode" か "too_large"
+  final String? fail;
+
+  const SignatureUpload._(this.key, this.etag, this.src, this.sig, this.fail);
+  const SignatureUpload.signed({
+    required String key,
+    required String etag,
+    required String src,
+    required String sig,
+  }) : this._(key, etag, src, sig, null);
+  const SignatureUpload.failed({
+    required String key,
+    required String etag,
+    required String src,
+    required String fail,
+  }) : this._(key, etag, src, null, fail);
+
+  Map<String, dynamic> toJson() => {
+        'key': key,
+        'etag': etag,
+        'src': src,
+        'sig': ?sig,
+        'fail': ?fail,
+      };
+}
+
+/// 署名の送信結果。[stale] は送る間に中身が入れ替わって捨てられた件数
+class SignaturePostResult {
+  final int stored;
+  final int stale;
+  final int failRecorded;
+  const SignaturePostResult(
+      {this.stored = 0, this.stale = 0, this.failRecorded = 0});
+
+  factory SignaturePostResult.fromJson(Map j) => SignaturePostResult(
+        stored: _n(j, 'stored'),
+        stale: _n(j, 'stale'),
+        failRecorded: _n(j, 'failRecorded'),
+      );
+}
+
+/// 組の中の1件。[match] は keeper / identical / same / mirror / similar のどれか
+class SimilarMember {
+  final MediaItem item;
+  final int size;
+  final String match;
+  final int? ph;
+  final int? dh;
+
+  /// 原本の大きさと形式が同じで、細かい差分があるかもしれない（差分かも）
+  final bool variant;
+  final int? ow;
+  final int? oh;
+  const SimilarMember({
+    required this.item,
+    required this.size,
+    required this.match,
+    this.ph,
+    this.dh,
+    this.variant = false,
+    this.ow,
+    this.oh,
+  });
+
+  factory SimilarMember.fromJson(Map<String, dynamic> j) => SimilarMember(
+        item: MediaItem.fromJson(j),
+        size: _n(j, 'size'),
+        // 欠けた時は一括選択に拾われない一番弱い札にして、誤って消す側へ倒さない
+        match: (j['match'] as String?) ?? 'similar',
+        ph: _optN(j, 'ph'),
+        dh: _optN(j, 'dh'),
+        variant: (j['variant'] as bool?) ?? false,
+        ow: _optN(j, 'ow'),
+        oh: _optN(j, 'oh'),
+      );
+
+  String get key => item.key;
+  bool get isKeeper => match == 'keeper';
+}
+
+/// 残す1件（keeper）を中心にした組。[id] は keeper のキーで、[more] は応答に載らなかった件数
+class SimilarGroup {
+  final String id;
+
+  /// "dup" か "similar"
+  final String tier;
+  final int reclaim;
+  final List<SimilarMember> members;
+  final int more;
+  const SimilarGroup({
+    required this.id,
+    required this.tier,
+    required this.members,
+    this.reclaim = 0,
+    this.more = 0,
+  });
+
+  factory SimilarGroup.fromJson(Map<String, dynamic> j) => SimilarGroup(
+        id: j['id'] as String,
+        tier: (j['tier'] as String?) ?? 'dup',
+        reclaim: _n(j, 'reclaim'),
+        members: ((j['items'] as List?) ?? const [])
+            .map((e) => SimilarMember.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        more: _n(j, 'more'),
+      );
+}
+
+/// 1つの段（重複／似ている）の合計。[reclaimable] は重複の段にだけ入る
+class SimilarTierSummary {
+  final int groups;
+  final int items;
+  final int reclaimable;
+  const SimilarTierSummary(
+      {this.groups = 0, this.items = 0, this.reclaimable = 0});
+
+  factory SimilarTierSummary.fromJson(Map j) => SimilarTierSummary(
+        groups: _n(j, 'groups'),
+        items: _n(j, 'items'),
+        reclaimable: _n(j, 'reclaimable'),
+      );
+}
+
+/// 照合が届いた範囲。見つからなかった理由を画面で言い分けるために残す
+class SimilarCoverage {
+  final int images;
+  final int signed;
+  final int pending;
+  final int failed;
+  final int flat;
+  const SimilarCoverage({
+    this.images = 0,
+    this.signed = 0,
+    this.pending = 0,
+    this.failed = 0,
+    this.flat = 0,
+  });
+
+  factory SimilarCoverage.fromJson(Map j) => SimilarCoverage(
+        images: _n(j, 'images'),
+        signed: _n(j, 'signed'),
+        pending: _n(j, 'pending'),
+        failed: _n(j, 'failed'),
+        flat: _n(j, 'flat'),
+      );
+}
+
+/// ライブラリ全体の合計。ページに依らず同じ値が返る
+class SimilarSummary {
+  final SimilarTierSummary dup;
+  final SimilarTierSummary similar;
+  final int crowded;
+  final SimilarCoverage coverage;
+  final int hashPending;
+  final int hashSkipped;
+  const SimilarSummary({
+    this.dup = const SimilarTierSummary(),
+    this.similar = const SimilarTierSummary(),
+    this.crowded = 0,
+    this.coverage = const SimilarCoverage(),
+    this.hashPending = 0,
+    this.hashSkipped = 0,
+  });
+
+  factory SimilarSummary.fromJson(Map j) => SimilarSummary(
+        dup: SimilarTierSummary.fromJson(_obj(j['dup'])),
+        similar: SimilarTierSummary.fromJson(_obj(j['similar'])),
+        crowded: _n(j, 'crowded'),
+        coverage: SimilarCoverage.fromJson(_obj(j['coverage'])),
+        hashPending: _n(j, 'hashPending'),
+        hashSkipped: _n(j, 'hashSkipped'),
+      );
+}
+
+/// 組の一覧の1ページ。[cursor] は「この組の後ろから」の意味で、削除しても位置がずれない
+class SimilarPage {
+  final List<SimilarGroup> groups;
+  final String? cursor;
+  final int total;
+  final SimilarSummary summary;
+  const SimilarPage({
+    required this.groups,
+    this.cursor,
+    this.total = 0,
+    this.summary = const SimilarSummary(),
+  });
+
+  factory SimilarPage.fromJson(Map j) => SimilarPage(
+        groups: ((j['groups'] as List?) ?? const [])
+            .map((e) => SimilarGroup.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        cursor: j['cursor'] as String?,
+        total: _n(j, 'total'),
+        summary: SimilarSummary.fromJson(_obj(j['summary'])),
+      );
+}
+
+/// オリジナルを選び直した時の1件ぶんの付け直し結果。[match] が null なら新しいオリジナルとは別物
+class SimilarLabel {
+  final String? match;
+  final int? ph;
+  final int? dh;
+  final bool variant;
+  const SimilarLabel({this.match, this.ph, this.dh, this.variant = false});
+
+  factory SimilarLabel.fromJson(Map j) => SimilarLabel(
+        match: j['match'] as String?,
+        ph: _optN(j, 'ph'),
+        dh: _optN(j, 'dh'),
+        variant: (j['variant'] as bool?) ?? false,
+      );
+}
+
+/// 一括ゴミ箱の1件ぶん。失敗は [error] の理由で再読み込みの要否を決める
+class SimilarTrashItemResult {
+  final String key;
+  final bool ok;
+  final String? trashKey;
+
+  /// 成功時、Worker が確かめ直した種類（identical / same / mirror / similar）
+  final String? kind;
+  final String? error;
+  const SimilarTrashItemResult({
+    required this.key,
+    required this.ok,
+    this.trashKey,
+    this.kind,
+    this.error,
+  });
+
+  factory SimilarTrashItemResult.fromJson(Map j) => SimilarTrashItemResult(
+        key: (j['key'] as String?) ?? '',
+        ok: (j['ok'] as bool?) ?? false,
+        trashKey: j['trashKey'] as String?,
+        kind: j['kind'] as String?,
+        error: j['error'] as String?,
+      );
+}
+
+/// 一括の取り消しの1件ぶん
+class SimilarUndoItemResult {
+  final String trashKey;
+  final bool ok;
+  final String? key;
+  final String? error;
+  final int? status;
+  const SimilarUndoItemResult({
+    required this.trashKey,
+    required this.ok,
+    this.key,
+    this.error,
+    this.status,
+  });
+
+  factory SimilarUndoItemResult.fromJson(Map j) => SimilarUndoItemResult(
+        trashKey: (j['trashKey'] as String?) ?? '',
+        ok: (j['ok'] as bool?) ?? false,
+        key: j['key'] as String?,
+        error: j['error'] as String?,
+        status: _optN(j, 'status'),
+      );
+}

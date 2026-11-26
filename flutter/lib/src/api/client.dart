@@ -332,6 +332,80 @@ class ApiClient {
     return tk is String ? tk : '';
   }
 
+  // ---- 見た目の照合（重複・似ている写真）----
+  // 古い Worker はどれも 404 を返す。呼び出し側は ApiError(status: 404) を見て従来の重複画面に戻す
+
+  /// 照合の進み具合。照合前の同意（通信量の見積もり）に使う
+  Future<SimilarStatus> similarStatus(String libId) =>
+      _get('${_lib(libId)}/similar/status',
+          (r) => SimilarStatus.fromJson(_obj(r.data)));
+
+  /// [shard]（0〜31）のうち、まだ署名の無い画像を [after] の続きから読む
+  Future<SimilarTodoPage> similarTodo(String libId, int shard,
+          {String? after, int? limit}) =>
+      _get('${_lib(libId)}/similar/todo',
+          (r) => SimilarTodoPage.fromJson(_obj(r.data), lib: libId),
+          query: {
+            'shard': shard,
+            'after': ?after,
+            'limit': ?limit,
+          });
+
+  /// 署名をまとめて送る（Worker は1回 200 件まで）。方式が古ければ 409 alg_mismatch
+  Future<SignaturePostResult> postSignatures(
+          String libId, List<SignatureUpload> items,
+          {String alg = similarAlg}) =>
+      _post('${_lib(libId)}/similar/signatures', {
+        'alg': alg,
+        'items': [for (final i in items) i.toJson()],
+      }, (r) => SignaturePostResult.fromJson(_obj(r.data)));
+
+  /// [tab] は "dup"（重複）か "similar"（似ている）。[cursor] は前のページが返した物
+  Future<SimilarPage> similarGroups(String libId, String tab,
+          {String? cursor, int? limit}) =>
+      _get('${_lib(libId)}/similar', (r) => SimilarPage.fromJson(_obj(r.data)),
+          query: {
+            'tab': tab,
+            'cursor': ?cursor,
+            'limit': ?limit,
+          });
+
+  /// オリジナルを [keep] に選び直した時、[keys]（60 件まで）を Worker に付け直させる
+  Future<Map<String, SimilarLabel>> similarRelabel(
+          String libId, String keep, List<String> keys) =>
+      _post('${_lib(libId)}/similar/relabel', {'keep': keep, 'keys': keys},
+          (r) {
+        final labels = _obj(_obj(r.data)['labels']);
+        return {
+          for (final e in labels.entries)
+            if (e.key is String)
+              e.key as String: SimilarLabel.fromJson(_obj(e.value)),
+        };
+      });
+
+  /// まとめてゴミ箱へ（1回 40 件まで）。Worker は端末の組分けを信じず1件ずつ確かめ直すので、
+  /// 失敗は要求全体ではなく項目ごとに results で返る
+  Future<List<SimilarTrashItemResult>> similarTrash(
+          String libId, List<({String key, String keep})> items) =>
+      _post('${_lib(libId)}/similar/trash', {
+        'items': [
+          for (final i in items) {'key': i.key, 'keep': i.keep},
+        ],
+      }, (r) => ((_obj(r.data)['results'] as List?) ?? const [])
+          .map((e) => SimilarTrashItemResult.fromJson(_obj(e)))
+          .toList());
+
+  /// 直後の「元に戻す」専用の一括取り消し（1回 40 件まで）。アルバムも削除前の形に戻る
+  Future<List<SimilarUndoItemResult>> similarUndo(
+          String libId, List<String> trashKeys) =>
+      _post('${_lib(libId)}/similar/undo', {'trashKeys': trashKeys},
+          (r) => ((_obj(r.data)['results'] as List?) ?? const [])
+              .map((e) => SimilarUndoItemResult.fromJson(_obj(e)))
+              .toList());
+
+  // 応答の形が崩れていても型エラーで落とさず、空として各モデルの既定値に寄せる
+  static Map _obj(Object? v) => v is Map ? v : const {};
+
   /// アップロード前の照合。results[i] が items[i] に答える（1回 1000 件まで）。
   /// sha256 を付けない項目はサイズの一致数だけを返す。
   Future<ObjectCheck> checkObjects(

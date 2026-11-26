@@ -31,6 +31,15 @@ export interface Env {
   DUP_SCAN_OBJECTS?: string;
   /** これより大きい物は重複の確認で中身を計算しない（既定 1 GiB）。 */
   DUP_MAX_OBJECT_BYTES?: string;
+  /**
+   * 似ている写真を束ねる時の節の数の上限（既定 150000）。超えると GET /similar は 413 too_many_for_similar。
+   * 署名を全部読んで束ねるので、これより大きいライブラリは Worker のメモリと CPU 時間に収まらない。
+   */
+  SIMILAR_MAX_NODES?: string;
+  /** POST /similar/signatures の 1 回の件数の上限（既定 200、最大 200。原本の先頭を 1 件ずつ読むので外部呼び出しの上限に効く）。 */
+  SIMILAR_SIG_BATCH?: string;
+  /** POST /similar/trash の 1 回の件数の上限（既定 40、最大 40。1 件あたり約 12 回の外部呼び出しを使う）。 */
+  SIMILAR_TRASH_BATCH?: string;
   /** Cloudflare Images の binding。無い環境では JPEG の写しを作らない。 */
   IMAGES?: unknown;
   /** Optional read-only D1 binding holding per-object review rows. */
@@ -69,6 +78,28 @@ export function writable(env: Env, libId: unknown): { lib: LibraryConfig; bucket
   if (!t) throw new HttpError(404, "unknown_library");
   if (t.lib.readOnly) throw new HttpError(403, "read_only_library");
   return t;
+}
+
+export interface SimilarLimits {
+  maxNodes: number;
+  sigBatch: number;
+  trashBatch: number;
+}
+
+/**
+ * SIMILAR_* の値を読む。壊れた値・0 以下は既定に戻し、件数の上限は最大値で頭打ちにする
+ * （設定で上限を上げると 1 リクエストの外部呼び出しの上限 1000 回を超えて落ちる）。
+ */
+export function similarLimits(env: Env): SimilarLimits {
+  const num = (raw: string | undefined, fallback: number) => {
+    const n = Number(raw);
+    return raw !== undefined && raw !== "" && Number.isInteger(n) && n > 0 ? n : fallback;
+  };
+  return {
+    maxNodes: num(env.SIMILAR_MAX_NODES, 150_000),
+    sigBatch: Math.min(200, num(env.SIMILAR_SIG_BATCH, 200)),
+    trashBatch: Math.min(40, num(env.SIMILAR_TRASH_BATCH, 40)),
+  };
 }
 
 export function readable(env: Env, libId: unknown): { lib: LibraryConfig; bucket: R2Bucket } {

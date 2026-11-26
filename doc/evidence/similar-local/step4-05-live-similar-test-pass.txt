@@ -1,0 +1,20 @@
+$ flutter test test_live/live_similar_test.dart --dart-define=LIVE_ENDPOINT=http://127.0.0.1:8799 --dart-define=LIVE_EXPECTED=../.work/t3-e2e/expected-live.json
+00:00 +0: loading flutter/test_live/live_similar_test.dart
+00:00 +0: (setUpAll)
+00:00 +0: 書けるライブラリ: 署名を補い、期待どおりの組になり、すべての重複をまとめて消すとアルバムはオリジナルへ置き換わり、元に戻すで完全に戻る
+LIVE status before: images=337 signed=0 pending=337 withThumb=245 noThumb=92
+LIVE backfill: end=BackfillEnd.completed done=337 stored=337 failed=0 errors=0 stale=0 deferred=0 in 5963 ms
+LIVE status after: signed=337 failed=0 flat=1 pending=0
+LIVE groups: dup=31 similar=30
+LIVE album before: [similar-e2e/x-copies/s01.png, similar-e2e/variants/s01-q40.jpg, similar-e2e/distinct/d01.png, similar-e2e/originals/s02.png, similar-e2e/variants/s02-webp.webp, similar-e2e/variants/s03-hflip.jpg, similar-e2e/variants/s03-patch40.jpg, similar-e2e/variants/s04-patch-small.png, similar-e2e/variants/s04-resave.png]
+LIVE selected 181 ({identical: 31, same: 150}) 34403959 bytes / dup reclaimable 34403959
+LIVE commit: trashed=181 kinds={identical: 31, same: 150} failed=0 errors={}
+LIVE album after trash: [similar-e2e/originals/s01.png, similar-e2e/distinct/d01.png, similar-e2e/originals/s02.png, similar-e2e/variants/s03-hflip.jpg, similar-e2e/variants/s03-patch40.jpg, similar-e2e/variants/s04-patch-small.png, similar-e2e/originals/s04.png]
+LIVE undo: restored=181/181 failures={}
+LIVE re-sign after undo: pending 180 -> stored 180
+00:16 +1: 読み取り専用ライブラリ: 照合の状況は読めるが、まとめてゴミ箱へ・元に戻すは 403
+LIVE b status: images=0 pending=0
+LIVE b similar/trash -> 403, similar/undo -> 403
+00:16 +2: (tearDownAll)
+00:16 +2: All tests passed!
+exit=0

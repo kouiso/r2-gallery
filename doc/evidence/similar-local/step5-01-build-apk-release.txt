@@ -1,0 +1,9 @@
+$ cd flutter && flutter build apk --release
+Installing Android SDK Platform 34 in ~/.local/share/android/sdk/platforms/android-34
+"Install Android SDK Platform 34 (revision 3)" complete.
+"Install Android SDK Platform 34 (revision 3)" finished.
+[=========                              ] 25%                                   
+Font asset "MaterialIcons-Regular.otf" was tree-shaken, reducing it from 1645184 to 10672 bytes (99.4% reduction). Tree-shaking can be disabled by providing the --no-tree-shake-icons flag when building your app.
+Running Gradle task 'assembleRelease'...                          209.2s
+✓ Built build/app/outputs/flutter-apk/app-release.apk (80.2MB)
+exit=0

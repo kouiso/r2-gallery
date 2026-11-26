@@ -1,0 +1,13 @@
+# 画面で「すべての重複」→ ゴミ箱に移動（137件）した後、curl で確かめた物
+## 消す前: GET /v1/a/similar?tab=dup の identical/same（差分かもでない）物の数と合計バイト
+count=137 bytes=33843064
+## 消した後: GET /v1/a/trash を全ページたどった元のキーの集合 = 消す前の選べる物の集合か
+trash rows=137
+SAME (diff は空)
+## 消した後: GET /v1/a/similar?tab=dup の summary と札の内訳
+{"dup":{"groups":30,"items":38,"reclaimable":0},"similar":{"groups":18,"items":18},"crowded":0,"coverage":{"images":201,"signed":109,"pending":92,"failed":0,"flat":1},"hashPending":0,"hashSkipped":0}
+{"keeper":30,"mirror":19,"same+variant":19}
+## アルバム（GET /v1/a/albums/<id> のキーの並び）消す前
+["similar-e2e/x-copies/s01.png","similar-e2e/variants/s01-q40.jpg","similar-e2e/distinct/d01.png","similar-e2e/originals/s02.png","similar-e2e/variants/s02-webp.webp","similar-e2e/variants/s03-hflip.jpg","similar-e2e/variants/s03-patch40.jpg","similar-e2e/variants/s04-patch-small.png","similar-e2e/variants/s04-resave.png"]
+## 同 消した後（消した物の場所にオリジナルが入る。オリジナルが既にあるアルバムからは消した物だけが外れる）
+["similar-e2e/originals/s01.png","similar-e2e/distinct/d01.png","similar-e2e/originals/s02.png","similar-e2e/variants/s03-hflip.jpg","similar-e2e/variants/s03-patch40.jpg","similar-e2e/variants/s04-patch-small.png","similar-e2e/originals/s04.png"]

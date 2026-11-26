@@ -1,0 +1,2 @@
+# POST /v1/a/duplicates/scan を pending が 0 になるまで繰り返す
+{"pending":0,"hashed":62,"skipped":0}

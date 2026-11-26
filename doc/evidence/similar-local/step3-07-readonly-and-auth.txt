@@ -1,0 +1,9 @@
+$ curl -X POST ... /v1/b/similar/trash -d {"items":[{"key":"x.jpg","keep":"y.jpg"}]}   # 読み取り専用ライブラリ
+{"error":"read_only_library"}
+HTTP 403
+$ curl -X POST ... /v1/b/similar/undo
+{"error":"read_only_library"}
+HTTP 403
+$ curl ... /v1/a/similar/status   # 鍵なし
+{"error":"unauthorized"}
+HTTP 401

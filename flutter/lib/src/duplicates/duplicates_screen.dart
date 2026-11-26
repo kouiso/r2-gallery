@@ -14,11 +14,13 @@ import '../ui/viewer_screen.dart';
 import '../ui/write_guard_notice.dart';
 import '../viewer/viewer_format.dart';
 import 'duplicates_controller.dart';
+import 'similar_screen.dart';
 
 /// 設定タブから開く。重複の確認は時間がかかるので、専用の画面で進み具合を見せる。
+/// 見た目の照合に対応していない古い Worker では、SimilarScreen がこの DuplicatesScreen に切り替える
 Future<void> openDuplicates(BuildContext context, AppState app, String lib) =>
     Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => DuplicatesScreen(app: app, lib: lib),
+      builder: (_) => SimilarScreen(app: app, lib: lib),
     ));
 
 /// 中身がバイト単位で同じ写真・動画の組を出し、利用者が1件ずつ消す画面（#106）。

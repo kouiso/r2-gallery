@@ -13,6 +13,12 @@
  * - GET /v1/:lib/duplicates?cursor=&limit=    -> groups of byte-identical media (from recorded SHA-256)
  * - POST /v1/:lib/duplicates/scan             -> hash a bounded batch of same-size candidates -> {pending,hashed,skipped}
  * - POST /v1/:lib/objects/check {items:[{size,sha256?}]} -> same-size counts / same-content matches before upload
+ * - GET /v1/:lib/similar/status               -> visual signature coverage {alg,params,images,signed,failed,flat,pending,...}
+ * - GET /v1/:lib/similar/todo?shard=&after=&limit= -> images of one signature shard that still need a signature
+ * - POST /v1/:lib/similar/signatures {alg, items:[{key,etag,src,sig?|fail?}]} -> {stored,stale,failRecorded}
+ *                                                (readable: writes only META, so read-only libraries accept it)
+ * - GET /v1/:lib/similar?tab=dup|similar&cursor=&limit= -> duplicate / similar-looking groups with a keeper
+ * - POST /v1/:lib/similar/relabel {keep, keys} -> labels of each key re-checked against a new keeper
  * - GET /v1/:lib/meta?key=                    -> review metadata joined from D1 (REVIEW_LIBS only)
  * - GET /m/:lib/<key>?e=&s=                   -> original object (signed, no bearer needed)
  * - GET /t/:lib/<key>?e=&s=                   -> thumbnail from META/.system/thumbs/<lib>/ (falls back to original)
@@ -32,6 +38,10 @@
  * - POST /v1/:lib/ops/trash   {key, duplicateOf?} -> move to .trash/<epoch ms>/<key> (kept 30 days);
  *                                                with duplicateOf, album memberships move to that key
  * - POST /v1/:lib/ops/restore {trashKey}      -> move a trashed object back to its original key
+ * - POST /v1/:lib/similar/trash {items:[{key,keep}]} (max 40) -> batch trash of duplicates / similar images;
+ *                                                the keeper takes the album slot of each trashed item
+ * - POST /v1/:lib/similar/undo  {trashKeys} (max 40) -> exact inverse of /similar/trash right after it
+ *                                                (also removes keepers it added to albums)
  * - GET  /v1/:lib/trash?cursor=               -> list trashed objects
  *
  * Album edits (libraries with readOnly !== true only; they rewrite META/.system/albums.json, the user albums
@@ -56,6 +66,14 @@ import { ALLOWED_METHODS, corsHeaders, HttpError, isAuthorized, json } from "./l
 import { purgeTrash } from "./lib/objects";
 import { handleDuplicates, handleDuplicateScan, handleObjectsCheck } from "./routes/duplicates";
 import { handleMedia } from "./routes/media";
+import {
+  handleSimilar,
+  handleSimilarRelabel,
+  handleSimilarSignatures,
+  handleSimilarStatus,
+  handleSimilarTodo,
+} from "./routes/similar";
+import { handleSimilarTrash, handleSimilarUndo } from "./routes/similar-trash";
 import {
   handleAlbum,
   handleAlbums,
@@ -188,6 +206,27 @@ app.post("/v1/:lib/duplicates/scan", (c) =>
 );
 app.post("/v1/:lib/objects/check", (c) =>
   handleObjectsCheck(c.req.raw, c.env, new URL(c.req.url).origin, c.req.param("lib"), ctxOf(c)),
+);
+app.get("/v1/:lib/similar/status", (c) => handleSimilarStatus(c.env, c.req.param("lib"), ctxOf(c)));
+app.get("/v1/:lib/similar/todo", (c) => {
+  const url = new URL(c.req.url);
+  return handleSimilarTodo(c.env, url.origin, c.req.param("lib"), url, ctxOf(c));
+});
+app.post("/v1/:lib/similar/signatures", (c) =>
+  handleSimilarSignatures(c.req.raw, c.env, c.req.param("lib"), ctxOf(c)),
+);
+app.get("/v1/:lib/similar", (c) => {
+  const url = new URL(c.req.url);
+  return handleSimilar(c.env, url.origin, c.req.param("lib"), url, ctxOf(c));
+});
+app.post("/v1/:lib/similar/relabel", (c) =>
+  handleSimilarRelabel(c.req.raw, c.env, c.req.param("lib"), ctxOf(c)),
+);
+app.post("/v1/:lib/similar/trash", (c) =>
+  handleSimilarTrash(c.req.raw, c.env, c.req.param("lib"), ctxOf(c)),
+);
+app.post("/v1/:lib/similar/undo", (c) =>
+  handleSimilarUndo(c.req.raw, c.env, c.req.param("lib"), ctxOf(c)),
 );
 
 app.put("/v1/:lib/objects", (c) =>

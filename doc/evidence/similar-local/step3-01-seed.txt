@@ -1,0 +1,11 @@
+$ node tools/similar-fixture-seed.mjs --endpoint http://127.0.0.1:8797 --token test-access-token --lib a --out .work/t3-e2e/expected.json
+絵を作っている…
+上げた 50 / 339
+上げた 100 / 339
+上げた 150 / 339
+上げた 200 / 339
+上げた 250 / 339
+上げた 300 / 339
+上げた 339 件・サムネ 245 枚・アルバム 1 つ (9 件)
+期待: .work/t3-e2e/expected.json（確かめる項目 339 件）
+exit=0

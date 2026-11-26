@@ -6,6 +6,7 @@ import 'package:r2_gallery/src/api/client.dart';
 import 'package:r2_gallery/src/api/models.dart';
 import 'package:r2_gallery/src/duplicates/duplicates_controller.dart';
 import 'package:r2_gallery/src/duplicates/duplicates_screen.dart';
+import 'package:r2_gallery/src/duplicates/similar_screen.dart';
 import 'package:r2_gallery/src/state/app_state.dart';
 import 'package:r2_gallery/src/ui/settings_tab.dart';
 
@@ -71,6 +72,11 @@ class _DupApi extends ApiClient {
     restoreCalls.add(trashKey);
     return trashKey;
   }
+
+  /// 見た目の照合が無い古い Worker を真似る。設定から開くと従来の重複画面に切り替わる
+  @override
+  Future<SimilarStatus> similarStatus(String libId) async =>
+      throw const ApiError(404, 'x', code: 'not_found');
 }
 
 DuplicatePage _page(List<List<MediaItem>> groups, {String? cursor}) =>
@@ -285,7 +291,7 @@ void main() {
     expect(find.text('z copy.jpg'), findsOneWidget);
   });
 
-  testWidgets('設定タブから今のライブラリの重複の画面を開ける', (tester) async {
+  testWidgets('設定タブから開き、見た目の照合が無い古い Worker では従来の重複の画面になる', (tester) async {
     final api = _DupApi({null: _twoGroups});
     tester.view.physicalSize = const Size(1000, 2400);
     tester.view.devicePixelRatio = 1;
@@ -293,8 +299,11 @@ void main() {
     await tester.pumpWidget(
         MaterialApp(home: Scaffold(body: SettingsTab(app: _app(api)))));
     await tester.pump();
-    await tester.tap(find.text('重複した写真・動画を探す'));
+    expect(find.text('同じファイルと、見た目が同じ・似ている写真を今のライブラリから探します'),
+        findsOneWidget);
+    await tester.tap(find.text('重複・似ている写真を探す'));
     await tester.pumpAndSettle();
+    expect(find.byType(SimilarScreen), findsOneWidget);
     expect(find.byType(DuplicatesScreen), findsOneWidget);
     expect(find.text('2組 · 3.0 MB 空けられます'), findsOneWidget);
   });

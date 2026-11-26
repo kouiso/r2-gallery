@@ -1,0 +1,38 @@
+$ flutter test test_live/live_similar_test.dart --dart-define=LIVE_ENDPOINT=http://127.0.0.1:8799 --dart-define=LIVE_EXPECTED=../.work/t3-e2e/expected-live.json
+00:00 +0: loading flutter/test_live/live_similar_test.dart
+00:00 +0: (setUpAll)
+00:00 +0: 書けるライブラリ: 署名を補い、期待どおりの組になり、すべての重複をまとめて消すとアルバムはオリジナルへ置き換わり、元に戻すで完全に戻る
+LIVE status before: images=337 signed=0 pending=337 withThumb=245 noThumb=92
+LIVE backfill: end=BackfillEnd.completed done=337 stored=337 failed=0 errors=0 stale=0 deferred=0 in 5447 ms
+LIVE status after: signed=337 failed=0 flat=1 pending=0
+LIVE groups: dup=31 similar=30
+LIVE NG similar-e2e/originals/s16.png (with similar-e2e/originals/s16.png): 期待 keeper / 実際 identical [thumb=webp]
+LIVE NG similar-e2e/variants/s16-patch40.jpg (with similar-e2e/originals/s16.png): 期待 similar / 実際 none [thumb=jpeg]
+LIVE NG similar-e2e/x-copies/s16.png (with similar-e2e/originals/s16.png): 期待 identical / 実際 keeper [thumb=webp]
+LIVE NG similar-e2e/originals/s17.png (with similar-e2e/originals/s17.png): 期待 keeper / 実際 identical [thumb=jpeg]
+LIVE NG similar-e2e/variants/s17-patch40.jpg (with similar-e2e/originals/s17.png): 期待 similar / 実際 none [thumb=null]
+LIVE NG similar-e2e/x-copies/s17.png (with similar-e2e/originals/s17.png): 期待 identical / 実際 keeper [thumb=jpeg]
+00:06 +0 -1: 書けるライブラリ: 署名を補い、期待どおりの組になり、すべての重複をまとめて消すとアルバムはオリジナルへ置き換わり、元に戻すで完全に戻る [E]
+  Expected: empty
+    Actual: [
+              'similar-e2e/originals/s16.png (with similar-e2e/originals/s16.png): 期待 keeper / 実際 identical [thumb=webp]',
+              'similar-e2e/variants/s16-patch40.jpg (with similar-e2e/originals/s16.png): 期待 similar / 実際 none [thumb=jpeg]',
+              'similar-e2e/x-copies/s16.png (with similar-e2e/originals/s16.png): 期待 identical / 実際 keeper [thumb=webp]',
+              'similar-e2e/originals/s17.png (with similar-e2e/originals/s17.png): 期待 keeper / 実際 identical [thumb=jpeg]',
+              'similar-e2e/variants/s17-patch40.jpg (with similar-e2e/originals/s17.png): 期待 similar / 実際 none [thumb=null]',
+              'similar-e2e/x-copies/s17.png (with similar-e2e/originals/s17.png): 期待 identical / 実際 keeper [thumb=jpeg]'
+            ]
+  
+  package:matcher                                     expect
+  package:flutter_test/src/widget_tester.dart 473:18  expect
+  test_live/live_similar_test.dart 284:7              main.<fn>
+  
+00:06 +0 -1: 読み取り専用ライブラリ: 照合の状況は読めるが、まとめてゴミ箱へ・元に戻すは 403
+LIVE b status: images=0 pending=0
+LIVE b similar/trash -> 403, similar/undo -> 403
+00:06 +1 -1: (tearDownAll)
+00:06 +1 -1: Some tests failed.
+
+Failing tests:
+  flutter/test_live/live_similar_test.dart: 書けるライブラリ: 署名を補い、期待どおりの組になり、すべての重複をまとめて消すとアルバムはオリジナルへ置き換わり、元に戻すで完全に戻る
+exit=1

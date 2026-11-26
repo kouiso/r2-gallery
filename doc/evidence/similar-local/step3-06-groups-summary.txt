@@ -1,0 +1,18 @@
+$ curl ... "/v1/a/similar?tab=dup&limit=100" と "tab=similar" を、別版の種類（キーの末尾）ごとの札に数え直した物
+dup: total=31 cursor=None
+summary={"dup": {"groups": 31, "items": 241, "reclaimable": 34403959}, "similar": {"groups": 30, "items": 30}, "crowded": 0, "coverage": {"images": 337, "signed": 337, "pending": 0, "failed": 0, "flat": 1}, "hashPending": 0, "hashSkipped": 0}
+similar: total=30 cursor=None
+
+kind                     tab      label                  count
+bright                   dup      same                   30
+exact copy (x-copies)    dup      identical              31
+half                     dup      same                   30
+hflip                    dup      mirror                 30
+original                 dup      keeper                 30
+original                 similar  keeper                 30
+patch-small              dup      same+variant(差分かも)     30
+patch40                  similar  similar                30
+q40                      dup      same                   30
+resave                   dup      same                   30
+similar-e2e/video/clip.mp4 dup      keeper                 1
+webp                     dup      same                   30

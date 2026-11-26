@@ -1,0 +1,14 @@
+# 似ている段で s03-patch40.jpg（アルバムに入っていて、オリジナル s03.png はアルバムに無い）を1件選んでゴミ箱へ → 6秒以内に「元に戻す」
+## Worker のログ（wrangler dev）
+[wrangler:info] POST /v1/a/similar/trash 200 OK (92ms)
+[wrangler:info] OPTIONS /v1/a/similar/undo 204 No Content (8ms)
+[wrangler:info] POST /v1/a/similar/undo 200 OK (69ms)
+## アルバム 消す前（ops/restore の後）
+["similar-e2e/originals/s01.png","similar-e2e/distinct/d01.png","similar-e2e/originals/s02.png","similar-e2e/variants/s03-hflip.jpg","similar-e2e/variants/s03-patch40.jpg","similar-e2e/variants/s04-patch-small.png","similar-e2e/variants/s04-resave.png","similar-e2e/originals/s04.png"]
+## アルバム 元に戻した後
+["similar-e2e/originals/s01.png","similar-e2e/distinct/d01.png","similar-e2e/originals/s02.png","similar-e2e/variants/s03-hflip.jpg","similar-e2e/variants/s03-patch40.jpg","similar-e2e/variants/s04-patch-small.png","similar-e2e/variants/s04-resave.png","similar-e2e/originals/s04.png"]
+署名付き URL を除いたアルバムの JSON（key・note・createdAt・並び）は消す前と同じ
+## META に残っているアルバムの控え（.system/trash-albums/a/）
+.system/trash-albums/a/1795719118860/similar-e2e/variants/s01-q40.jpg.json
+.system/trash-albums/a/1795719118860/similar-e2e/variants/s02-webp.webp.json
+（残る 2 件は 1 回目に消してまだゴミ箱にある s01-q40.jpg と s02-webp.webp の控えで、ゴミ箱から戻す時に使う。取り消した s03-patch40.jpg と、ops/restore で戻した 2 件の控えは残っていない）

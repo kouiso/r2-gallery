@@ -273,6 +273,12 @@ class SimilarStatus {
 
   /// Worker が 1 回に受けるゴミ箱・取り消しの件数（SIMILAR_TRASH_BATCH）。載っていなければ null（40）
   final int? trashBatch;
+
+  /// 見た目の照合ができる画像の数の上限（SIMILAR_MAX_NODES）。古い Worker は載せないので null
+  final int? maxNodes;
+
+  /// 画像が [maxNodes] を超え、Worker は似ている写真の一覧を断る（413）。署名を作っても使われない
+  final bool tooMany;
   const SimilarStatus({
     this.alg = similarAlg,
     this.params = '',
@@ -286,6 +292,8 @@ class SimilarStatus {
     this.pendingBytesEstimate = 0,
     this.sigBatch,
     this.trashBatch,
+    this.maxNodes,
+    this.tooMany = false,
   });
 
   factory SimilarStatus.fromJson(Map j) => SimilarStatus(
@@ -301,6 +309,8 @@ class SimilarStatus {
         pendingBytesEstimate: _n(j, 'pendingBytesEstimate'),
         sigBatch: _batch(j['sigBatch']),
         trashBatch: _batch(j['trashBatch']),
+        maxNodes: _batch(j['maxNodes']),
+        tooMany: (j['tooMany'] as bool?) ?? false,
       );
 
   static int? _batch(Object? v) => v is num && v >= 1 ? v.toInt() : null;

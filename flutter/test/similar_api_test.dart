@@ -91,10 +91,13 @@ void main() {
           'pendingBytesEstimate': 819200 + 5 * 1024 * 1024,
           'sigBatch': 50,
           'trashBatch': 10,
+          'maxNodes': 40000,
+          'tooMany': true,
         },
       );
       final s = await api.similarStatus('lib');
       expect((s.sigBatch, s.trashBatch), (50, 10));
+      expect((s.maxNodes, s.tooMany), (40000, true));
       expect(w.seen.single.method, 'GET');
       expect(w.seen.single.auth, 'Bearer tok');
       expect(
@@ -112,6 +115,7 @@ void main() {
       expect(s.pending, 0);
       // 古い Worker は上限を返さない。アプリは自分の上限で送る
       expect((s.sigBatch, s.trashBatch), (null, null));
+      expect((s.maxNodes, s.tooMany), (null, false));
     });
 
     test('古い Worker の 404 は status 404 の ApiError になり、再試行しない', () async {

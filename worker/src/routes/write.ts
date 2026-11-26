@@ -31,6 +31,42 @@ export const thumbPath = (lib: string, key: string) => `${SYSTEM_PREFIX}thumbs/$
 
 type WaitUntil = Pick<ExecutionContext, "waitUntil">;
 
+/**
+ * ゴミ箱から戻した物にサムネがあるか（索引に載せる値）。ゴミ箱の間もサムネは元の key の置き場に残して
+ * あるが、置き場は key だけで引くので、ゴミ箱に居る間に同じ key へ別の物を上げ（上げた時に古いサムネは
+ * 消える）、そのサムネを置いてからその物もゴミ箱へ送ると、置き場には後の物のサムネが残る。それを
+ * 戻した物のサムネとして出すと、戻した物の見た目の署名が別の絵から作られ、似ていない写真を「ほぼ同じ」
+ * としてまとめて消してしまう。ゴミ箱の間は元の key のサムネを作る口が無いので、送った時刻より後に
+ * 置かれたサムネは戻した物の物ではない。そういうサムネは消して「サムネ無し」にする（アプリが原本から
+ * 作り直す）。確かめられなかった時は null で、サムネの有無に触れない。ここで 5xx にすると、本体は
+ * 戻ったのに失敗と伝わり、やり直しは「もうゴミ箱に無い」で通らなくなる
+ */
+export async function restoredThumb(
+  env: Env,
+  lib: string,
+  key: string,
+  trashKey: string,
+): Promise<boolean | null> {
+  const path = thumbPath(lib, key);
+  let thumb: R2Object | null;
+  try {
+    thumb = await env.META.head(path);
+  } catch (e) {
+    console.error("thumb_probe_failed", lib, key, e);
+    return null;
+  }
+  if (!thumb) return false;
+  const trashedAt = Number(/^\.trash\/(\d+)\//.exec(trashKey)?.[1]);
+  if (!Number.isFinite(trashedAt) || thumb.uploaded.getTime() <= trashedAt) return true;
+  try {
+    await env.META.delete(path);
+  } catch (e) {
+    // 消せなくても、索引は「サムネ無し」にする（アプリは原本から作り、置き直して上書きする）
+    console.error("stale_thumb_delete_failed", lib, key, e);
+  }
+  return false;
+}
+
 /** 新しく置いた物を索引へ足す。同名の古いサムネは消した後なので、サムネ無しとして足す。 */
 const journalCreated = (env: Env, lib: string, obj: R2Object, ctx?: WaitUntil) =>
   journalBestEffort(env, lib, { put: [rowOf(obj)], unthumb: [obj.key] }, ctx);
@@ -361,16 +397,7 @@ export async function handleLibOps(
   // やり直しでも行を足し直す。前回が索引の追記の前で止まっていると一覧に戻らないため
   // （同じ行を 2 回足しても、一覧は同じになる）
   {
-    // ゴミ箱の間もサムネは残してある。あるかを 1 回だけ確かめて索引に足す
-    // 確かめられなかった時はサムネの有無に触れない。ここで 5xx にすると、本体は戻ったのに
-    // 失敗と伝わり、やり直しは「もうゴミ箱に無い」で通らなくなる
-    const hasThumb = await env.META.head(thumbPath(lib, original)).then(
-      (o) => o !== null,
-      (e: unknown) => {
-        console.error("thumb_probe_failed", lib, original, e);
-        return null;
-      },
-    );
+    const hasThumb = await restoredThumb(env, lib, original, trashKey);
     await journalBestEffort(env, lib, {
       put: [rowOf(back)],
       ...(hasThumb === null ? {} : hasThumb ? { thumb: [original] } : { unthumb: [original] }),

@@ -52,23 +52,78 @@ export function foldGhostsIntoOrder(album: GlobalAlbum) {
   album.trashOrder = order;
 }
 
-// 候補のうち「まだ戻せる物」を返す。期限切れ purge は控えを消さないので、控えがあり、かつ
-// .trash の実体も元の key も無い物だけを purge 済みと見なす。restore は実体を先に元の key へ戻して
-// からアルバムを更新するので、元の key を見ないと、その間に戻している途中の物が落ちてしまう。
-// 控えの一覧と head の結果はリクエスト内で使い回し、mutateAlbums がやり直す時だけ捨てる
-// （並行した trash が書いた控えを見落として落とさないため）。
+/**
+ * 跡を確かめるのに 1 リクエストで使ってよい外部呼び出しの数（既定）。1 リクエストの上限は 1000 回で、
+ * 跡の数（アルバムから消した物の数）は上限なく増える。使い切った後の跡は確かめずに「まだ戻せる」と
+ * 見なして残す（落とす側に倒すと、戻した時に元の位置へ戻らない）。落とせる跡は次の書き込みで少しずつ落ちる
+ */
+export const PROBE_BUDGET = 150;
+
+// 候補のうち「まだ戻せる物」を返す。控えがあり、かつ .trash の実体も元の key も無い物だけを
+// purge 済みと見なす（期限切れの purge は控えも消すが、この直しより前に purge した物は控えが残っている）。
+// restore は実体を先に元の key へ戻してからアルバムを更新するので、元の key を見ないと、その間に
+// 戻している途中の物が落ちてしまう。
 //
-// ゴミ箱の実体は 1 件ずつ head せず、送った時刻の階（.trash/<時刻>/）ごとに 1 回 list して確かめる。
-// まとめて消す口は 40 件を同じ時刻で送るので、アルバムに数百件の跡が溜まっても数回の list で済む。
-// 1 件ずつ head すると、跡 1 件ごとに 2 回の外部呼び出しが毎回の書き込みで掛かり、同じアルバムから
-// 240 件ほど消した所で 1 リクエストの上限（1000 回）を超えていた。元の key の head は、ゴミ箱に
-// 実体が無い物（purge 済みか戻している途中）だけに行う。purge 済みならその書き込みで跡から外れるので、
-// 同じ物に何度も払わない。
-export function makeProbe(env: Env) {
-  let lists = new Map<string, Promise<Map<string, string[]>>>();
-  let heads = new Map<string, Promise<boolean>>();
-  let floors = new Map<string, Promise<Set<string>>>();
-  const trashFloor = (lib: string, bucket: R2Bucket, trashKey: string) => {
+// ゴミ箱の実体は 1 件ずつ head せず、送った時刻の階（.trash/<時刻>/）ごとに 1 回 list して確かめる
+// （まとめて消す口は 40 件を同じ時刻で送る）。1 件ずつのゴミ箱は件ごとに階が違うので、跡 1 件に 1 回
+// かかる。どちらも合わせて budget 回で打ち切る。確かめる順は送った時刻の古い順: purge で消えた跡
+// （一番古い）から確かめるので、使い切っても落とせる跡が先に落ちる。
+//
+// 確かめた結果は mutateAlbums がやり直しても使い回す（やり直すたびに同じ数を払うと、競合 1 回で倍になる）。
+// やり直しで読み直した albums.json に新しく現れた跡は、並行した trash がまだ控えを書き終えていない
+// かもしれないので、確かめずに「まだ戻せる」とする。前の回に確かめた跡の答えは、その時点の答えとして
+// 正しい（こちらが先に書けていても同じ結果になる）。
+export function makeProbe(env: Env, limit = PROBE_BUDGET) {
+  // テストは env で下げられる（上げられない）
+  const lowered = Number(env.TRASH_PROBE_BUDGET);
+  const budget =
+    Number.isInteger(lowered) && lowered >= 0 && env.TRASH_PROBE_BUDGET
+      ? Math.min(limit, lowered)
+      : limit;
+  let spent = 0;
+  const take = () => {
+    if (spent >= budget) return false;
+    spent++;
+    return true;
+  };
+  let reread = false;
+  const verdict = new Map<string, boolean>();
+  const sidecars = new Map<string, Promise<Map<string, string[]> | null>>();
+  const floors = new Map<string, Promise<Set<string> | null>>();
+  /** prefix の下を全部列挙する。途中で使い切ったら false（集めた分は使わない） */
+  const listAll = async (
+    bucket: R2Bucket,
+    prefix: string,
+    each: (key: string) => void,
+  ): Promise<boolean> => {
+    let cursor: string | undefined;
+    do {
+      if (!take()) return false;
+      const listed = await bucket.list({ prefix, cursor });
+      for (const o of listed.objects) each(o.key);
+      cursor = listed.truncated ? listed.cursor : undefined;
+    } while (cursor);
+    return true;
+  };
+  const sidecarsOf = (lib: string) => {
+    let p = sidecars.get(lib);
+    if (!p) {
+      p = (async () => {
+        const out = new Map<string, string[]>();
+        const prefix = `${SYSTEM_PREFIX}trash-albums/${lib}/`;
+        const done = await listAll(env.META, prefix, (key) => {
+          const m = /^(\d+)\/([\s\S]+)\.json$/.exec(key.slice(prefix.length));
+          if (!m) return;
+          const id = `${lib}:${m[2]}`;
+          out.set(id, [...(out.get(id) ?? []), `${TRASH_PREFIX}${m[1]}/${m[2]}`]);
+        });
+        return done ? out : null;
+      })();
+      sidecars.set(lib, p);
+    }
+    return p;
+  };
+  const floorOf = (lib: string, bucket: R2Bucket, trashKey: string) => {
     const at = trashKey.indexOf("/", TRASH_PREFIX.length);
     const prefix = at < 0 ? trashKey : trashKey.slice(0, at + 1);
     const id = `${lib}\n${prefix}`;
@@ -76,68 +131,74 @@ export function makeProbe(env: Env) {
     if (!p) {
       p = (async () => {
         const out = new Set<string>();
-        let cursor: string | undefined;
-        do {
-          const listed = await bucket.list({ prefix, cursor });
-          for (const o of listed.objects) out.add(o.key);
-          cursor = listed.truncated ? listed.cursor : undefined;
-        } while (cursor);
-        return out;
+        return (await listAll(bucket, prefix, (key) => out.add(key))) ? out : null;
       })();
       floors.set(id, p);
     }
     return p;
   };
-  const listSidecars = (lib: string) => {
-    let p = lists.get(lib);
-    if (!p) {
-      p = (async () => {
-        const out = new Map<string, string[]>();
-        const prefix = `${SYSTEM_PREFIX}trash-albums/${lib}/`;
-        let cursor: string | undefined;
-        do {
-          const listed = await env.META.list({ prefix, cursor });
-          for (const o of listed.objects) {
-            const m = /^(\d+)\/([\s\S]+)\.json$/.exec(o.key.slice(prefix.length));
-            if (!m) continue;
-            const id = `${lib}:${m[2]}`;
-            out.set(id, [...(out.get(id) ?? []), `${TRASH_PREFIX}${m[1]}/${m[2]}`]);
-          }
-          cursor = listed.truncated ? listed.cursor : undefined;
-        } while (cursor);
-        return out;
-      })();
-      lists.set(lib, p);
+  const timeOf = (trashKey: string) => Number(trashKey.slice(TRASH_PREFIX.length).split("/")[0]);
+  /** まだ戻せるか。確かめきれなければ null */
+  const check = async (
+    lib: string,
+    bucket: R2Bucket,
+    original: string,
+    trashKeys: string[],
+  ): Promise<boolean | null> => {
+    for (const k of trashKeys) {
+      const floor = await floorOf(lib, bucket, k);
+      if (!floor) return null;
+      if (floor.has(k)) return true;
     }
-    return p;
-  };
-  const head = (lib: string, bucket: R2Bucket, key: string) => {
-    const id = `${lib}\n${key}`;
-    let p = heads.get(id);
-    if (!p) {
-      p = bucket.head(key).then((o) => o !== null);
-      heads.set(id, p);
-    }
-    return p;
+    if (!take()) return null;
+    return (await bucket.head(original)) !== null;
   };
   return {
+    /** mutateAlbums がやり直す（albums.json を読み直した）時に呼ぶ */
     reset() {
-      lists = new Map();
-      heads = new Map();
-      floors = new Map();
+      reread = true;
     },
     async live(candidates: Set<string>): Promise<Set<string>> {
       const live = new Set<string>();
+      const open: { id: string; lib: string; bucket: R2Bucket; keys: string[]; at: number }[] = [];
       for (const id of candidates) {
+        const known = verdict.get(id);
+        if (known !== undefined) {
+          if (known) live.add(id);
+          continue;
+        }
+        if (reread) {
+          live.add(id);
+          continue;
+        }
         const lib = id.slice(0, id.indexOf(":"));
-        const original = id.slice(lib.length + 1);
         const t = bucketFor(env, lib);
-        const trashKeys = t ? (await listSidecars(lib)).get(id) : undefined;
-        if (!t || !trashKeys) continue;
-        const inTrash = await Promise.all(
-          trashKeys.map(async (k) => (await trashFloor(lib, t.bucket, k)).has(k)),
-        );
-        if (inTrash.some(Boolean) || (await head(lib, t.bucket, original))) live.add(id);
+        if (!t) {
+          verdict.set(id, false);
+          continue;
+        }
+        const side = await sidecarsOf(lib);
+        if (!side) {
+          live.add(id);
+          continue;
+        }
+        const keys = side.get(id);
+        // 控えが無い跡は戻しても元の位置へ入らない（戻す道が無い）。呼び出しなしで落とす
+        if (!keys) {
+          verdict.set(id, false);
+          continue;
+        }
+        open.push({ id, lib, bucket: t.bucket, keys, at: Math.min(...keys.map(timeOf)) });
+      }
+      open.sort((a, b) => a.at - b.at || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+      for (const c of open) {
+        const v = await check(c.lib, c.bucket, c.id.slice(c.lib.length + 1), c.keys);
+        if (v === null) {
+          live.add(c.id);
+          continue;
+        }
+        verdict.set(c.id, v);
+        if (v) live.add(c.id);
       }
       return live;
     },

@@ -1365,6 +1365,36 @@ void main() {
       final c = _ctl(api);
       await c.start();
       expect(c.phase, SimilarPhase.unsupported);
+      // 黙って替えず、断られた理由を画面に出せるようにする
+      expect(c.tooManyForSimilar, isTrue);
+    });
+
+    test('status が上限を超えると言えば、照合を始めず（同意も取らず）従来の画面に替える', () async {
+      final api = _Api()
+        ..status = const SimilarStatus(
+          images: 52000,
+          pending: 52000,
+          pendingNoThumb: 52000,
+          pendingBytesEstimate: 52000 * 40960,
+          maxNodes: 40000,
+          tooMany: true,
+        )
+        ..todo = {
+          0: [_todo('z')],
+        };
+      final c = _ctl(api);
+      await c.start();
+      expect(c.phase, SimilarPhase.unsupported);
+      expect(c.tooManyForSimilar, isTrue);
+      expect(api.todoCalls, 0);
+      expect(api.posted, isEmpty);
+      expect(api.groupCalls, isEmpty);
+
+      // 上限の内に収まれば（写真を減らした後のやり直し）、いつもどおり進む
+      api.status = const SimilarStatus(maxNodes: 40000);
+      await c.start();
+      expect(c.phase, SimilarPhase.ready);
+      expect(c.tooManyForSimilar, isFalse);
     });
 
     test('一覧の 5xx は error だが、同じファイルだけの従来の画面へ移れる', () async {

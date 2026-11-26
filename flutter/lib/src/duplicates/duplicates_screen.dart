@@ -31,8 +31,15 @@ class DuplicatesScreen extends StatefulWidget {
 
   /// テストで時刻を固定するための口。
   final DateTime Function() clock;
+
+  /// 画面の上に出す一言。見た目の照合を断られてこの画面に替わった時に、その理由を出す
+  final String? notice;
   const DuplicatesScreen(
-      {super.key, required this.app, required this.lib, this.clock = DateTime.now});
+      {super.key,
+      required this.app,
+      required this.lib,
+      this.clock = DateTime.now,
+      this.notice});
 
   @override
   State<DuplicatesScreen> createState() => _DuplicatesScreenState();
@@ -89,9 +96,34 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final body =
+        ListenableBuilder(listenable: _c, builder: (context, _) => _body());
+    final notice = widget.notice;
     return Scaffold(
       appBar: AppBar(title: const Text('重複した写真・動画')),
-      body: ListenableBuilder(listenable: _c, builder: (context, _) => _body()),
+      body: notice == null
+          ? body
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ColoredBox(
+                  color: AppColors.surfaceHigh,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.info_outline,
+                            size: 20, color: AppColors.textDim),
+                        const SizedBox(width: 12),
+                        Expanded(child: Text(notice, style: AppText.caption)),
+                      ],
+                    ),
+                  ),
+                ),
+                Expanded(child: body),
+              ],
+            ),
     );
   }
 

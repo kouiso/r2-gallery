@@ -2,6 +2,7 @@ import { SYSTEM_PREFIX, TRASH_PREFIX } from "./const";
 import type { Env } from "./env";
 import { HttpError } from "./http";
 import { libraries } from "./env";
+import { trashAlbumsPath } from "./trash-albums";
 
 /**
  * A head() check before put() still lets a write that lands in between be replaced.
@@ -230,6 +231,15 @@ export async function purgeTrash(env: Env, batchSize = PURGE_BATCH): Promise<num
       }
       await bucket.delete(batch);
       removed += batch.length;
+      // 本体を消した後で、アルバムの所属の控えも消す。控えが残ると、アルバムの並びの跡を書き込みの
+      // たびに 1 件ずつ確かめ直すことになり、1 リクエストの外部呼び出しの上限に届く（控えが無い跡は
+      // 確かめずに落とせる）。本体より先に消すと、消し損ねた本体を戻した時に所属が失われる。
+      // 消せなくても期限切れの本体は消えているので、失敗は記録だけにする（跡は確かめて落とせる）
+      try {
+        await env.META.delete(batch.map((tk) => trashAlbumsPath(lib.id, tk)));
+      } catch (e) {
+        console.error("purge_sidecar_delete_failed", lib.id, e);
+      }
     }
   }
   return removed;

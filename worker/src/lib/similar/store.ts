@@ -3,6 +3,7 @@ import { IMAGE_EXT, SYSTEM_PREFIX } from "../const";
 import type { Env } from "../env";
 import { validHash, type HashesFile } from "../hashes";
 import { HttpError } from "../http";
+import { trashRetentionDays } from "../objects";
 import { decodeSig, FLAG_FLAT, PARAMS, SIG_BYTES } from "./core";
 
 /**
@@ -28,6 +29,12 @@ interface ShardFile {
   version: 1;
   alg: string;
   items: Record<string, unknown>;
+  /**
+   * 一覧から消えた key と、消えたと最初に見た時刻（ミリ秒）。ゴミ箱へ送った物は一覧から外れるが、
+   * 戻せば同じ etag で戻るので、ゴミ箱の保持日数の間は署名を残す（戻すたびにサムネを取り直して
+   * 署名を作り直さない）。保持日数を過ぎた物は落とす
+   */
+  gone?: Record<string, number>;
 }
 
 // 記録の種類。列ごとの配列に 1 バイトで持つ
@@ -105,24 +112,33 @@ function sanitize(raw: unknown): ShardItem | null {
   return [etag as string, sig, third, ow, oh];
 }
 
-function parseFile(text: string | null): Record<string, ShardItem> {
-  if (!text) return {};
+function parseFile(text: string | null): {
+  items: Record<string, ShardItem>;
+  gone: Record<string, number>;
+} {
+  const items: Record<string, ShardItem> = {};
+  const gone: Record<string, number> = {};
+  if (!text) return { items, gone };
   let file: ShardFile;
   try {
     file = JSON.parse(text) as ShardFile;
   } catch {
-    return {};
+    return { items, gone };
   }
   // 算法の版が違うファイルは空として扱う。古い署名と比べると判定がでたらめになる
   if (!file || file.version !== 1 || file.alg !== PARAMS.alg || typeof file.items !== "object") {
-    return {};
+    return { items, gone };
   }
-  const out: Record<string, ShardItem> = {};
   for (const [key, raw] of Object.entries(file.items ?? {})) {
     const item = sanitize(raw);
-    if (item) out[key] = item;
+    if (item) items[key] = item;
   }
-  return out;
+  if (file.gone && typeof file.gone === "object") {
+    for (const [key, at] of Object.entries(file.gone)) {
+      if (items[key] && typeof at === "number" && Number.isFinite(at)) gone[key] = at;
+    }
+  }
+  return { items, gone };
 }
 
 function toShard(items: Record<string, ShardItem>, etag: string | null): Shard {
@@ -168,6 +184,16 @@ export function resetSimilarStoreMemory(): void {
 }
 
 /**
+ * lib 以外のライブラリの署名・ハッシュの写しを捨てる。写しはライブラリごとに持つので、大きな
+ * ライブラリを 1 つ見た後で別のライブラリを見ると、両方の写しが isolate に残ってメモリ（128 MB）を
+ * 超える。全部を読む口（GET /similar・/similar/status）の前に呼び、持つのは 1 つのライブラリだけにする
+ */
+export function focusSimilarStoreMemory(lib: string): void {
+  for (const id of shardMem.keys()) if (!id.startsWith(`${lib}\n`)) shardMem.delete(id);
+  for (const id of hashesMem.keys()) if (id !== lib) hashesMem.delete(id);
+}
+
+/**
  * 1 ファイルを読む。手元の写しと etag が同じなら中身を受け取らない（32 ファイルを毎回読み直さない）。
  */
 export async function loadShard(env: Env, lib: string, n: number): Promise<Shard> {
@@ -184,9 +210,19 @@ export async function loadShard(env: Env, lib: string, n: number): Promise<Shard
   }
   // 条件に合わない（手元と同じ）時は中身なしで返る
   if (!("body" in got) || !got.body) return have ?? emptyShard(got.etag);
-  const shard = toShard(parseFile(await (got as R2ObjectBody).text()), got.etag);
+  const shard = toShard(parseFile(await (got as R2ObjectBody).text()).items, got.etag);
   shardMem.set(id, shard);
   return shard;
+}
+
+/**
+ * 1 ファイルを読むが、手元の写しには置かない。上限を超えるライブラリの数え上げで、32 ファイルを
+ * 同時に持たずに 1 つずつ読んで捨てるのに使う
+ */
+export async function peekShard(env: Env, lib: string, n: number): Promise<Shard> {
+  const got = await env.META.get(shardPath(lib, n));
+  if (!got) return emptyShard(null);
+  return toShard(parseFile(await got.text()).items, got.etag);
 }
 
 /** 32 ファイルを全部読む。JSON は 1 ファイルずつ届いた順に列の配列へ移すので、大きな JSON が同時に残らない */
@@ -247,7 +283,9 @@ export async function loadRecord(env: Env, lib: string, key: string): Promise<Si
 
 /**
  * etag の条件付きで 1 ファイルを書き直す。負けたら読み直してやり直す（アルバム・ハッシュの保存と同じ型）。
- * 書くたびに、一覧に無い・etag が合わない・画像でない・置き場違いの行を落とす（ファイルを太らせない）。
+ * 書くたびに、etag が合わない（中身が変わった）・画像でない・置き場違いの行と、一覧から消えて
+ * ゴミ箱の保持日数を過ぎた行を落とす（ファイルを太らせない）。一覧から消えたばかりの行は残す:
+ * ゴミ箱へ送った物は一覧から外れるが、戻せば同じ etag で戻り、その署名がそのまま使える。
  * mutate が false を返し、落とす行も無ければ書かない。
  */
 export async function mutateShard(
@@ -258,15 +296,27 @@ export async function mutateShard(
   catalog: Catalog,
 ): Promise<Shard> {
   const path = shardPath(lib, n);
+  const keepGoneMs = trashRetentionDays(env) * 86_400_000;
   for (let attempt = 0; attempt < 8; attempt++) {
     const obj = await env.META.get(path);
-    const items = parseFile(obj ? await obj.text() : null);
+    const { items, gone } = parseFile(obj ? await obj.text() : null);
     const changed = mutate(items) !== false;
+    const now = Date.now();
     let pruned = false;
     for (const key of Object.keys(items)) {
+      const item = items[key]!;
       const row = catalog.rows.get(key);
-      if (row && row[3] === items[key]![0] && IMAGE_EXT.test(key) && shardOf(key) === n) continue;
+      let keep = IMAGE_EXT.test(key) && shardOf(key) === n;
+      if (keep && row) {
+        keep = row[3] === item[0];
+        delete gone[key];
+      } else if (keep) {
+        gone[key] ??= now;
+        keep = now - gone[key]! <= keepGoneMs;
+      }
+      if (keep) continue;
       delete items[key];
+      delete gone[key];
       pruned = true;
     }
     if (!changed && !pruned) {
@@ -274,7 +324,12 @@ export async function mutateShard(
       shardMem.set(`${lib}\n${n}`, shard);
       return shard;
     }
-    const file = { version: 1, alg: PARAMS.alg, items };
+    const file: ShardFile = {
+      version: 1,
+      alg: PARAMS.alg,
+      items,
+      ...(Object.keys(gone).length ? { gone } : {}),
+    };
     const put = await env.META.put(path, JSON.stringify(file), {
       httpMetadata: { contentType: "application/json" },
       onlyIf: new Headers(obj ? { "if-match": `"${obj.etag}"` } : { "if-none-match": "*" }),

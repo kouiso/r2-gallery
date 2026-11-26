@@ -402,10 +402,12 @@ class _SimilarScreenState extends State<SimilarScreen>
       builder: (context, _) {
         if (_c.phase == SimilarPhase.unsupported) {
           // 古い Worker には見た目の照合が無い。従来の画面をそのまま出し、できていた事を失わない
+          // 大きすぎて断られた時は、黙って替えずに理由を出す（照合を続けても見られないと分かるように）
           return DuplicatesScreen(
             app: widget.app,
             lib: widget.lib,
             clock: widget.clock,
+            notice: _c.tooManyForSimilar ? _tooManyNotice() : null,
           );
         }
         final listing = _c.phase == SimilarPhase.ready && !_empty;
@@ -458,6 +460,18 @@ class _SimilarScreenState extends State<SimilarScreen>
     ),
     bottomNavigationBar: listing && !_readOnly ? _bottomBar() : null,
   );
+
+  /// 見た目の照合を断られた理由。枚数と上限は分かる時だけ出す（古い Worker は上限を返さない）
+  String _tooManyNotice() {
+    final s = _c.status;
+    final images = s?.images ?? 0;
+    final cap = s?.maxNodes;
+    final head = images > 0 ? '写真が ${formatCount(images)} 枚あり、' : '写真が多すぎて、';
+    final limit = cap == null ? '' : '（${formatCount(cap)} 枚）';
+    return '$head見た目の照合の上限$limitを超えています。'
+        '同じファイルの重複はここで探せます。'
+        '似ている写真は PC の tools/similar-signatures.mjs で探せます';
+  }
 
   bool get _empty =>
       _c.dupGroups.isEmpty &&

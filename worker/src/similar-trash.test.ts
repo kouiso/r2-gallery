@@ -2,6 +2,7 @@ import { createExecutionContext, env, SELF, waitOnExecutionContext } from "cloud
 import { describe, expect, it, vi } from "vitest";
 
 import worker, { type Env } from "./index";
+import { purgeTrash } from "./lib/objects";
 import { encodeSig, SIG_BYTES } from "./lib/similar/core";
 import { shardOf } from "./lib/similar/store";
 
@@ -1278,4 +1279,253 @@ describe("同じアルバムから何百件も消しても、1 回の外部呼�
     // env.ts の上限 40 件の根拠（1 件あたり約 12 回）に収まる
     expect(Math.max(...perBatch), perBatch.join()).toBeLessThanOrEqual(BATCH * 13);
   }, 120_000);
+});
+
+describe("アルバムの跡を確かめる外部呼び出しには上限がある", () => {
+  // Worker が R2 に出す呼び出しを数える（本番では 1 リクエスト 1000 回が上限）
+  const COUNTED = new Set(["get", "put", "head", "delete", "list", "createMultipartUpload"]);
+  let calls = 0;
+  const counted = (b: R2Bucket): R2Bucket =>
+    new Proxy(b, {
+      get(target, prop) {
+        const v = Reflect.get(target, prop) as unknown;
+        if (typeof v !== "function") return v;
+        return (...a: unknown[]) => {
+          if (COUNTED.has(String(prop))) calls++;
+          return (v as (...a: unknown[]) => unknown).apply(target, a);
+        };
+      },
+    });
+  // 本番の上限（150・80）を超える数の跡を置くと、同じ R2 を使う他のテストのファイルが遅れて落ちる。
+  // 上限を env で下げ、その数を超える跡で打ち切りを確かめる（上限そのものは定数なので数だけの話）
+  const BUDGET = 12;
+  const countedEnv = (lib: string, o: LibOpts = {}) => {
+    const base = libEnv(lib, { ...o, vars: { TRASH_PROBE_BUDGET: String(BUDGET), ...o.vars } });
+    const binding = `LIB_${lib.toUpperCase()}`;
+    return {
+      ...base,
+      [binding]: counted(base[binding] as R2Bucket),
+      META: counted(base.META),
+    } as Env;
+  };
+  const ghostId = (lib: string, g: number) => `${lib}:${lib}/ghost${g}.png`;
+
+  /**
+   * アルバムに live 件の物と ghosts 件の跡（並びの控え）を置く。跡は floors 個の送った時刻に散らし、
+   * どれも所属の控えを持つ。purged なら .trash の実体を置かない（この直しより前の purge は控えを残した）
+   */
+  async function seed(lib: string, live: number, ghosts: number, floors: number, purged: boolean) {
+    const items = [];
+    for (let i = 0; i < live; i++) {
+      const key = `${lib}/live${i}.png`;
+      await put(key, pngBytes(10, 10, i));
+      items.push({ key, lib, createdAt: 1 });
+    }
+    const order = items.map((i) => `${lib}:${i.key}`);
+    const base = Date.now() - 1000 * 1000;
+    for (let g = 0; g < ghosts; g++) {
+      const ts = base + (g % floors);
+      const key = `${lib}/ghost${g}.png`;
+      order.splice(Math.min(order.length, g * 2), 0, ghostId(lib, g));
+      await env.META.put(
+        `.system/trash-albums/${lib}/${ts}/${key}.json`,
+        JSON.stringify([{ albumId: `${lib}-album`, item: { key, lib, createdAt: 1 } }]),
+      );
+      if (!purged) await bucket().put(`.trash/${ts}/${key}`, new Uint8Array([9]));
+    }
+    const data = ((await (await env.META.get(ALBUMS))?.json()) as
+      { version: 1; albums: unknown[] } | undefined) ?? { version: 1, albums: [] };
+    data.albums.push({ id: `${lib}-album`, title: lib, items, trashOrder: order });
+    await env.META.put(ALBUMS, JSON.stringify(data));
+    return `${lib}-album`;
+  }
+  const ghostsLeft = async (lib: string, album: string, ghosts: number) => {
+    const order = new Set((await rawAlbum(album)).trashOrder ?? []);
+    return Array.from({ length: ghosts }, (_, g) => ghostId(lib, g)).filter((id) => order.has(id))
+      .length;
+  };
+  /** 跡の無いアルバムで同じ 1 件を消した時の呼び出しの数（跡の分を差し引くための基準） */
+  const plainTrashCalls = async (lib: string) => {
+    await seed(lib, 2, 0, 1, true);
+    calls = 0;
+    await ok(post(countedEnv(lib), `/v1/${lib}/ops/trash`, { key: `${lib}/live0.png` }));
+    return calls;
+  };
+
+  it("purge 済みの跡がいくらあっても書き込みは上限の内で通り、書くたびに跡が減って無くなる", async () => {
+    const lib = "tq";
+    const G = 40;
+    const plain = await plainTrashCalls("tq0");
+    const album = await seed(lib, 8, G, 4, true);
+    const e = countedEnv(lib);
+    const left = [G];
+    for (let i = 0; i < 8 && left[left.length - 1]! > 0; i++) {
+      calls = 0;
+      await ok(post(e, `/v1/${lib}/ops/trash`, { key: `${lib}/live${i}.png` }));
+      // 跡を確かめる分は上限まで（跡 1 件ごとに head していた時は、跡の数だけ増えた）
+      expect(calls - plain, `${calls} - ${plain}`).toBeLessThanOrEqual(BUDGET);
+      left.push(await ghostsLeft(lib, album, G));
+    }
+    // 1 回で全部は確かめないが、書くたびに落ちて、最後は無くなる
+    expect(left[left.length - 1], left.join()).toBe(0);
+    for (let i = 1; i < left.length; i++) expect(left[i]!, left.join()).toBeLessThan(left[i - 1]!);
+  }, 60_000);
+
+  it("1 件ずつ消した跡（送った時刻が全部違う）がいくらあっても上限の内で通り、跡は残す", async () => {
+    const lib = "ts1";
+    const G = 30;
+    const plain = await plainTrashCalls("ts0");
+    const album = await seed(lib, 4, G, G, false);
+    calls = 0;
+    await ok(post(countedEnv(lib), `/v1/${lib}/ops/trash`, { key: `${lib}/live0.png` }));
+    expect(calls - plain, `${calls} - ${plain}`).toBeLessThanOrEqual(BUDGET);
+    // 確かめきれなかった跡も「まだ戻せる」として残す（落とすと、戻した時に元の位置へ戻らない）
+    expect(await ghostsLeft(lib, album, G)).toBe(G);
+  }, 60_000);
+
+  it("まとめて消す口は、albums.json の競合でやり直しても跡を確かめ直さない", async () => {
+    /** 40 組を置いたアルバム（跡は ghosts 件）で、1 回競合させて 40 件を消した時の呼び出しの数 */
+    const run = async (lib: string, ghosts: number) => {
+      const album = await seed(lib, 0, ghosts, ghosts || 1, false);
+      const pairs: { key: string; keep: string }[] = [];
+      const data = (await (await env.META.get(ALBUMS))!.json()) as { albums: RawAlbum[] };
+      const a = data.albums.find((x) => x.id === album)!;
+      for (let i = 0; i < 40; i++) {
+        const body = pngBytes(20, 20, 1000 + i, 64);
+        await put(`${lib}/d${i}.png`, body);
+        await put(`${lib}/k${i}.png`, body);
+        a.items.push({ key: `${lib}/d${i}.png`, lib });
+        pairs.push({ key: `${lib}/d${i}.png`, keep: `${lib}/k${i}.png` });
+      }
+      await env.META.put(ALBUMS, JSON.stringify(data));
+      const plain = libEnv(lib);
+      for (let i = 0; i < 10; i++) {
+        const r = await ok<{ pending: number }>(post(plain, `/v1/${lib}/duplicates/scan`, {}));
+        if (r.pending === 0) break;
+      }
+      // アプリは 2 つの塊を同時に送るので、albums.json の書き込みが 1 回負ける
+      let conflicts = 1;
+      const realPut = env.META.put.bind(env.META);
+      const e = countedEnv(lib, {
+        meta: {
+          put: ((k: string, ...rest: unknown[]) => {
+            if (k === ALBUMS && conflicts > 0) {
+              conflicts--;
+              return Promise.resolve(null);
+            }
+            return (realPut as (...x: unknown[]) => Promise<R2Object | null>)(k, ...rest);
+          }) as R2Bucket["put"],
+        },
+      });
+      calls = 0;
+      const results = await trash(e, lib, pairs);
+      expect(
+        results.every((r) => r.ok),
+        JSON.stringify(results),
+      ).toBe(true);
+      expect(conflicts).toBe(0);
+      expect(await ghostsLeft(lib, album, ghosts)).toBe(ghosts);
+      return calls;
+    };
+    const plain = await run("tr0", 0);
+    const many = await run("tr", 30);
+    // 跡 1 件ごとに数えていた時は、競合 1 回で跡の分を 2 回払っていた（この数で 60 回余り多い）
+    expect(many - plain, `${many} - ${plain}`).toBeLessThanOrEqual(BUDGET);
+    // 本番の上限（40 件、跡を確かめる分 80 回）でも 1000 回に届かない
+    expect(plain + 80).toBeLessThan(1000);
+  }, 60_000);
+
+  it("期限切れの purge は、ゴミ箱の本体と一緒にアルバムの所属の控えも消す", async () => {
+    const lib = "tu";
+    const old = Date.now() - 40 * 86_400_000;
+    const fresh = Date.now() - 1000;
+    for (const ts of [old, fresh]) {
+      await bucket().put(`.trash/${ts}/${lib}/x.png`, new Uint8Array([1]));
+      await env.META.put(sidecarPath(lib, `.trash/${ts}/${lib}/x.png`), "[]");
+    }
+    const only = {
+      ...libEnv(lib),
+      LIBRARIES: JSON.stringify([{ id: lib, binding: `LIB_${lib.toUpperCase()}`, title: lib }]),
+    } as Env;
+    await purgeTrash(only);
+    expect(await exists(`.trash/${old}/${lib}/x.png`)).toBe(false);
+    expect(await exists(`.trash/${fresh}/${lib}/x.png`)).toBe(true);
+    expect(await sidecars(lib)).toEqual([sidecarPath(lib, `.trash/${fresh}/${lib}/x.png`)]);
+  });
+});
+
+describe("ゴミ箱の間に同じ key の別の物がサムネを置いた", () => {
+  const lib = "tw";
+  const e = libEnv(lib);
+  const thumb = (k: string) => `.system/thumbs/${lib}/${k}.webp`;
+  const WEBP = Uint8Array.from([
+    ...[0x52, 0x49, 0x46, 0x46, 4, 0, 0, 0, 0x57, 0x45, 0x42, 0x50],
+    ...new Array<number>(8).fill(0),
+  ]);
+  const putThumb = (k: string) =>
+    call(e, `/v1/${lib}/thumb?key=${encodeURIComponent(k)}`, {
+      method: "PUT",
+      headers: { "content-type": "image/webp", "content-length": String(WEBP.length) },
+      body: WEBP,
+    });
+  const upload = (k: string, body: Uint8Array) =>
+    call(e, `/v1/${lib}/objects?key=${encodeURIComponent(k)}`, {
+      method: "PUT",
+      headers: { "content-type": "image/png", "content-length": String(body.length) },
+      body,
+    });
+  const trashOne = async (k: string) =>
+    (await ok<{ trashKey: string }>(post(e, `/v1/${lib}/ops/trash`, { key: k }))).trashKey;
+  const thumbStored = async (k: string) => {
+    const todo = await ok<{ items: { key: string; thumbStored: boolean }[] }>(
+      call(e, `/v1/${lib}/similar/todo?shard=${shardOf(k)}`),
+    );
+    return todo.items.find((i) => i.key === k)?.thumbStored;
+  };
+
+  it("戻した物には後の物のサムネを付けずに消し、送る前に置いたサムネはそのまま使う", async () => {
+    const K = `${lib}/k.png`;
+    await ok(upload(K, pngBytes(30, 30, 1, 60)), 201);
+    await ok(putThumb(K), 201);
+    const first = await trashOne(K);
+    // 同じ名前で別の絵を上げ、そのサムネを置いてから、その物もゴミ箱へ送る
+    await ok(upload(K, pngBytes(30, 30, 2, 60)), 201);
+    await ok(putThumb(K), 201);
+    await trashOne(K);
+    await ok(post(e, `/v1/${lib}/ops/restore`, { trashKey: first }));
+    expect(await env.META.head(thumb(K))).toBeNull();
+    expect(await thumbStored(K)).toBe(false);
+
+    const M = `${lib}/m.png`;
+    await ok(upload(M, pngBytes(30, 30, 3, 60)), 201);
+    await ok(putThumb(M), 201);
+    await ok(post(e, `/v1/${lib}/ops/restore`, { trashKey: await trashOne(M) }));
+    expect(await env.META.head(thumb(M))).not.toBeNull();
+    expect(await thumbStored(M)).toBe(true);
+  });
+});
+
+describe("ゴミ箱へ送った物の見た目の署名", () => {
+  const lib = "tv";
+  const e = libEnv(lib);
+
+  it("同じ置き場へ別の署名を送っても消えず、ゴミ箱から戻すと照合済みのまま", async () => {
+    const X = `${lib}/x.png`;
+    await put(X, pngBytes(40, 40, 7, 60));
+    let other = "";
+    for (let i = 0; !other; i++) {
+      if (shardOf(`${lib}/o${i}.png`) === shardOf(X)) other = `${lib}/o${i}.png`;
+    }
+    await put(other, pngBytes(40, 40, 8, 60));
+    await sign(e, lib, [[X, sigOf(look(1))]]);
+    const { trashKey } = await ok<{ trashKey: string }>(
+      post(e, `/v1/${lib}/ops/trash`, { key: X }),
+    );
+    await sign(e, lib, [[other, sigOf(look(2))]]);
+    await ok(post(e, `/v1/${lib}/ops/restore`, { trashKey }));
+    const todo = await ok<{ items: { key: string }[] }>(
+      call(e, `/v1/${lib}/similar/todo?shard=${shardOf(X)}`),
+    );
+    expect(todo.items.map((i) => i.key)).not.toContain(X);
+  });
 });

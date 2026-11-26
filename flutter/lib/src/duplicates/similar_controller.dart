@@ -270,6 +270,10 @@ class SimilarController extends ChangeNotifier {
   SimilarPhase phase = SimilarPhase.hashScan;
   String? error;
 
+  /// 画像が多すぎて Worker が見た目の照合を断った（status の tooMany か、一覧の 413）。
+  /// [phase] は unsupported で、画面は従来の重複の画面に理由を添えて出す
+  bool tooManyForSimilar = false;
+
   // ---- 中身（SHA-256）の計算 ----
   /// 計算待ちの残り。最初の応答が来るまでは null
   int? scanPending;
@@ -349,6 +353,7 @@ class SimilarController extends ChangeNotifier {
     phase = SimilarPhase.hashScan;
     error = null;
     exactFallback = false;
+    tooManyForSimilar = false;
     scanPending = null;
     _notify();
     try {
@@ -379,6 +384,14 @@ class SimilarController extends ChangeNotifier {
       return;
     }
     if (_stale(run)) return;
+    if (status?.tooMany ?? false) {
+      // 画像が上限を超えると Worker は一覧を 413 で断る。照合（数 GB の通信と数十分）を始める前に
+      // 従来の画面へ替え、理由を出す（作り終えてから断られると、使った時間と通信が無駄になる）
+      tooManyForSimilar = true;
+      phase = SimilarPhase.unsupported;
+      _notify();
+      return;
+    }
     final work = consentCount;
     if (work <= 0) return reload(run: run);
     if (work > consentThreshold) {
@@ -395,6 +408,7 @@ class SimilarController extends ChangeNotifier {
     if (e is ApiError &&
         (e.status == 404 ||
             (e.status == 413 && e.code == 'too_many_for_similar'))) {
+      tooManyForSimilar = e.status == 413;
       phase = SimilarPhase.unsupported;
     } else {
       phase = SimilarPhase.error;

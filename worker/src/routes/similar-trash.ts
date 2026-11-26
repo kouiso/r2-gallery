@@ -27,7 +27,7 @@ import {
   type TrashAlbumMembership,
 } from "../lib/trash-albums";
 import { sameContent } from "./duplicates";
-import { thumbPath } from "./write";
+import { restoredThumb } from "./write";
 
 /**
  * 重複・似ている写真をまとめてゴミ箱へ送る口と、その直後の取り消し。
@@ -53,6 +53,16 @@ const UNDO_ALBUM_TRIES = 3;
 const UNDO_ALBUM_BACKOFF_MS = 100;
 /** 戻すのに失敗した時に試し直す回数（一時的な失敗でゴミ箱に取り残さない） */
 const MOVE_BACK_TRIES = 3;
+/**
+ * まとめて消す時に albums.json を書く回数の上限。1 回ごとに残す物 40 件を head し直すので、
+ * mutateAlbums の 8 回まで競合すると、跡を確かめる分と合わせて 1000 回を超える
+ */
+const TRASH_ALBUM_ATTEMPTS = 4;
+/**
+ * まとめて消す時に跡を確かめる外部呼び出しの上限。この口は 40 件で約 500 回を使い、アルバムを書けずに
+ * 全部を戻す道でもう約 250 回を使うので、1 件ずつの口より小さくする
+ */
+const TRASH_PROBE_BUDGET = 80;
 
 const badItems = () => new HttpError(400, "bad_items");
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -265,12 +275,15 @@ export async function handleSimilarTrash(
     const meta = new Map(
       (index.items ?? []).filter((i) => keeperKeys.has(i.key)).map((i) => [i.key, i]),
     );
-    const probe = makeProbe(env);
+    const probe = makeProbe(env, TRASH_PROBE_BUDGET);
     let attempt = 0;
     await mutateAlbums(env, async (data) => {
-      if (attempt++) probe.reset();
       // この回で書く中身だけを持つ（途中で投げた回の分を、書けた物と取り違えない）
       real = new Map();
+      // やり直すたびに残す物を確かめ直すので、競合が続くと 1 リクエストの外部呼び出しの上限に届く。
+      // 数回で諦めて全部を元へ戻す（アプリは albums_failed の物を一覧に戻し、もう一度選べる）
+      if (attempt >= TRASH_ALBUM_ATTEMPTS) throw new HttpError(503, "albums_contended");
+      if (attempt++) probe.reset();
       // 書く直前にもう一度、残す側があるかを確かめる。別の操作が残す側を消した後で
       // アルバムを残す側へ書き換えると、ゴミ箱にある物を指してしまう。albums.json は
       // etag の条件付きで書くので、ここで見た後に相手が先に書けば、こちらはやり直しになる。
@@ -652,14 +665,9 @@ export async function handleSimilarUndo(
       // 前回、ファイルは戻ったのにアルバムの更新（や索引の追記）で失敗した場合のやり直しも、
       // 写しが済んだのにゴミ箱側を消せなかった場合も、物の在り処で決める（/ops/restore と同じ）
       const { obj } = await moveBackFromTrash(env, bucket, it.trashKey, it.key, !!saved);
-      // ゴミ箱の間もサムネは残してある。確かめられなかった時はサムネの有無に触れない
-      const hasThumb = await env.META.head(thumbPath(lib, it.key)).then(
-        (o) => o !== null,
-        (e: unknown) => {
-          console.error("thumb_probe_failed", lib, it.key, e);
-          return null;
-        },
-      );
+      // ゴミ箱の間もサムネは残してある。送った後に同じ key の別の物が置いたサムネは外す
+      // （/ops/restore と同じ）。確かめられなかった時はサムネの有無に触れない
+      const hasThumb = await restoredThumb(env, lib, it.key, it.trashKey);
       // やり直しでも行を足し直す。前回が索引の追記の前で止まっていると、一覧に戻らないため
       rows.push(rowOf(obj));
       if (hasThumb === true) thumb.push(it.key);

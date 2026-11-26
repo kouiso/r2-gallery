@@ -17,17 +17,20 @@ import {
   type GroupItem,
   type GroupNodeInput,
   type MemberMeta,
+  type SigTable,
 } from "../lib/similar/core";
 import { PROBE_BYTES, probeDims, type Dims } from "../lib/similar/probe";
 import {
   exactRows,
   exactSide,
+  focusSimilarStoreMemory,
   isFailKind,
   isFlatAt,
   loadAllShards,
   loadHashesCached,
   loadShard,
   mutateShard,
+  peekShard,
   resetSimilarStoreMemory,
   shardOf,
   SHARDS,
@@ -98,21 +101,32 @@ interface Coverage {
   pendingBytesEstimate: number;
 }
 
+const emptyCoverage = (): Coverage => ({
+  images: 0,
+  signed: 0,
+  failed: 0,
+  flat: 0,
+  pending: 0,
+  pendingWithThumb: 0,
+  pendingNoThumb: 0,
+  pendingBytesEstimate: 0,
+});
+
 function coverageOf(catalog: Catalog, shards: readonly Shard[]): Coverage {
-  const c: Coverage = {
-    images: 0,
-    signed: 0,
-    failed: 0,
-    flat: 0,
-    pending: 0,
-    pendingWithThumb: 0,
-    pendingNoThumb: 0,
-    pendingBytesEstimate: 0,
-  };
-  for (const row of catalog.rows.values()) {
+  return countCoverage(catalog, catalog.rows.values(), (key) => shards[shardOf(key)]!);
+}
+
+/** rows の分を c に足す。shardFor は行の置き場を返す */
+function countCoverage(
+  catalog: Catalog,
+  rows: Iterable<CatalogRow>,
+  shardFor: (key: string) => Shard,
+  c: Coverage = emptyCoverage(),
+): Coverage {
+  for (const row of rows) {
     if (!IMAGE_EXT.test(row[0])) continue;
     c.images++;
-    const shard = shards[shardOf(row[0])]!;
+    const shard = shardFor(row[0]);
     const i = validIndex(shard, row);
     if (i < 0) {
       c.pending++;
@@ -133,22 +147,53 @@ function coverageOf(catalog: Catalog, shards: readonly Shard[]): Coverage {
   return c;
 }
 
+/** 一覧の画像の数。束ねる節の数はこれを超えない（同じ中身の動画の束を除く）ので、上限の前置きの確認に使う */
+function imageCount(catalog: Catalog): number {
+  let n = 0;
+  for (const key of catalog.rows.keys()) if (IMAGE_EXT.test(key)) n++;
+  return n;
+}
+
+/**
+ * 上限を超えるライブラリの進み具合。32 の置き場を 1 つずつ読んで数え、写しには置かない
+ * （全部を同時に持つと、断るはずの大きさで isolate のメモリを使い切る）
+ */
+async function coverageStreamed(env: Env, lib: string, catalog: Catalog): Promise<Coverage> {
+  const byShard: CatalogRow[][] = Array.from({ length: SHARDS }, () => []);
+  for (const row of catalog.rows.values()) {
+    if (IMAGE_EXT.test(row[0])) byShard[shardOf(row[0])]!.push(row);
+  }
+  const c = emptyCoverage();
+  for (let n = 0; n < SHARDS; n++) {
+    const shard = await peekShard(env, lib, n);
+    countCoverage(catalog, byShard[n]!, () => shard, c);
+  }
+  return c;
+}
+
 /** GET /v1/:lib/similar/status — 照合が済んだ数・残りの数と通信量の見積もり */
 export async function handleSimilarStatus(env: Env, lib: string, ctx: Ctx): Promise<Response> {
   const { bucket } = readable(env, lib);
-  const [catalog, shards] = await Promise.all([
-    loadCatalog(env, lib, bucket, { ctx }),
-    loadAllShards(env, lib),
-  ]);
+  focusLibrary(lib);
+  const catalog = await loadCatalog(env, lib, bucket, { ctx });
   // 1 回に受ける件数は env で下げられる。アプリはこれに合わせて分けて送る（固定の 200 / 40 で
   // 送ると、下げた時に全部 400 になり、署名も「元に戻す」も通らなくなる）
-  const { sigBatch, trashBatch } = similarLimits(env);
+  const { sigBatch, trashBatch, maxNodes } = similarLimits(env);
+  // 上限を超えるライブラリは GET /similar が 413 で断る。アプリはここで知り、署名を作り始める前に
+  // 従来の重複の画面へ替える（作り終えてから断ると、数 GB の通信と数十分が無駄になる）。
+  // PC ツールは上限なしに手元で束ねるので、進み具合は数えて返す
+  const tooMany = imageCount(catalog) > maxNodes;
+  const coverage = tooMany
+    ? await coverageStreamed(env, lib, catalog)
+    : coverageOf(catalog, await withBuildTurn(lib, () => loadAllShards(env, lib)));
   return json({
     alg: PARAMS.alg,
     params: PARAMS.version,
-    ...coverageOf(catalog, shards),
+    ...coverage,
     sigBatch,
     trashBatch,
+    maxNodes,
+    tooMany,
   });
 }
 
@@ -386,7 +431,42 @@ const modelMem = new Map<string, { key: string; model: Model }>();
 /** テスト用: isolate が持つ写し（署名・ハッシュ・束ねた結果）を捨てる */
 export function resetSimilarMemory(): void {
   modelMem.clear();
+  building.clear();
   resetSimilarStoreMemory();
+}
+
+/** 持つ写しを lib の物だけにする（別のライブラリの写しの上に読み足して isolate の上限を超えない） */
+function focusLibrary(lib: string): void {
+  for (const id of modelMem.keys()) if (id !== lib) modelMem.delete(id);
+  focusSimilarStoreMemory(lib);
+}
+
+/**
+ * 全部の置き場を読む口の順番。アプリは 2 つの段（dup・similar）を同時に読むので、同時に作ると一覧・32 の
+ * 置き場・ハッシュの記録を 2 組読み解いて isolate のメモリを倍使う。先に始めた方が終わるまで待ち、
+ * 後の方は手元の写し（etag が同じなら中身を受け取らない）と束ねた結果を使い回す。
+ * 他のリクエストの Promise は待たない（workerd では I/O の持ち主のリクエストが終わると止まり得る）。
+ * 印を見て自分の時計で待つだけにし、印が古すぎれば（持ち主が落ちた）待たずに進む
+ */
+const building = new Map<string, { at: number }>();
+const BUILD_WAIT_MS = 30_000;
+const BUILD_POLL_MS = 25;
+
+async function withBuildTurn<T>(lib: string, fn: () => Promise<T>): Promise<T> {
+  const until = Date.now() + BUILD_WAIT_MS;
+  for (;;) {
+    const other = building.get(lib);
+    if (!other || Date.now() - other.at > BUILD_WAIT_MS || Date.now() > until) break;
+    await new Promise((r) => setTimeout(r, BUILD_POLL_MS));
+  }
+  // 最後に見てから印を立てるまでの間に await は無いので、2 つが同時に進むことはない
+  const mine = { at: Date.now() };
+  building.set(lib, mine);
+  try {
+    return await fn();
+  } finally {
+    if (building.get(lib) === mine) building.delete(lib);
+  }
 }
 
 /** 有効な署名の在りか（単色も含む）。画像でない・署名が無い・失敗の印なら null */
@@ -419,6 +499,19 @@ export function buildModel(
   }
   if (nodeCount > maxNodes) throw new HttpError(413, "too_many_for_similar");
 
+  // 節と署名の表を作る途中の物（有効な署名の在りか・表に写す行）は、束ねる前に手放す
+  const { nodes, table } = nodesOf(catalog, shards, exact.groups, inExact);
+  const { groups, crowded } = groupNodes(nodes, table);
+  return toModelResult(groups, crowded, coverage, exact);
+}
+
+/** 束ねる節と署名の表 */
+function nodesOf(
+  catalog: Catalog,
+  shards: readonly Shard[],
+  exactGroups: ReturnType<typeof duplicateState>["groups"],
+  inExact: ReadonlySet<string>,
+): { nodes: GroupNodeInput[]; table: SigTable } {
   // 有効な署名の在りかを 1 回で集める（単色も含む: 同じ中身の束はどれかの署名を使う）
   const valid = new Map<string, { row: CatalogRow; shard: Shard; i: number }>();
   for (const row of catalog.rows.values()) {
@@ -439,7 +532,7 @@ export function buildModel(
 
   const nodes: GroupNodeInput[] = [];
   const tableRows: { shard: Shard; i: number }[] = [];
-  for (const g of exact.groups) {
+  for (const g of exactGroups) {
     // 同じ中身の束は 1 つの節。動画もここに入り、見た目の辺は持たない。
     // 署名は古い順で最初の単色でない物（ゴミ箱・付け直しの exactSide と同じ決まり）
     let sig = -1;
@@ -464,8 +557,15 @@ export function buildModel(
 
   const table = newSigTable(tableRows.length);
   tableRows.forEach((v, n) => setSig(table, n, sigAtRow(v.shard, v.i)!));
-  const { groups, crowded } = groupNodes(nodes, table);
+  return { nodes, table };
+}
 
+function toModelResult(
+  groups: Group[],
+  crowded: number,
+  coverage: Coverage,
+  exact: ReturnType<typeof duplicateState>,
+): Model {
   const toModel = (g: Group): ModelGroup => {
     const members = g.items.slice(1);
     // 反転・差分かもは別の絵のことがあるので、空けられる量には数えない
@@ -588,24 +688,34 @@ export async function handleSimilar(
   const rawCursor = url.searchParams.get("cursor") ?? "";
   const cursor = rawCursor ? decodeCursor(rawCursor) : null;
 
-  const [catalog, shards, hashes] = await Promise.all([
-    loadCatalog(env, lib, bucket, { ctx }),
-    loadAllShards(env, lib),
-    loadHashesCached(env, lib),
-  ]);
-  const { maxObjectBytes } = hashBudget(env);
-  const cacheKey = [
-    PARAMS.version,
-    catalog.stamp,
-    hashes.etag,
-    maxObjectBytes,
-    ...shards.map((s) => s.etag ?? "-"),
-  ].join("\n");
-  let model = modelMem.get(lib)?.key === cacheKey ? modelMem.get(lib)!.model : null;
-  if (!model) {
-    model = buildModel(catalog, shards, hashes.data, maxObjectBytes, similarLimits(env).maxNodes);
+  const { maxNodes } = similarLimits(env);
+  focusLibrary(lib);
+  const { catalog, model } = await withBuildTurn(lib, async () => {
+    const catalog = await loadCatalog(env, lib, bucket, { ctx });
+    // 署名とハッシュの記録を読む前に、一覧の画像の数で断る（節の数はこれを超えない）。読んでから
+    // 数えると、断るはずの大きさのライブラリで 413 を返す前に isolate のメモリを使い切る
+    if (imageCount(catalog) > maxNodes) throw new HttpError(413, "too_many_for_similar");
+    const [shards, hashes] = await Promise.all([
+      loadAllShards(env, lib),
+      loadHashesCached(env, lib),
+    ]);
+    const { maxObjectBytes } = hashBudget(env);
+    const cacheKey = [
+      PARAMS.version,
+      catalog.stamp,
+      hashes.etag,
+      maxObjectBytes,
+      maxNodes,
+      ...shards.map((s) => s.etag ?? "-"),
+    ].join("\n");
+    const have = modelMem.get(lib);
+    if (have?.key === cacheKey) return { catalog, model: have.model };
+    // 古い結果を持ったまま作り直さない
+    modelMem.delete(lib);
+    const model = buildModel(catalog, shards, hashes.data, maxObjectBytes, maxNodes);
     modelMem.set(lib, { key: cacheKey, model });
-  }
+    return { catalog, model };
+  });
 
   const list = tab === "dup" ? model.dup : model.similar;
   // 消すと束が減って番号がずれるので、続きは「この束より後」で探す

@@ -747,6 +747,28 @@ void main() {
       );
     await _show(tester, _app(api));
     expect(find.byType(DuplicatesScreen), findsOneWidget);
+    expect(find.textContaining('見た目の照合の上限'), findsOneWidget);
+    await _leave(tester);
+  });
+
+  testWidgets('上限を超えると status が言えば、照合を始めずに理由を添えて従来の重複の画面を出す', (tester) async {
+    final api = _Api()
+      ..pages = _onePage()
+      ..status = const SimilarStatus(
+        images: 52000,
+        pending: 52000,
+        maxNodes: 40000,
+        tooMany: true,
+      );
+    await _show(tester, _app(api));
+    expect(find.byType(DuplicatesScreen), findsOneWidget);
+    expect(find.text('この端末で照合する'), findsNothing);
+    final notice = find.textContaining('見た目の照合の上限');
+    expect(notice, findsOneWidget);
+    final text = tester.widget<Text>(notice).data!;
+    expect(text, contains('52,000'));
+    expect(text, contains('40,000'));
+    expect(text, contains('同じファイルの重複はここで探せます'));
     await _leave(tester);
   });
 

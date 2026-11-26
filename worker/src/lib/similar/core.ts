@@ -763,6 +763,16 @@ interface RankedNode {
  * 1 人の代表が取るのは、まだ取られていない相手のうち近い順に 64 件まで（crowded はそれで
  * 相手を残した節の数）。取り残された物も、既にできた組の頭と直接合えば、その組へ足す。
  */
+let peakProbe: (() => void) | null = null;
+
+/**
+ * テスト用: groupNodes の一番重い所（索引を作り終え、段の取り合いを始める直前と終えた直後）で呼ぶ
+ * 関数を置く（tools/similar-model-memory.test.mjs が記憶の量を測る）。null で外す
+ */
+export function setGroupPeakProbe(fn: (() => void) | null): void {
+  peakProbe = fn;
+}
+
 export function groupNodes(nodes: readonly GroupNodeInput[], table: SigTable): GroupResult {
   const ranked: RankedNode[] = nodes.map((nd) => {
     const members = [...nd.members].sort(oldestFirst);
@@ -926,6 +936,7 @@ export function groupNodes(nodes: readonly GroupNodeInput[], table: SigTable): G
   // 段ごとの判定。classify が same / mirror / similar を返す条件と同じ物を、安い順に確かめる
   // （格子は上限を超えた所で止める。密集していても、合わない相手に格子を全部比べない）
   const sums = gridSums(table);
+  peakProbe?.();
   const aspect = (i: number, j: number) => aspectGap(table, rows[i]!, rows[j]!);
   const isSame = (i: number, j: number, ph: number, dh: number) =>
     ph <= same.ph &&
@@ -985,6 +996,7 @@ export function groupNodes(nodes: readonly GroupNodeInput[], table: SigTable): G
   );
 
   for (const g of groups) g.items = [g.items[0]!, ...tidy(g.items.slice(1))];
+  peakProbe?.();
   let crowded = 0;
   for (let i = 0; i < n; i++) crowded += crowdedNode[i]!;
   return { groups, crowded };

@@ -534,9 +534,9 @@ describe("署名が無い物の一覧と署名の受け取り", () => {
     for (const k of keys) expect(items[k]?.[1], k).toBe(sig);
   });
 
-  it("書く時に、一覧に無い・etag の合わない記録を落とす", async () => {
-    const [gone, changed, fresh] = keysInShard("sq/prune/", 3);
-    for (const [i, k] of [gone!, changed!, fresh!].entries())
+  it("書く時に、etag の合わない記録と、一覧から消えてゴミ箱の保持日数を過ぎた記録を落とす", async () => {
+    const [gone, changed, fresh, later] = keysInShard("sq/prune/", 4);
+    for (const [i, k] of [gone!, changed!, fresh!, later!].entries())
       await put(k, pngBytes(10, 10, 30 + i));
     expect((await sign(e, lib, [[gone!, sig]])).stored).toBe(1);
     expect((await sign(e, lib, [[changed!, sig]])).stored).toBe(1);
@@ -548,8 +548,25 @@ describe("署名が無い物の一覧と署名の受け取り", () => {
     expect((await sign(e, lib, [[fresh!, sig]])).stored).toBe(1);
     const items = await shardItems(lib, fresh!);
     expect(items[fresh!]).toBeDefined();
-    expect(items[gone!]).toBeUndefined();
+    // 一覧から消えたばかりの記録は残す（ゴミ箱から戻せば同じ etag で、そのまま使える）
+    expect(items[gone!]).toBeDefined();
     expect(items[changed!]).toBeUndefined();
+    const path = shardPath(lib, shardOf(gone!));
+    const file = (await (await env.META.get(path))!.json()) as {
+      gone: Record<string, number>;
+    };
+    expect(Object.keys(file.gone)).toEqual([gone]);
+    // 消えたと最初に見てから保持日数（既定 30 日）を過ぎれば落とす
+    file.gone[gone!] = Date.now() - 31 * 86_400_000;
+    await env.META.put(path, JSON.stringify(file));
+    expect((await sign(e, lib, [[later!, sig]])).stored).toBe(1);
+    const after = (await (await env.META.get(path))!.json()) as {
+      items: Record<string, unknown>;
+      gone?: Record<string, number>;
+    };
+    expect(after.items[gone!]).toBeUndefined();
+    expect(after.gone).toBeUndefined();
+    expect(after.items[later!]).toBeDefined();
   });
 
   it("読み取り専用のライブラリでも署名を受け付ける（書くのは META だけ）", async () => {
@@ -597,6 +614,8 @@ describe("照合の進み具合", () => {
       pendingBytesEstimate: 3 * 40960 + 90,
       sigBatch: 200,
       trashBatch: 40,
+      maxNodes: 40000,
+      tooMany: false,
     });
     // env で下げた件数をアプリに伝える（アプリは固定の上限ではなくこれで分けて送る）
     const lowered = { ...e, SIMILAR_SIG_BATCH: "50", SIMILAR_TRASH_BATCH: "10" } as Env;
@@ -793,6 +812,19 @@ describe("重複と似ている写真の束", () => {
     const big = await call(tiny, `/v1/${lib}/similar?tab=dup`);
     expect(big.status).toBe(413);
     expect(await big.json()).toEqual({ error: "too_many_for_similar" });
+    // 照合の状況は上限を超えても数えて返し、超えていることも伝える（アプリは署名を作り始める前に
+    // 従来の画面へ替える。PC ツールは手元で束ねるので進み具合が要る）。置き場は 1 つずつ読んで数える
+    type Status = Record<string, number | boolean | string>;
+    const over = await ok<Status>(call(tiny, `/v1/${lib}/similar/status`));
+    const normal = await ok<Status>(call(e, `/v1/${lib}/similar/status`));
+    expect(over.tooMany).toBe(true);
+    expect(over.maxNodes).toBe(3);
+    expect(normal.tooMany).toBe(false);
+    expect(normal.maxNodes).toBe(40000);
+    const coverage = (s: Status) =>
+      Object.fromEntries(Object.entries(s).filter(([k]) => k !== "tooMany" && k !== "maxNodes"));
+    expect(coverage(over)).toEqual(coverage(normal));
+    expect(Number(over.images)).toBeGreaterThan(3);
     for (const path of [
       "/v1/a/similar",
       "/v1/a/similar/status",

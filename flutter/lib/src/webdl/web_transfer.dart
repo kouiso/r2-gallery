@@ -790,6 +790,9 @@ class WebTransferQueue extends ChangeNotifier {
   }
 
   bool _isTransient(Object e) {
+    // アップロードの失敗は ApiError(0, ...) に包まれて届く。回線で落ちたものだけ一時的とみなし、
+    // HTTP の拒否（4xx/5xx）や「未設定」などの status 0 は待っても変わらないので含めない
+    if (e is ApiError) return e.network;
     if (e is DioException) {
       return e.type == DioExceptionType.connectionTimeout ||
           e.type == DioExceptionType.receiveTimeout ||

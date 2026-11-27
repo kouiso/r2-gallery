@@ -48,6 +48,12 @@ class FakeServer {
   bool failFolders = false;
   int? failPart;
   Completer<void>? holdPut;
+  // 一括 PUT を受けた時に呼ぶ。上げている最中に回線が切れた状況を作るために使う
+  void Function()? onPut;
+  // 一括 PUT を受けたら返事を返さず接続を切る（上げている最中の回線断）
+  bool dropPut = false;
+  // 一括 PUT に返す HTTP の拒否
+  int? failPutStatus;
 
   Future<void> start() async {
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -185,6 +191,14 @@ class FakeServer {
     if (r.method == 'PUT' && p.endsWith('/objects')) {
       objectPuts++;
       final body = await _body(r);
+      onPut?.call();
+      if (dropPut) {
+        final sock = await res.detachSocket(writeHeaders: false);
+        sock.destroy();
+        return;
+      }
+      final reject = failPutStatus;
+      if (reject != null) return json({'error': 'rejected'}, reject);
       if (holdPut != null) await holdPut!.future;
       if (existingKeys.contains(key)) return json({'error': 'exists'}, 409);
       objects[key!] = body;
@@ -846,6 +860,38 @@ void main() {
       await until(() => t.status != WebTaskStatus.fetching);
       expect(t.status, WebTaskStatus.queued, reason: t.error);
       expect(queue.activeCount, 1);
+    });
+
+    test('上げている最中に回線が切れたら失敗にせず待機に戻り、一時ファイルを残す', () async {
+      // 取得は済み、アップロードの途中で接続が切れる。上げる側の失敗は ApiError(0) に包まれて届く
+      s.media['clip.mp4'] = _bytes(2000);
+      s.dropPut = true;
+      s.onPut = () => queue.setOnline(false);
+      final t = queue.enqueue('lib', [video('clip.mp4')]).single;
+      await until(() => s.objectPuts > 0 && t.status == WebTaskStatus.queued);
+      expect(t.status, WebTaskStatus.queued, reason: t.error);
+      expect(t.staged, isNotNull);
+      expect(t.staged!.existsSync(), isTrue);
+      expect(queue.activeCount, 1);
+
+      // 戻ったら続きから上げて終わる（取り直さない）
+      final fetched = s.mediaRequests.length;
+      s.dropPut = false;
+      s.onPut = null;
+      queue.setOnline(true);
+      await run();
+      expect(t.status, WebTaskStatus.done, reason: t.error);
+      expect(s.mediaRequests.length, fetched);
+      expect(s.objects['downloads/clip.mp4'], hasLength(2000));
+    });
+
+    test('オフラインでも HTTP の拒否は待たせず失敗にする', () async {
+      s.media['clip.mp4'] = _bytes(2000);
+      s.failPutStatus = 500;
+      s.onPut = () => queue.setOnline(false);
+      final t = queue.enqueue('lib', [video('clip.mp4')]).single;
+      await run();
+      expect(t.status, WebTaskStatus.error);
     });
 
     test('オンラインのまま通信の失敗が尽きたら今通り失敗', () async {

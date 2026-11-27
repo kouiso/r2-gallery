@@ -182,7 +182,11 @@ class ApiError implements Exception {
 
   /// Worker が本文で返す `{"error": "..."}` の値。同じ 409 でも理由で次の動きが変わるため残す。
   final String? code;
-  const ApiError(this.status, this.message, {this.code});
+
+  /// 回線の失敗（つながらない・途中で切れた・時間切れ）で、HTTP の返事が無かったもの。
+  /// status 0 は「未設定」「ファイルが途中で尽きた」なども含むので、status だけでは回線の失敗と区別できない
+  final bool network;
+  const ApiError(this.status, this.message, {this.code, this.network = false});
 
   @override
   String toString() => status > 0 ? 'HTTP $status: $message' : message;

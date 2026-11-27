@@ -599,6 +599,48 @@ void main() {
       expect(c.value.isPlaying, isFalse);
     });
 
+    testWidgets('読み込み中にロックされた動画は、解除後のURL差し替えでも鳴らさない', (tester) async {
+      MediaItem v(String url) =>
+          MediaItem(key: 'a.mp4', type: 'video', url: url);
+      final feed = _Feed([v('https://w.example/m/a.mp4?e=1')]);
+      final app = _LockApp();
+      final gate = Completer<void>();
+      final made = <_FakeController>[];
+      // 最初の1本だけ読み込みを止めておき、差し替え後の1本はすぐ読み込み終わる
+      _FakeController create(String url) {
+        final c = made.isEmpty ? _GatedController(url, gate) : _FakeController(url);
+        made.add(c);
+        return c;
+      }
+
+      await _pumpLocked(
+        tester,
+        app,
+        _viewer(
+          app: app,
+          items: feed.items,
+          initialIndex: 0,
+          source: feed,
+          readItems: () => feed.items,
+          controllerFactory: create,
+        ),
+      );
+      expect(made.single.value.isInitialized, isFalse);
+
+      app.setLocked(true);
+      feed.load([v('https://w.example/m/a.mp4?e=2')]);
+      await tester.pump();
+      expect(made, hasLength(1));
+
+      app.setLocked(false);
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+      expect(made, hasLength(2));
+      expect(made.last.value.isInitialized, isTrue);
+      expect(made.last.log, isNot(contains('play')));
+    });
+
     testWidgets('ロック中に読み込みが終わった動画は鳴らさない', (tester) async {
       final app = _LockApp()..setLocked(true);
       final ctl = _Controllers();

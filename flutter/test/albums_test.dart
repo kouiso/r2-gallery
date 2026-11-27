@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:r2_gallery/src/albums/album_detail_screen.dart';
@@ -674,6 +676,106 @@ void main() {
       expect(api.calls.where((c) => c.startsWith('POST')), isEmpty);
     });
   });
+
+  // 引き直しの間にロックされたら、下の画面は残っていても開かず、失敗の帯も出さない
+  group('引き直し中のロック', () {
+    testWidgets('アルバムの中: 引き直しの間にロックされたら開かず帯も出さない', (t) async {
+      final gate = Completer<void>();
+      final api = _GatedObjectApi(gate)
+        ..albumList = [const Album(id: 'x', title: '旅', readOnly: false)]
+        ..albumTitle['x'] = '旅'
+        ..albumItems['x'] = [
+          MediaItem(key: '1.jpg', type: 'image', url: 'https://w.example/m/1.jpg?e=1'),
+        ];
+      final app = _app(api);
+      await t.pumpWidget(MaterialApp(
+          home: AlbumDetailScreen(
+              app: app,
+              lib: 'a',
+              album: const Album(id: 'x', title: '旅', readOnly: false))));
+      await t.pumpAndSettle();
+      await t.tap(_tile('1.jpg'));
+      await t.pump();
+      app.locked = true;
+      gate.complete();
+      await t.pumpAndSettle();
+      expect(find.text(_openFailed), findsNothing);
+    });
+
+    testWidgets('フォルダ: 引き直しの間にロックされたら開かず帯も出さない', (t) async {
+      final gate = Completer<void>();
+      final api = _GatedObjectApi(gate)
+        ..tree['f/'] = (
+          items: [
+            MediaItem(key: 'f/1.jpg', type: 'image', url: 'https://w.example/m/f/1.jpg?e=1'),
+          ],
+          folders: <String>[],
+        );
+      final app = _app(api);
+      await t.pumpWidget(
+          _host(FolderBrowseScreen(app: app, lib: 'a', prefix: 'f/')));
+      await t.pumpAndSettle();
+      await t.tap(_tile('f/1.jpg'));
+      await t.pump();
+      app.locked = true;
+      gate.complete();
+      await t.pumpAndSettle();
+      expect(find.text(_openFailed), findsNothing);
+    });
+
+    testWidgets('写真タブ: 引き直しの間にロックされたら開かず帯も出さない', (t) async {
+      final gate = Completer<void>();
+      final api = _GatedObjectApi(gate)
+        ..tree[''] = (
+          items: [
+            MediaItem(key: '1.jpg', type: 'image', url: 'https://w.example/m/1.jpg?e=1'),
+          ],
+          folders: <String>[],
+        );
+      final app = _app(api);
+      await t.pumpWidget(_host(GalleryTab(app: app, lib: 'a')));
+      await t.pumpAndSettle();
+      await t.tap(_tile('1.jpg'));
+      await t.pump();
+      app.locked = true;
+      gate.complete();
+      await t.pumpAndSettle();
+      expect(find.text(_openFailed), findsNothing);
+    });
+  });
+
+  test('期限切れの差し替えが成功したら、前の拒否の帯を消す', () async {
+    final api = _ExpiredCoverApi();
+    final s = AlbumsHomeState(api);
+    await s.load('a');
+    s.error = '401 unauthorized';
+    await s.refreshIfExpired('a');
+    expect(s.error, isNull);
+    s.dispose();
+  });
+}
+
+/// objectAt の返事を外から止めておける worker（引き直しの最中を作る）。
+class _GatedObjectApi extends _FakeApi {
+  _GatedObjectApi(this.gate);
+  final Completer<void> gate;
+  @override
+  Future<MediaItem?> objectAt(String libId, String key) async {
+    await gate.future;
+    return null;
+  }
+}
+
+/// 一覧の取得は常に成功する（表紙のURLは期限切れ）。
+class _ExpiredCoverApi extends _FakeApi {
+  @override
+  Future<List<Album>> albums(String libId) async => [
+        Album(
+            id: 'x',
+            title: '旅',
+            coverUrl: 'https://w.example/m/c.jpg?e=1',
+            readOnly: false)
+      ];
 }
 
 class _FailMoreApi extends ApiClient {

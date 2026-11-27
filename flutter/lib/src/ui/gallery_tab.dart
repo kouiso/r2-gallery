@@ -205,6 +205,8 @@ class _GalleryTabState extends State<GalleryTab> {
     // 控えの一覧から開く時は、期限の切れた署名URLを新しいものに替えてから開く
     final target = await g.openTarget(sorted, index, lib: lib);
     if (!mounted || widget.lib != lib) return;
+    // 引き直しの間にロックされたら開かない（ロック層は下の画面を残すので mounted では防げない）
+    if (widget.app.locked) return;
     if (target == null) {
       // 消えていた時も引き直しの失敗も null なので、どちらにも当てはまる文言で知らせる
       showOpenFailedNotice(context);

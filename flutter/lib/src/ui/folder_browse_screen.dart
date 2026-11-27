@@ -107,6 +107,8 @@ class _FolderBrowseScreenState extends State<FolderBrowseScreen> {
     // 控えの一覧から開く時は、期限の切れた署名URLを新しいものに替えてから開く
     final target = await _g.openTarget(sorted, index, lib: widget.lib);
     if (!mounted) return;
+    // 引き直しの間にロックされたら開かない（ロック層は下の画面を残すので mounted では防げない）
+    if (widget.app.locked) return;
     if (target == null) {
       // 消えていた時も引き直しの失敗も null なので、どちらにも当てはまる文言で知らせる
       showOpenFailedNotice(context);

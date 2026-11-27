@@ -237,6 +237,8 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
               // 切れた署名URLの行はその1件だけ引き直してから開く（#24 作業B）
               final target = await s.openTarget(it);
               if (!context.mounted) return;
+              // 引き直しの間にロックされたら開かない。ロック層は下の画面を残すので mounted では防げない
+              if (widget.app.locked) return;
               if (target == null) {
                 // 引き直しに失敗しても無反応にしない（写真タブ・フォルダと同じ文言）
                 showOpenFailedNotice(context);

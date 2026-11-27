@@ -97,6 +97,8 @@ class AlbumsHomeState extends ChangeNotifier with _SafeNotify {
       final f = got[1];
       if (a is List<Album>) albums = a;
       if (f is FolderPage) folders = f.folders;
+      // 取り直せたので、前の拒否で出した帯を残さない（load と同じ）
+      error = null;
       notifyListeners();
     } on Object catch (err) {
       if (e != _epoch) return;

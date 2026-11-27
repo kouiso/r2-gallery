@@ -15,6 +15,7 @@ import '../store/kv.dart';
 import '../store/private_storage.dart';
 import '../upload/image_thumb.dart';
 import '../webdl/media_name.dart';
+import 'multipart_sender.dart';
 import 'transfer_api.dart';
 import 'transfer_ledger.dart';
 import 'upload_picker.dart';
@@ -1021,28 +1022,39 @@ class TransferQueue extends ChangeNotifier {
       _persist(t);
       return;
     }
-    final existing = resumed ? t.uploadId : null;
-    if (existing != null) {
-      try {
-        await _multipart(t, token, size);
-        return;
-      } on ApiError catch (e) {
-        // 完了時の同名（409）は呼び出し側へ。それ以外はサーバー側で uploadId が失効している
-        // ので、作り直して最初から送る
-        if (e.status == 409 || e.status < 400) rethrow;
+    await sendMultipart(
+      api: api,
+      lib: t.lib,
+      key: key,
+      mime: t.mime,
+      size: size,
+      partSize: partSize,
+      read: (offset, len) => _readChunk(t, offset, len),
+      uploadId: resumed ? t.uploadId : null,
+      parts: t.parts,
+      cancelToken: token,
+      abortStale: (_) async {
         await _abortSession(t);
         t.loaded = 0;
         _persist(t);
-      }
-    }
-    _checkCancelled(token);
-    final id = await api.multipartCreate(t.lib, key, t.mime);
-    // uploadId の確定は区切り。残さんと再開時に2つ目のセッションを作り、1つ目がサーバーに残る
-    t.key = key;
-    t.uploadId = id;
-    t.parts = [];
-    _persist(t);
-    await _multipart(t, token, size);
+      },
+      onCheckpoint: (id, parts) async {
+        t.key = key;
+        t.uploadId = id;
+        t.parts = parts;
+        if (parts.isEmpty) {
+          _persist(t);
+          return;
+        }
+        t.loaded = _confirmedBytes(t, size);
+        _persist(t);
+        _changed();
+      },
+      onProgress: (v) {
+        if (v > t.loaded) t.loaded = v;
+        _progress();
+      },
+    );
   }
 
   /// 開いたままの multipart を畳む。キーに紐づくので、名前を変える時は新しく作り直す必要がある。
@@ -1080,34 +1092,6 @@ class TransferQueue extends ChangeNotifier {
       t.loaded = n;
       _progress();
     });
-  }
-
-  Future<void> _multipart(TransferTask t, CancelToken token, int size) async {
-    final uploadId = t.uploadId!;
-    final key = t.key!;
-    final total = (size + partSize - 1) ~/ partSize;
-    for (var n = 1; n <= total; n++) {
-      _checkCancelled(token);
-      if (t.parts.any((p) => p.partNumber == n)) continue;
-      final offset = (n - 1) * partSize;
-      final len = offset + partSize > size ? size - offset : partSize;
-      final chunk = await _readChunk(t, offset, len);
-      final confirmed = _confirmedBytes(t, size);
-      final part = await api.putPart(t.lib, key, uploadId, n, chunk,
-          cancelToken: token, onProgress: (s) {
-        final v = confirmed + s;
-        if (v > t.loaded) t.loaded = v > size ? size : v;
-        _progress();
-      });
-      // 確定したパートは止めても残す。再開ではここから先だけ送る
-      t.parts = [...t.parts.where((p) => p.partNumber != part.partNumber), part];
-      t.loaded = _confirmedBytes(t, size);
-      _persist(t);
-      _changed();
-    }
-    _checkCancelled(token);
-    final sorted = [...t.parts]..sort((a, b) => a.partNumber.compareTo(b.partNumber));
-    await api.multipartComplete(t.lib, key, uploadId, sorted);
   }
 
   int _confirmedBytes(TransferTask t, int size) {

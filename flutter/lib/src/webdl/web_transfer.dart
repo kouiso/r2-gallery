@@ -812,6 +812,9 @@ class WebTransferQueue extends ChangeNotifier {
   }
 
   bool _isTransient(Object e) {
+    // アップロードの失敗は ApiError(0, ...) に包まれて届く。回線で落ちたものだけ一時的とみなし、
+    // HTTP の拒否（4xx/5xx）や「未設定」などの status 0 は待っても変わらないので含めない
+    if (e is ApiError) return e.network;
     if (e is DioException) {
       return e.type == DioExceptionType.connectionTimeout ||
           e.type == DioExceptionType.receiveTimeout ||
@@ -1055,6 +1058,11 @@ class WebTransferQueue extends ChangeNotifier {
         uploadId: t.uploadId,
         parts: t.parts,
         cancelToken: token,
+        // 失効した続きは、行が積まれた時の接続へ閉じる（#149）。今の接続へ送ると別の接続の物を閉じに行く
+        abortStale: (_) async {
+          await _abortUpload(t);
+          t.loaded = 0;
+        },
         // 一括 PUT と同じく、保存された大きさが合わなければ完了にしない
         verifySize: true,
         onCheckpoint: (id, parts) async {

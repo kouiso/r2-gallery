@@ -69,8 +69,14 @@ class ApiClient {
     if (e is DioException) {
       final body = e.response?.data;
       final code = body is Map ? body['error'] : null;
+      // 返事が無いまま回線で落ちたものだけ印を付ける。400 番台の拒否や取り消しは含めない
+      final dropped = e.response == null &&
+          (e.type == DioExceptionType.connectionError ||
+              e.type == DioExceptionType.connectionTimeout ||
+              e.type == DioExceptionType.sendTimeout ||
+              e.type == DioExceptionType.receiveTimeout);
       throw ApiError(e.response?.statusCode ?? 0, e.message ?? 'network error',
-          code: code is String ? code : null);
+          code: code is String ? code : null, network: dropped);
     }
     throw ApiError(0, e.toString());
   }
@@ -419,7 +425,7 @@ class ApiClient {
   /// 続きから送る multipart（TransferApi）も同じ確かめ方をするので外から呼べるようにする
   static void verifyStoredObject(Object? data, String key, int size) {
     if (data is! Map || data['key'] != key || data['size'] != size) {
-      throw const ApiError(502, 'アップロード結果を確認できません。再試行してください');
+      throw const StoredObjectMismatch();
     }
   }
 

@@ -182,10 +182,22 @@ class ApiError implements Exception {
 
   /// Worker が本文で返す `{"error": "..."}` の値。同じ 409 でも理由で次の動きが変わるため残す。
   final String? code;
-  const ApiError(this.status, this.message, {this.code});
+
+  /// 回線の失敗（つながらない・途中で切れた・時間切れ）で、HTTP の返事が無かったもの。
+  /// status 0 は「未設定」「ファイルが途中で尽きた」なども含むので、status だけでは回線の失敗と区別できない
+  final bool network;
+  const ApiError(this.status, this.message, {this.code, this.network = false});
 
   @override
   String toString() => status > 0 ? 'HTTP $status: $message' : message;
+}
+
+/// 保存の受け取りが送った物と合わなかった（完了済みの可能性がある）。
+/// 続きから送る経路は 400 番台以上の [ApiError] を「サーバー側で失効した」と読んで作り直すが、
+/// これはその失効ではない。作り直すと完了済みの物を閉じて別名で送り直し、R2 に重複が残る
+class StoredObjectMismatch extends ApiError {
+  const StoredObjectMismatch()
+      : super(502, 'アップロード結果を確認できません。再試行してください');
 }
 
 /// 中身がバイト単位で同じ（SHA-256 一致）項目の組。[items] は古い順で、先頭が残す候補。

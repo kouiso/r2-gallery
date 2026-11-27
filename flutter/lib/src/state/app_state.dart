@@ -341,7 +341,12 @@ class AppState extends ChangeNotifier {
     final want = transfers.hasActiveWork || webQueue.activeCount > 0;
     // 待っているだけの行があってもサービスは外さない。外すとタスク一覧から消された後に
     // Wi‑Fi へ繋がっても再開できない（#27）
-    final waiting = want ? transfers.waitingCount + webQueue.waitingCount : 0;
+    // 通知の文言は、動かす行が全部待っている時だけ待機にする（混ざる時は「転送中」のまま）
+    final waiting = want
+        ? notifyWaitingCount(
+            active: transfers.activeWorkCount + webQueue.activeCount,
+            waiting: transfers.waitingCount + webQueue.waitingCount)
+        : 0;
     if (want == _keepAlive) {
       // 張ったまま件数だけ変わった時は、張り直さず通知の文言だけを替える
       // （裏から startForegroundService を呼び直すと Android 12 以降の起動制限に当たり得る）

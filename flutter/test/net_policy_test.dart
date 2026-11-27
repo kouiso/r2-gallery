@@ -153,5 +153,15 @@ void main() {
       expect(netWaitLabel(NetWait.wifi), 'Wi‑Fi接続待ち');
       expect(netWaitLabel(NetWait.dataSaver), '省データ設定のため待機中');
     });
+
+    test('通知の待機件数は、動かす行が全部待っている時だけ渡す', () {
+      // 全部待機: 件数を渡す（通知は「N件の転送が Wi‑Fi を待っています」）
+      expect(notifyWaitingCount(active: 2, waiting: 2), 2);
+      // 動いている行が混ざる: 0（通知は今まで通りの「転送中」）
+      expect(notifyWaitingCount(active: 3, waiting: 2), 0);
+      // 待っている行が無い（オフライン待ちだけの時も含む）: 0
+      expect(notifyWaitingCount(active: 1, waiting: 0), 0);
+      expect(notifyWaitingCount(active: 0, waiting: 0), 0);
+    });
   });
 }

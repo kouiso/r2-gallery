@@ -37,12 +37,17 @@ object TransferBridge {
                 "start" -> {
                     requestNotificationsOnce(activity)
                     try {
-                        TransferService.start(app)
+                        TransferService.start(app, call.argument<Int>("waiting") ?: 0)
                         result.success(null)
                     } catch (e: IllegalStateException) {
                         // Android 12 以降、裏からはサービスを始められない。前面に戻った時の次の切り替えで張り直す
                         result.error("start_failed", e.message, null)
                     }
+                }
+                "update" -> {
+                    // 張っている間の待機の件数。通知の文言だけを替える（張っていなければ service 側で何もしない）
+                    TransferService.update(app, call.argument<Int>("waiting") ?: 0)
+                    result.success(null)
                 }
                 "stop" -> {
                     TransferService.stop(app)

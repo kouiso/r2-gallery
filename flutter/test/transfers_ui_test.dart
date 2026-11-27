@@ -815,6 +815,23 @@ void main() {
       expect(platform.keepAlive, [true, false]);
     });
 
+    test('待機の行がオフライン待ちに替わったら、通知は「転送中」に戻すため件数を 0 にする', () async {
+      final app = makeApp(api: ApiClient());
+      await app.init();
+      app.unlock();
+      await until(() => app.libraries.isNotEmpty);
+      await app.setTransferNetPolicy(const TransferNetPolicy(uploadWifiOnly: true));
+      platform.net.add(mobileNet);
+      await until(() => app.transfers.net == mobileNet);
+      expect(await app.upload('lib', [_src('a.jpg', 5, 'image/jpeg')]), 1);
+      await until(() => platform.waiting.isNotEmpty && platform.waiting.last == 1);
+
+      // 回線そのものが無い待ちは、動いている行と同じく「転送中」のまま回線の戻りを待つ
+      platform.net.add(NetState.offline);
+      await until(() => platform.waiting.last == 0);
+      expect(platform.keepAlive, [true]);
+    });
+
     test('裏に回ると省データ設定のため待機し、前面に戻ると動く', () async {
       final app = makeApp(api: ApiClient());
       await app.init();

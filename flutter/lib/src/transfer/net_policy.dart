@@ -54,3 +54,11 @@ NetWait? transferWait(
   if (net.dataSaver && net.metered && !foreground) return NetWait.dataSaver;
   return null;
 }
+
+/// サービスの通知へ渡す「待機の件数」。動いている行（または回線待ちの行）が 1 件でも
+/// 設定で待っていない時は 0 を返し、通知は今まで通りの「転送中」のままにする。
+/// 理由: 端末側は件数しか知らず、待機の行と動いている行が混ざる時に
+/// 「N件が Wi‑Fi を待っています」と出すと、実際には動いている転送を隠してしまう。
+/// [active] は動かす対象の行の数（待機を含む）、[waiting] はそのうち設定か省データで待っている数
+int notifyWaitingCount({required int active, required int waiting}) =>
+    waiting > 0 && waiting >= active ? waiting : 0;

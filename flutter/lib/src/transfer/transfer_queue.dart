@@ -331,8 +331,12 @@ class TransferQueue extends ChangeNotifier {
   Stream<TransferTask> get doneEvents => _done.stream;
 
   /// 裏で動き続けるべき転送があるか（フォアグラウンドサービスを張る目安）。
-  bool get hasActiveWork => _tasks.any((t) =>
-      t.active && (t.isUpload || _canSaveOffline(t)));
+  bool get hasActiveWork => activeWorkCount > 0;
+
+  /// 裏で動かす対象の行の数（待機中を含む）。通知を待機の文言にするかの判定に使う
+  int get activeWorkCount => _tasks
+      .where((t) => t.active && (t.isUpload || _canSaveOffline(t)))
+      .length;
 
   static Future<Directory> _defaultStageDir() => privatePersistentDirectory('transfers');
 

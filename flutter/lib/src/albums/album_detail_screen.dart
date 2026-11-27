@@ -59,6 +59,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
       albumId: widget.album.id);
 
   bool _selecting = false;
+  bool _opening = false;
   StreamSubscription<void>? _resumeSub;
 
   @override
@@ -234,22 +235,29 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
             onRefresh: s.refresh,
             onNearEnd: s.loadMore,
             onOpen: (it) async {
-              // 切れた署名URLの行はその1件だけ引き直してから開く（#24 作業B）
-              final target = await s.openTarget(it);
-              if (!context.mounted) return;
-              // 引き直しの間にロックされたら開かない。ロック層は下の画面を残すので mounted では防げない
-              if (widget.app.locked) return;
-              if (target == null) {
-                // 引き直しに失敗しても無反応にしない（写真タブ・フォルダと同じ文言）
-                showOpenFailedNotice(context);
-                return;
+              // 引き直しを待つ間の連打で、ビューアが二重に積まれないようにする
+              if (_opening) return;
+              _opening = true;
+              try {
+                // 切れた署名URLの行はその1件だけ引き直してから開く（#24 作業B）
+                final target = await s.openTarget(it);
+                if (!context.mounted) return;
+                // 引き直しの間にロックされたら開かない。ロック層は下の画面を残すので mounted では防げない
+                if (widget.app.locked) return;
+                if (target == null) {
+                  // 引き直しに失敗しても無反応にしない（写真タブ・フォルダと同じ文言）
+                  showOpenFailedNotice(context);
+                  return;
+                }
+                await openViewer(context,
+                    app: widget.app,
+                    lib: widget.lib,
+                    items: target.items,
+                    index: target.index,
+                    onChanged: s.refresh);
+              } finally {
+                _opening = false;
               }
-              openViewer(context,
-                  app: widget.app,
-                  lib: widget.lib,
-                  items: target.items,
-                  index: target.index,
-                  onChanged: s.refresh);
             },
             onToggle: s.toggle,
             onLongPress: _onLongPress,

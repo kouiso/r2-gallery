@@ -214,6 +214,8 @@ class _VideoViewState extends State<VideoView>
     if (_started || !widget.active || isAppLocked) return;
     if (!_c.value.isInitialized) return;
     _started = true;
+    // ロックで取り消された開始は、読み込みが解除の後に終わっても自動で鳴らさない
+    final cancelledByLock = _startCancelledByLock;
     _startCancelledByLock = false;
     // 読み込み中に背面へ回っていたら、ここで鳴らさず戻った時に再生する
     if (_background) {
@@ -221,7 +223,7 @@ class _VideoViewState extends State<VideoView>
       return;
     }
     // URL差し替えで作り直した直後に元が止まっていたなら、動かし直さない
-    final auto = _refreshAutoplay ?? true;
+    final auto = _refreshAutoplay ?? !cancelledByLock;
     _refreshAutoplay = null;
     if (!auto) return;
     unawaited(_resumeAfterForeground(_c, ++_resumeGeneration));

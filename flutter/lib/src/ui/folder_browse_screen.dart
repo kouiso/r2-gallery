@@ -103,7 +103,20 @@ class _FolderBrowseScreenState extends State<FolderBrowseScreen> {
     super.dispose();
   }
 
+  // 署名URLの引き直しを待つ間の連打で、ビューアが二重に積まれないようにする
+  bool _opening = false;
+
   Future<void> _open(List<MediaItem> sorted, int index) async {
+    if (_opening) return;
+    _opening = true;
+    try {
+      await _openOnce(sorted, index);
+    } finally {
+      _opening = false;
+    }
+  }
+
+  Future<void> _openOnce(List<MediaItem> sorted, int index) async {
     // 控えの一覧から開く時は、期限の切れた署名URLを新しいものに替えてから開く
     final target = await _g.openTarget(sorted, index, lib: widget.lib);
     if (!mounted) return;

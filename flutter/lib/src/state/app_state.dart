@@ -94,6 +94,13 @@ class AppState extends ChangeNotifier {
   /// ロック解除や復帰の機会に取り直す（#24 作業A）。
   bool librariesFromNet = false;
 
+  /// 回線の一覧を取れなかった最後の時刻。圏外のまま通知シェードなどで前面に戻るたびに
+  /// 取りに行かないよう、復帰の取り直しだけこの時刻から間を空ける（解除・再試行は空けない）
+  DateTime? _librariesFailedAt;
+  static const _librariesRetryGap = Duration(seconds: 30);
+  @visibleForTesting
+  DateTime Function() nowForRetry = DateTime.now;
+
   /// 接続済みか、接続なしでの利用を選んだか。ロックや窓の保護はこの間ずっと効かせる。
   bool get sessionOpen => connected || browseOnly;
 
@@ -185,6 +192,7 @@ class AppState extends ChangeNotifier {
     librariesLoading = false;
     libraries = [];
     librariesFromNet = false;
+    _librariesFailedAt = null;
     activeLib = null;
     startupError = null;
     notifyListeners();
@@ -755,6 +763,7 @@ class AppState extends ChangeNotifier {
       if (!current()) return;
       libraries = loaded;
       librariesFromNet = true;
+      _librariesFailedAt = null;
       PerfLog.mark('libs.net', {'n': loaded.length});
       _offlineLibrariesKnown = true;
       activeLib = loaded.any((l) => l.id == saved)
@@ -764,6 +773,7 @@ class AppState extends ChangeNotifier {
       unawaited(_saveLibrarySnapshot());
     } on Object catch (e) {
       if (!current()) return;
+      _librariesFailedAt = nowForRetry();
       if (libraries.isEmpty) {
         startupError = 'ライブラリを取得できませんでした（${describeStartupError(e)}）';
       }
@@ -836,9 +846,15 @@ class AppState extends ChangeNotifier {
   /// 控えがある時は、取得中に頼み直すと世代が進んで先の答えが捨てられ同じ要求が2本飛ぶので重ねない
   /// （失敗したら次の復帰で取り直す）。一覧が全く無い時は、固まった要求を待つと
   /// 何分も何も出せないので、重ねてでも頼み直す。
-  void _refetchLibrariesIfStale() {
+  void _refetchLibrariesIfStale({bool throttle = false}) {
     final stale = libraries.isEmpty || activeLib == null || !librariesFromNet;
     if (!stale) return;
+    final failedAt = _librariesFailedAt;
+    if (throttle &&
+        failedAt != null &&
+        nowForRetry().difference(failedAt) < _librariesRetryGap) {
+      return;
+    }
     if (libraries.isNotEmpty && librariesLoading) return;
     _loadLibraries();
   }
@@ -1020,7 +1036,7 @@ class AppState extends ChangeNotifier {
     _emitResumed();
     // 控えだけで起動して回線の一覧をまだ取れていない時は、戻ったついでに取り直す。
     // 一覧のメタ情報だけなので、起動の先読みと同じくロック中でも取る（#24 決めた事 A-4a）
-    if (connected) _refetchLibrariesIfStale();
+    if (connected) _refetchLibrariesIfStale(throttle: true);
   }
 
   Future<void> refreshPinState() async {

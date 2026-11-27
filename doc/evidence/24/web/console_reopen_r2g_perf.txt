@@ -6,4 +6,4 @@
 2026-11-27T23:41:12.575+09:00 [net] GET http://127.0.0.1:8787/v1/libraries
 2026-11-27T23:41:12.575+09:00 [net] GET http://127.0.0.1:8787/v1/a/folders?prefix=&recursive=1&order=recent&sort=new
 2026-11-27T23:41:12.857+09:00 [log] r2g.perf {"t":1287,"ev":"libs.net","n":2}
-2026-11-27T23:41:13.114+09:00 [step] screenshot 07_reopen_cached_1.8s.png
+2026-11-27T23:41:13.114+09:00 [step] screenshot 06_reopen_cached_1.8s.png

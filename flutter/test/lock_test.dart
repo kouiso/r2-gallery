@@ -355,6 +355,9 @@ void main() {
       await pumpEventQueue();
       expect(api.calls, 2);
       expect(app.librariesFromNet, isFalse);
+      // 失敗から 30 秒以上空いた後の復帰（直後なら取り直しを間引く）
+      final failedAt = DateTime.now();
+      app.nowForRetry = () => failedAt.add(const Duration(seconds: 31));
       var resumed = 0;
       final sub = app.resumed.listen((_) => resumed++);
       app.onBackground();

@@ -143,6 +143,24 @@ class _CoverApi extends ApiClient {
       const FolderPage(items: [], folders: ['f/']);
 }
 
+/// 表紙の取り直しの返事を外から止めておけるアルバム一覧。取り直しの最中に手元で作成・削除する場面を作る。
+class _GatedCoverApi extends _CoverApi {
+  final gate = Completer<void>();
+  bool armed = false;
+  @override
+  Future<List<Album>> albums(String libId) async {
+    final stale = await super.albums(libId);
+    if (armed) await gate.future;
+    return stale;
+  }
+
+  @override
+  Future<void> albumDelete(String lib, String albumId) async {}
+
+  @override
+  Future<String> albumCreate(String lib, String title) async => 'new-id';
+}
+
 /// アルバムの中身を1件ずつ返し、取り直しの2ページ目で回線が切れる偽物。
 class _AlbumApi extends ApiClient {
   int generation = 0;
@@ -331,8 +349,11 @@ void main() {
       Keys.libraries:
           '{"v":1,"endpoint":"https://w.example","activeLib":"photos","libraries":[{"id":"photos","title":"写真","readOnly":false}]}',
     });
-    final api = _FlakyLibApi();
+    // 起動・解除・間の無い解除の 3 回は圏外で落ちる
+    final api = _FlakyLibApi()..failures = 3;
     final app = AppState(api: api, bakedEndpoint: '', bakedToken: '');
+    var now = DateTime(2026, 1, 1);
+    app.nowForRetry = () => now;
     await app.init();
     await pumpEventQueue();
     // 起動の先読みと解除の取り直しが2回とも圏外で落ちる
@@ -343,17 +364,31 @@ void main() {
     expect(before, 2);
     expect(app.librariesFromNet, isFalse);
 
+    // 失敗の直後（30 秒以内）の復帰では、圏外のまま取りに行かない
+    now = now.add(const Duration(seconds: 10));
     app.onBackground();
     await app.onForeground();
     await pumpEventQueue();
+    expect(api.calls, before);
+    // 解除は間を空けず取り直す
+    app.lockNow();
+    app.unlock();
+    await pumpEventQueue();
     expect(api.calls, before + 1);
+    expect(app.librariesFromNet, isFalse);
+
+    now = now.add(const Duration(seconds: 31));
+    app.onBackground();
+    await app.onForeground();
+    await pumpEventQueue();
+    expect(api.calls, before + 2);
     expect(app.librariesFromNet, isTrue);
 
     // 取れた後の復帰では頼まない
     app.onBackground();
     await app.onForeground();
     await pumpEventQueue();
-    expect(api.calls, before + 1);
+    expect(api.calls, before + 2);
     app.dispose();
   });
 
@@ -449,6 +484,31 @@ void main() {
     expect(h.error, isNull);
     h.dispose();
   });
+
+  for (final op in ['delete', 'create']) {
+    test('表紙の取り直しの最中に手元で$opしたら、古い答えで一覧を戻さない', () async {
+      final api = _GatedCoverApi();
+      final h = AlbumsHomeState(api);
+      await h.load('photos');
+      h.albums = [
+        Album(id: 'x', title: '旅', coverUrl: _url('cover-old', expired: true)),
+      ];
+      api.armed = true;
+      final refresh = h.refreshIfExpired('photos');
+      if (op == 'delete') {
+        await h.delete('photos', 'x');
+      } else {
+        await h.create('photos', '新しい');
+      }
+      final expected = h.albums.map((a) => a.id).toList();
+      api.gate.complete();
+      await refresh;
+      expect(h.albums.map((a) => a.id), expected);
+      expect(h.albums.any((a) => a.coverUrl?.contains('cover-new') ?? false),
+          isFalse);
+      h.dispose();
+    });
+  }
 
   test('アルバム一覧の復帰が断られた（401）時は帯で見せる', () async {
     final api = _CoverApi();

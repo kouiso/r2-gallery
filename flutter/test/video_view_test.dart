@@ -65,6 +65,17 @@ class _Video extends FakeVideo {
   }
 }
 
+/// 読み込みの完了を手で遅らせられる動画（ロック中・解除後に終わる場合を作る）
+class _GatedVideo extends _Video {
+  final gate = Completer<void>();
+
+  @override
+  Future<void> initialize() async {
+    await gate.future;
+    await super.initialize();
+  }
+}
+
 class _ForegroundApp extends AppState {
   _ForegroundApp() : super(bakedEndpoint: '', bakedToken: '');
   Completer<void>? gate;
@@ -481,6 +492,37 @@ void main() {
     await tester.pump();
     expect(rig.video.value.isPlaying, isFalse);
     await _dispose(tester);
+  });
+
+  testWidgets('#24: 読み込み中にロックされた動画は、解除の後に読み込みが終わっても鳴らさない', (tester) async {
+    final app = AppState(bakedEndpoint: '', bakedToken: '')..hasPin = true;
+    final video = _GatedVideo();
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: AppLockScope(
+          app: app,
+          child: VideoView(
+            url: 'https://w.example/m/a.mp4',
+            controllerFactory: (_) => video,
+            system: _System(),
+          ),
+        ),
+      ),
+    ));
+    await tester.pump();
+    expect(app.lockNow(), isTrue);
+    await tester.pump();
+    app.unlock();
+    await tester.pump();
+    // 解除の後に読み込みが終わる
+    video.gate.complete();
+    await tester.pump();
+    await tester.pump();
+    expect(video.value.isInitialized, isTrue);
+    expect(video.plays, 0);
+    expect(video.value.isPlaying, isFalse);
+    await _dispose(tester);
+    app.dispose();
   });
 
   group('#198: 明るさ・音量の操作', () {

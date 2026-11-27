@@ -199,7 +199,20 @@ class _GalleryTabState extends State<GalleryTab> {
 
   Future<void> _refresh() => _stateFor(widget.lib).refresh(widget.lib);
 
+  // 署名URLの引き直しを待つ間の連打で、ビューアが二重に積まれないようにする
+  bool _opening = false;
+
   Future<void> _openPlayer(List<MediaItem> sorted, int index) async {
+    if (_opening) return;
+    _opening = true;
+    try {
+      await _openPlayerOnce(sorted, index);
+    } finally {
+      _opening = false;
+    }
+  }
+
+  Future<void> _openPlayerOnce(List<MediaItem> sorted, int index) async {
     final lib = widget.lib;
     final g = _stateFor(lib);
     // 控えの一覧から開く時は、期限の切れた署名URLを新しいものに替えてから開く

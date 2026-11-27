@@ -744,6 +744,77 @@ void main() {
     });
   });
 
+  // 引き直しの返事を待つ間の連打で、ビューアを二重に積まない（1回だけ引き直して開く）
+  group('開く途中の連打', () {
+    testWidgets('アルバムの中: 引き直しの間の2回目のタップは無視する', (t) async {
+      final gate = Completer<void>();
+      final api = _GatedObjectApi(gate)
+        ..albumList = [const Album(id: 'x', title: '旅', readOnly: false)]
+        ..albumTitle['x'] = '旅'
+        ..albumItems['x'] = [
+          MediaItem(key: '1.jpg', type: 'image', url: 'https://w.example/m/1.jpg?e=1'),
+        ];
+      final app = _app(api);
+      await t.pumpWidget(MaterialApp(
+          home: AlbumDetailScreen(
+              app: app,
+              lib: 'a',
+              album: const Album(id: 'x', title: '旅', readOnly: false))));
+      await t.pumpAndSettle();
+      await t.tap(_tile('1.jpg'));
+      await t.pump();
+      await t.tap(_tile('1.jpg'));
+      await t.pump();
+      expect(api.objectAtCalls, 1);
+      gate.complete();
+      await t.pumpAndSettle();
+      expect(find.text(_openFailed), findsOneWidget);
+    });
+
+    testWidgets('フォルダ: 引き直しの間の2回目のタップは無視する', (t) async {
+      final gate = Completer<void>();
+      final api = _GatedObjectApi(gate)
+        ..tree['f/'] = (
+          items: [
+            MediaItem(key: 'f/1.jpg', type: 'image', url: 'https://w.example/m/f/1.jpg?e=1'),
+          ],
+          folders: <String>[],
+        );
+      final app = _app(api);
+      await t.pumpWidget(
+          _host(FolderBrowseScreen(app: app, lib: 'a', prefix: 'f/')));
+      await t.pumpAndSettle();
+      await t.tap(_tile('f/1.jpg'));
+      await t.pump();
+      await t.tap(_tile('f/1.jpg'));
+      await t.pump();
+      expect(api.objectAtCalls, 1);
+      gate.complete();
+      await t.pumpAndSettle();
+    });
+
+    testWidgets('写真タブ: 引き直しの間の2回目のタップは無視する', (t) async {
+      final gate = Completer<void>();
+      final api = _GatedObjectApi(gate)
+        ..tree[''] = (
+          items: [
+            MediaItem(key: '1.jpg', type: 'image', url: 'https://w.example/m/1.jpg?e=1'),
+          ],
+          folders: <String>[],
+        );
+      final app = _app(api);
+      await t.pumpWidget(_host(GalleryTab(app: app, lib: 'a')));
+      await t.pumpAndSettle();
+      await t.tap(_tile('1.jpg'));
+      await t.pump();
+      await t.tap(_tile('1.jpg'));
+      await t.pump();
+      expect(api.objectAtCalls, 1);
+      gate.complete();
+      await t.pumpAndSettle();
+    });
+  });
+
   test('期限切れの差し替えが成功したら、前の拒否の帯を消す', () async {
     final api = _ExpiredCoverApi();
     final s = AlbumsHomeState(api);
@@ -758,9 +829,11 @@ void main() {
 /// objectAt の返事を外から止めておける worker（引き直しの最中を作る）。
 class _GatedObjectApi extends _FakeApi {
   _GatedObjectApi(this.gate);
+  int objectAtCalls = 0;
   final Completer<void> gate;
   @override
   Future<MediaItem?> objectAt(String libId, String key) async {
+    objectAtCalls++;
     await gate.future;
     return null;
   }

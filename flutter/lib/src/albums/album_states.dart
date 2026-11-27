@@ -44,6 +44,10 @@ class AlbumsHomeState extends ChangeNotifier with _SafeNotify {
   String? error;
   int _epoch = 0;
 
+  /// 作成・名前変更・削除で進める。表紙の取り直しが飛んでいる間に手元で変えた一覧を、
+  /// 変える前の時点の答えで上書きしないための印（load と違い取り直しの世代は進めない）
+  int _mutations = 0;
+
   Future<void> load(String lib) async {
     final e = ++_epoch;
     if (this.lib != lib) {
@@ -87,12 +91,13 @@ class AlbumsHomeState extends ChangeNotifier with _SafeNotify {
     }
     _resigning = true;
     final e = ++_epoch;
+    final m = _mutations;
     try {
       final got = await Future.wait([
         api.albums(lib),
         api.folder(lib, prefix: ''),
       ]);
-      if (e != _epoch) return;
+      if (e != _epoch || m != _mutations) return;
       final a = got[0];
       final f = got[1];
       if (a is List<Album>) albums = a;
@@ -101,7 +106,7 @@ class AlbumsHomeState extends ChangeNotifier with _SafeNotify {
       error = null;
       notifyListeners();
     } on Object catch (err) {
-      if (e != _epoch) return;
+      if (e != _epoch || m != _mutations) return;
       if (isClientRejection(err)) {
         error = err.toString();
         notifyListeners();
@@ -133,6 +138,7 @@ class AlbumsHomeState extends ChangeNotifier with _SafeNotify {
   /// 結果を待たずに一覧へ足し、失敗したら外す。作成は id が要るので仮の id で出して差し替える。
   Future<String?> create(String lib, String title) async {
     final tempId = 'pending:${++_tempSeq}';
+    _mutations++;
     pending.add(tempId);
     albums = [...albums, Album(id: tempId, title: title, readOnly: false)];
     notifyListeners();
@@ -159,6 +165,7 @@ class AlbumsHomeState extends ChangeNotifier with _SafeNotify {
   Future<String?> rename(String lib, String albumId, String title) async {
     final before = albums.where((a) => a.id == albumId).firstOrNull;
     if (before == null) return null;
+    _mutations++;
     _replace(albumId, _withTitle(before, title));
     try {
       await api.albumRename(lib, albumId, title);
@@ -177,6 +184,7 @@ class AlbumsHomeState extends ChangeNotifier with _SafeNotify {
     final at = albums.indexWhere((a) => a.id == albumId);
     if (at < 0) return null;
     final removed = albums[at];
+    _mutations++;
     albums = [...albums]..removeAt(at);
     notifyListeners();
     try {

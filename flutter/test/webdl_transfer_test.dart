@@ -6,6 +6,8 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:r2_gallery/src/api/client.dart';
 import 'package:r2_gallery/src/api/models.dart';
+import 'package:r2_gallery/src/transfer/net_policy.dart';
+import 'package:r2_gallery/src/transfer/net_state.dart';
 import 'package:r2_gallery/src/transfer/transfer_api.dart';
 import 'package:r2_gallery/src/transfer/transfer_queue.dart' show LedgerStore;
 import 'package:r2_gallery/src/webdl/detected.dart';
@@ -861,6 +863,128 @@ void main() {
     });
   });
 
+  group('回線の判定で待つ（#27 27-B）', () {
+    const mobile =
+        NetState(online: true, wifi: false, metered: true, dataSaver: false);
+    const wifi =
+        NetState(online: true, wifi: true, metered: false, dataSaver: false);
+
+    Future<void> until(bool Function() ok) async {
+      final sw = Stopwatch()..start();
+      while (!ok()) {
+        if (sw.elapsed > const Duration(seconds: 20)) fail('timed out');
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    }
+
+    test('取り込みの取得はダウンロード、送信はアップロードの設定で待つ', () async {
+      final data = _bytes(2000);
+      s.media['clip.mp4'] = data;
+      queue.setNetwork(mobile);
+      // ダウンロードだけ Wi‑Fi 限定。取得は待つ
+      queue.setPolicy(const TransferNetPolicy(downloadWifiOnly: true));
+      final t = queue.enqueue('lib', [video('clip.mp4')]).single;
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(t.status, WebTaskStatus.queued);
+      expect(queue.waitOf(t.id), NetWait.wifi);
+      expect(queue.waitingCount, 1);
+      expect(s.mediaRequests, isEmpty);
+      // 待っている行は動いている数に入る（裏のサービスとエンジンを残すため）
+      expect(queue.activeCount, 1);
+
+      // アップロードだけ Wi‑Fi 限定に替えると、取得は動いて送信の前で待つ
+      queue.setPolicy(const TransferNetPolicy(uploadWifiOnly: true));
+      await until(() => t.staged != null && t.status == WebTaskStatus.queued);
+      expect(s.mediaRequests, hasLength(1));
+      expect(queue.waitOf(t.id), NetWait.wifi);
+      expect(s.objectPuts, 0);
+      expect(t.error, isNull);
+      expect(t.staged!.existsSync(), isTrue);
+
+      // 取得済みの行の送信は、ダウンロードの設定には左右されず動く（取り直さない）
+      queue.setPolicy(const TransferNetPolicy(downloadWifiOnly: true));
+      await run();
+      expect(t.status, WebTaskStatus.done, reason: t.error);
+      expect(s.mediaRequests, hasLength(1));
+      expect(s.objects['downloads/clip.mp4'], data);
+    });
+
+    test('取得中にモバイル回線へ替わったら待機に戻り、続きから取る', () async {
+      final data = _bytes(400 * 1024);
+      s.media['slow.mp4'] = data;
+      s.slow.add('slow.mp4');
+      queue.setPolicy(const TransferNetPolicy(downloadWifiOnly: true));
+      queue.setNetwork(wifi);
+      final t = queue.enqueue('lib', [video('slow.mp4')]).single;
+      await until(() => t.loaded >= 8192);
+
+      queue.setNetwork(mobile);
+      await until(() => t.status == WebTaskStatus.queued);
+      // 失敗や取り消しにはせず、落とせた分は残す
+      expect(t.error, isNull);
+      expect(queue.waitOf(t.id), NetWait.wifi);
+      final partial = staged().whereType<File>().single.lengthSync();
+      expect(partial, greaterThan(0));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(t.status, WebTaskStatus.queued);
+
+      // Wi‑Fi に戻ると Range で続きから取る
+      s.slow.remove('slow.mp4');
+      queue.setNetwork(wifi);
+      await run();
+      expect(t.status, WebTaskStatus.done, reason: t.error);
+      expect(s.rangesSeen['slow.mp4']!.last, 'bytes=$partial-');
+      expect(s.objects['downloads/slow.mp4'], data);
+    });
+
+    test('待っている行は取り消せて、回線が合っても始まらない', () async {
+      s.media['clip.mp4'] = _bytes(2000);
+      queue.setNetwork(mobile);
+      queue.setPolicy(const TransferNetPolicy(downloadWifiOnly: true));
+      final t = queue.enqueue('lib', [video('clip.mp4')]).single;
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      queue.cancel(t.id);
+      expect(t.status, WebTaskStatus.cancelled);
+      await run();
+      queue.setNetwork(wifi);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(s.mediaRequests, isEmpty);
+    });
+
+    test('取得中に待機へ戻した行を取り消すと、そのまま取り消しになる', () async {
+      s.media['slow.mp4'] = _bytes(400 * 1024);
+      s.slow.add('slow.mp4');
+      queue.setPolicy(const TransferNetPolicy(downloadWifiOnly: true));
+      queue.setNetwork(wifi);
+      final t = queue.enqueue('lib', [video('slow.mp4')]).single;
+      await until(() => t.loaded >= 8192);
+      queue.setNetwork(mobile);
+      await until(() => t.status == WebTaskStatus.queued);
+      queue.cancel(t.id);
+      expect(t.status, WebTaskStatus.cancelled);
+      await run();
+      expect(t.status, WebTaskStatus.cancelled);
+      // 落とせていた分の片付けは取り消しの後に進む
+      await until(() => staged().isEmpty);
+    });
+
+    test('待機の行は一時停止でき、再開しても回線が合うまで始めない', () async {
+      s.media['clip.mp4'] = _bytes(2000);
+      queue.setNetwork(mobile);
+      queue.setPolicy(const TransferNetPolicy(downloadWifiOnly: true));
+      final t = queue.enqueue('lib', [video('clip.mp4')]).single;
+      queue.pause(t.id);
+      expect(t.status, WebTaskStatus.paused);
+      queue.resume(t.id);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(t.status, WebTaskStatus.queued);
+      expect(s.mediaRequests, isEmpty);
+      queue.setNetwork(wifi);
+      await run();
+      expect(t.status, WebTaskStatus.done, reason: t.error);
+    });
+  });
+
   group('回線が切れている間は取り込みを待たせる（#28 28-B）', () {
     Future<void> until(bool Function() ok) async {
       final sw = Stopwatch()..start();
@@ -1064,6 +1188,48 @@ void main() {
       expect(s.objects['downloads/clip.mp4'], data);
       expect(ledger.rows, isEmpty);
       expect(stage.listSync(), isEmpty);
+    });
+
+    test('送信中にモバイル回線へ替わったら待機に戻り、確定したパートは残して続きから送る', () async {
+      final data = _bytes(24 * 1024 * 1024);
+      await stageFile(data);
+      ledger.value = jsonEncode([row(url: video('clip.mp4').url)]);
+      s.holdPart = 3;
+      s.partGate = Completer<void>();
+      s.partHit = Completer<void>();
+      final q = open(resumable: true);
+      q.setPolicy(const TransferNetPolicy(uploadWifiOnly: true));
+      await q.restore();
+      await s.partHit!.future.timeout(const Duration(seconds: 20));
+
+      q.setNetwork(const NetState(
+          online: true, wifi: false, metered: true, dataSaver: false));
+      final t = q.tasks.single;
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      expect(t.status, WebTaskStatus.queued);
+      expect(t.error, isNull);
+      expect(q.waitOf(t.id), NetWait.wifi);
+      // 確定したパート 1・2 と multipart と一時ファイルは残す
+      expect(t.parts.map((p) => p.partNumber), [1, 2]);
+      expect(t.uploadId, 'u1');
+      expect(t.staged!.existsSync(), isTrue);
+      expect(s.multipartAborts, 0);
+      final saved = ledger.rows.single as Map;
+      expect([for (final p in saved['parts'] as List) p['partNumber']], [1, 2]);
+
+      // Wi‑Fi に戻ると、送るのはパート 3 だけ
+      s.partGate!.complete();
+      s.holdPart = null;
+      q.setNetwork(const NetState(
+          online: true, wifi: true, metered: false, dataSaver: false));
+      await settle(q);
+      expect(t.status, WebTaskStatus.done, reason: t.error);
+      expect(s.partNumbers, [1, 2, 3]);
+      expect(s.multipartCreates, 1);
+      expect(s.multipartAborts, 0);
+      expect(s.objects.keys, ['downloads/clip.mp4']);
+      expect(s.objects['downloads/clip.mp4'], data);
+      expect(ledger.rows, isEmpty);
     });
 
     test('送信の続きで同じ名前を別の物が取っていたら、開いていた multipart を閉じて次の名前へ', () async {

@@ -12,10 +12,12 @@ import 'package:r2_gallery/src/offline/offline_screen.dart';
 import 'package:r2_gallery/src/offline/offline_store.dart';
 import 'package:r2_gallery/src/state/app_state.dart';
 import 'package:r2_gallery/src/store/kv.dart';
+import 'package:r2_gallery/src/transfer/net_policy.dart';
 import 'package:r2_gallery/src/transfer/net_state.dart';
 import 'package:r2_gallery/src/transfer/transfer_api.dart';
 import 'package:r2_gallery/src/transfer/transfer_platform.dart';
 import 'package:r2_gallery/src/transfer/transfer_queue.dart';
+import 'package:r2_gallery/src/transfer/transfer_rows.dart';
 import 'package:r2_gallery/src/transfer/transfers_strip.dart';
 import 'package:r2_gallery/src/transfer/upload_confirm.dart';
 import 'package:r2_gallery/src/ui/home_shell.dart';
@@ -31,9 +33,17 @@ import 'transfer_queue_test.dart' show FakeWorker, MemLedger, until;
 
 class FakePlatform implements TransferPlatform {
   final List<bool> keepAlive = [];
+  // setKeepAlive と updateWaiting に渡された待機の件数（届いた順）
+  final List<int> waiting = [];
   final StreamController<NetState> net = StreamController<NetState>.broadcast();
   @override
-  Future<void> setKeepAlive(bool active) async => keepAlive.add(active);
+  Future<void> setKeepAlive(bool active, {int waiting = 0}) async {
+    keepAlive.add(active);
+    this.waiting.add(waiting);
+  }
+
+  @override
+  Future<void> updateWaiting(int waiting) async => this.waiting.add(waiting);
   @override
   Stream<NetState> get network => net.stream;
 }
@@ -760,6 +770,101 @@ void main() {
       await until(() => app.transfers.tasks.single.status == TransferStatus.done);
       expect(app.transfers.online, isTrue);
       expect(app.webQueue.online, isTrue);
+    });
+    const mobileNet =
+        NetState(online: true, wifi: false, metered: true, dataSaver: false);
+
+    test('Wi‑Fi 待ちの行は「Wi‑Fi接続待ち」と出る', () async {
+      final app = makeApp(api: ApiClient());
+      await app.init();
+      app.unlock();
+      await until(() => app.libraries.isNotEmpty);
+      await app.setTransferNetPolicy(const TransferNetPolicy(uploadWifiOnly: true));
+      platform.net.add(mobileNet);
+      await until(() => app.transfers.net == mobileNet && app.webQueue.net == mobileNet);
+      expect(await app.upload('lib', [_src('a.jpg', 5, 'image/jpeg')]), 1);
+      await until(() =>
+          app.transfers.waitOf(app.transfers.tasks.single.id) == NetWait.wifi);
+      final rows = transferRows(app.webQueue, app.transfers, online: true);
+      expect(rows.single.label, 'Wi‑Fi接続待ち');
+      expect(w.objects, isEmpty);
+
+      // Wi‑Fi に繋がったら自動で上がる
+      platform.net.add(NetState.unknownOnline);
+      await until(() => app.transfers.tasks.single.status == TransferStatus.done);
+      expect(w.objects['a.jpg'], Uint8List(5));
+    });
+
+    test('待機の行がある間はサービスを張り、待機の件数を渡す', () async {
+      final app = makeApp(api: ApiClient());
+      await app.init();
+      app.unlock();
+      await until(() => app.libraries.isNotEmpty);
+      await app.setTransferNetPolicy(const TransferNetPolicy(uploadWifiOnly: true));
+      platform.net.add(mobileNet);
+      await until(() => app.transfers.net == mobileNet);
+      expect(await app.upload('lib', [_src('a.jpg', 5, 'image/jpeg')]), 1);
+      await until(() => app.transfers.waitingCount == 1);
+      await until(() => platform.waiting.isNotEmpty && platform.waiting.last == 1);
+      // 待っている間もサービスは張ったまま（外すと裏で再開できない）。張り直しはしない
+      expect(platform.keepAlive, [true]);
+
+      platform.net.add(NetState.unknownOnline);
+      await until(() => app.transfers.tasks.single.status == TransferStatus.done);
+      await until(() => platform.keepAlive.length == 2);
+      expect(platform.keepAlive, [true, false]);
+    });
+
+    test('裏に回ると省データ設定のため待機し、前面に戻ると動く', () async {
+      final app = makeApp(api: ApiClient());
+      await app.init();
+      app.unlock();
+      await until(() => app.libraries.isNotEmpty);
+      platform.net.add(const NetState(
+          online: true, wifi: false, metered: true, dataSaver: true));
+      await until(() => app.transfers.net.dataSaver);
+      app.onBackground();
+      expect(app.transfers.foreground, isFalse);
+      expect(app.webQueue.foreground, isFalse);
+      expect(await app.upload('lib', [_src('a.jpg', 5, 'image/jpeg')]), 1);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      final t = app.transfers.tasks.single;
+      expect(t.status, TransferStatus.queued);
+      expect(app.transfers.waitOf(t.id), NetWait.dataSaver);
+      expect(w.objects, isEmpty);
+
+      await app.onForeground();
+      expect(app.transfers.foreground, isTrue);
+      await until(() => t.status == TransferStatus.done);
+    });
+
+    test('ロック中に裏へ回っても回線の判定には裏として伝える', () async {
+      final app = makeApp(api: ApiClient());
+      await app.init();
+      app.unlock();
+      app.locked = true;
+      app.onBackground();
+      expect(app.transfers.foreground, isFalse);
+      expect(app.webQueue.foreground, isFalse);
+    });
+
+    test('設定を変えると両キューの判定に入り、オフにすると待っていた行が動く', () async {
+      final app = makeApp(api: ApiClient());
+      await app.init();
+      app.unlock();
+      await until(() => app.libraries.isNotEmpty);
+      platform.net.add(mobileNet);
+      await until(() => app.transfers.net == mobileNet);
+      await app.setTransferNetPolicy(
+          const TransferNetPolicy(uploadWifiOnly: true, downloadWifiOnly: true));
+      expect(app.netPolicy.uploadWifiOnly, isTrue);
+      expect(app.transfers.policy.downloadWifiOnly, isTrue);
+      expect(app.webQueue.policy.uploadWifiOnly, isTrue);
+      expect(await app.upload('lib', [_src('a.jpg', 5, 'image/jpeg')]), 1);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(app.transfers.tasks.single.status, TransferStatus.queued);
+      await app.setTransferNetPolicy(const TransferNetPolicy());
+      await until(() => app.transfers.tasks.single.status == TransferStatus.done);
     });
   });
 }

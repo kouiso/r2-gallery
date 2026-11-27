@@ -16,6 +16,8 @@ import '../store/private_storage.dart';
 import '../upload/image_thumb.dart';
 import '../webdl/media_name.dart';
 import 'multipart_sender.dart';
+import 'net_policy.dart';
+import 'net_state.dart';
 import 'transfer_api.dart';
 import 'transfer_ledger.dart';
 import 'upload_picker.dart';
@@ -305,8 +307,18 @@ class TransferQueue extends ChangeNotifier {
   int _lastNotifyMs = 0;
   bool _disposed = false;
 
-  /// 回線が無い間はアップロードを始めず「待機中」にしておく。
-  bool online = true;
+  /// 端末の回線の様子。合わない行は始めず、走っている行も（オフライン以外は）待機に戻す（#27）。
+  /// 既定は「オンラインで Wi‑Fi かは不明」。何も知らせが来ない環境でも止めない
+  NetState net = NetState.unknownOnline;
+
+  /// Wi‑Fi 限定の設定。既定は制限なし（設定を変えていない人の動きを変えない）
+  TransferNetPolicy policy = const TransferNetPolicy();
+
+  /// アプリが前面か。省データ設定で裏の通信を止められる回線の判定に使う
+  bool foreground = true;
+
+  /// 回線があるか。転送バーなどが読む
+  bool get online => net.online;
 
   List<TransferTask> get tasks => List.unmodifiable(_tasks.where((t) =>
       t.isUpload || !requireDownloadAccount || _canSaveOffline(t)));
@@ -834,13 +846,16 @@ class TransferQueue extends ChangeNotifier {
   }
 
   void _pump() {
-    if (_disposed || !_restored.isCompleted || !online || !_configured()) return;
+    if (_disposed || !_restored.isCompleted || !_configured()) return;
     for (final t in _tasks) {
       if (_workers.length >= parallel) break;
       if (t.status != TransferStatus.queued || _workers.containsKey(t.id)) continue;
       if (_waits.containsKey(t.id)) continue;
       if (!_forThisConn(t)) continue;
       if (!t.isUpload && !_canSaveOffline(t)) continue;
+      // 回線と設定が合わない行は始めず待たせる。行ごとに見るので、
+      // 片方の設定で待つ行があっても、もう片方の行は動く
+      if (_wait(t) != null) continue;
       final gen = ++t._gen;
       t.status = TransferStatus.running;
       t.error = null;
@@ -1400,13 +1415,83 @@ class TransferQueue extends ChangeNotifier {
     _pump();
   }
 
+  /// アップロードは送信、オフライン保存はダウンロードの設定で見る
+  NetWait? _wait(TransferTask t) => transferWait(
+      net, policy, t.isUpload ? TransferLeg.upload : TransferLeg.download,
+      foreground: foreground);
+
+  /// 一覧の文言用。待機の行が、今の回線と設定のどれで待っているか。待っていなければ null
+  NetWait? waitOf(String id) {
+    final t = _find(id);
+    if (t == null || t.status != TransferStatus.queued) return null;
+    return _wait(t);
+  }
+
+  /// 設定か省データで待っている行の数。サービスの通知に出す。
+  /// オフラインで待つ行は数えない（今まで通り「転送中」のまま回線の戻りを待つ）
+  int get waitingCount => _tasks
+      .where((t) =>
+          t.status == TransferStatus.queued &&
+          _forThisConn(t) &&
+          (t.isUpload || _canSaveOffline(t)) &&
+          (_wait(t) == NetWait.wifi || _wait(t) == NetWait.dataSaver))
+      .length;
+
+  /// 回線の知らせ。オンラインに戻った時は待ちを解いて流し直す
+  void setNetwork(NetState s) {
+    if (net == s) return;
+    final wasOnline = net.online;
+    net = s;
+    _applyNet(recovered: !wasOnline && s.online);
+  }
+
+  /// 旧来の「使えるか」だけの知らせ。回線の種類は変えず、使えるかだけを替える
   void setOnline(bool value) {
     if (online == value) return;
-    online = value;
-    if (value) {
+    setNetwork(value ? NetState.unknownOnline : NetState.offline);
+  }
+
+  void setPolicy(TransferNetPolicy p) {
+    if (policy == p) return;
+    policy = p;
+    _applyNet();
+  }
+
+  void setForeground(bool v) {
+    if (foreground == v) return;
+    foreground = v;
+    _applyNet();
+  }
+
+  void _applyNet({bool recovered = false}) {
+    for (final t in _tasks.toList()) {
+      if (t.status == TransferStatus.running && _stopsForNet(_wait(t))) {
+        _stopForNetwork(t);
+      }
+    }
+    // 設定をオフにした時は待っていた行がすぐ始まる
+    if (recovered) {
       wake();
+    } else {
+      _pump();
     }
     _changed();
+  }
+
+  /// 動いている行を止める理由か。オフラインは含めない。通信が切れれば失敗として返り、
+  /// 既存の回復（待機に戻して回線の復帰で再開）に任せる。ここで取り消すと、
+  /// 一瞬の圏外で送信中の行が毎回やり直しになる
+  bool _stopsForNet(NetWait? w) => w == NetWait.wifi || w == NetWait.dataSaver;
+
+  /// 走っている行を、取り消しの仕組みで止めて待機に戻す。
+  /// 一時停止と同じく世代を進めて古い実行が状態を書き換えないようにし、
+  /// 退避ファイル・uploadId・確定したパートは残す（失敗や取り消しにはしない）
+  void _stopForNetwork(TransferTask t) {
+    t._gen++;
+    t.status = TransferStatus.queued;
+    _waits.remove(t.id)?.cancel();
+    t._token?.cancel('network');
+    _persist(t);
   }
 
   /// 動いているものが片付くまで待つ（テスト用）。

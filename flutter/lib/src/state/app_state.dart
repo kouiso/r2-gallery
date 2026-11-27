@@ -19,6 +19,7 @@ import '../store/listing_cache.dart';
 import '../store/lock_platform.dart';
 import '../store/lock_policy.dart';
 import '../store/pin.dart';
+import '../transfer/net_policy.dart';
 import '../transfer/net_state.dart';
 import '../transfer/transfer_api.dart';
 import '../transfer/transfer_platform.dart';
@@ -287,11 +288,15 @@ class AppState extends ChangeNotifier {
     _transfersWired = true;
     transfers.addListener(_syncKeepAlive);
     webQueue.addListener(_syncKeepAlive);
-    // ネット取り込みも同じ回線の知らせで待つ。片方だけだと取り込みは裏で失敗になる（#28 28-B）
-    // 回線の種類（#27 27-A）はまだ判定に使わない。両キューへは今まで通り「使えるか」だけを渡す
+    // 設定と前面・裏は、回線の知らせより先に両キューへ渡す。復元した行を最初の判定から合わせるため
+    _applyNetPolicy();
+    transfers.setForeground(_foreground);
+    webQueue.setForeground(_foreground);
+    // ネット取り込みも同じ回線の知らせで待つ。片方だけだと取り込みは裏で失敗になる（#28 28-B）。
+    // 回線の種類（Wi‑Fi か・従量制か・省データか）も同じ知らせで両キューへ渡し、設定と照らして待たせる（#27）
     _onlineSub = transferPlatform.network.listen((s) {
-      transfers.setOnline(s.online);
-      webQueue.setOnline(s.online);
+      transfers.setNetwork(s);
+      webQueue.setNetwork(s);
     });
     unawaited(transfers.restore());
     unawaited(webQueue.restore());
@@ -300,11 +305,55 @@ class AppState extends ChangeNotifier {
         onError: (Object _) => debugPrint('offline manifest unavailable')));
   }
 
+  /// Wi‑Fi 限定の設定。既定は制限なし（今まで通りモバイル回線でも動く）。
+  /// 設定の画面の 2 つのスイッチ（27-C）は、Kv へ書いたあと [setTransferNetPolicy] を呼ぶ
+  TransferNetPolicy netPolicy = const TransferNetPolicy();
+
+  /// アプリが前面か。起動直後は前面。キューを作る前でも裏に回った事を落とさないため、ここにも持つ
+  bool _foreground = true;
+
+  /// 待機の件数としてサービスへ最後に伝えた値
+  int _keepAliveWaiting = 0;
+
+  /// Wi‑Fi 限定の設定を替え、両キューの判定に入れる。オフにすれば待っていた行がすぐ始まり、
+  /// オンにすれば走っているモバイル回線の行は待機に戻る。Kv への保存は呼び手が行う
+  Future<void> setTransferNetPolicy(TransferNetPolicy p) async {
+    if (netPolicy == p) return;
+    netPolicy = p;
+    _applyNetPolicy();
+    notifyListeners();
+  }
+
+  void _applyNetPolicy() {
+    if (!_transfersWired) return;
+    transfers.setPolicy(netPolicy);
+    webQueue.setPolicy(netPolicy);
+  }
+
+  void _setTransfersForeground(bool v) {
+    _foreground = v;
+    if (!_transfersWired) return;
+    transfers.setForeground(v);
+    webQueue.setForeground(v);
+  }
+
   void _syncKeepAlive() {
     final want = transfers.hasActiveWork || webQueue.activeCount > 0;
-    if (want == _keepAlive) return;
+    // 待っているだけの行があってもサービスは外さない。外すとタスク一覧から消された後に
+    // Wi‑Fi へ繋がっても再開できない（#27）
+    final waiting = want ? transfers.waitingCount + webQueue.waitingCount : 0;
+    if (want == _keepAlive) {
+      // 張ったまま件数だけ変わった時は、張り直さず通知の文言だけを替える
+      // （裏から startForegroundService を呼び直すと Android 12 以降の起動制限に当たり得る）
+      if (want && waiting != _keepAliveWaiting) {
+        _keepAliveWaiting = waiting;
+        unawaited(transferPlatform.updateWaiting(waiting));
+      }
+      return;
+    }
     _keepAlive = want;
-    unawaited(transferPlatform.setKeepAlive(want));
+    _keepAliveWaiting = waiting;
+    unawaited(transferPlatform.setKeepAlive(want, waiting: waiting));
   }
 
   /// 失敗した転送を積み直し、待ちを解く（接続・ロック解除・アプリへの復帰の後。KMP 版と同じ）。
@@ -900,6 +949,8 @@ class AppState extends ChangeNotifier {
 
   /// アプリがバックグラウンドへ。認証ダイアログ由来の一時停止は数えない。
   void onBackground() {
+    // ロックのための早退より前に伝える。ロック中に裏へ回っても、省データ設定で通信が止まる判定は要る
+    _setTransfersForeground(false);
     if (authenticating || locked || _backgroundedAt != null) return;
     _backgroundGeneration++;
     // 戻った時には外部画面の結果が先に返って数が減っていることがあるので、裏へ回った時点で覚える
@@ -935,6 +986,8 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> onForeground() {
+    // 再ロックの判定を待たずに伝える。前面に戻れば省データ設定で待っていた転送がすぐ動く
+    _setTransfersForeground(true);
     _foregroundRequestedGeneration = _backgroundGeneration;
     final pending = _foregroundRun;
     if (pending != null) return pending;

@@ -11,6 +11,8 @@ import '../state/pairing.dart';
 import '../store/kv.dart';
 import '../store/private_storage.dart';
 import '../transfer/multipart_sender.dart';
+import '../transfer/net_policy.dart';
+import '../transfer/net_state.dart';
 import '../transfer/transfer_api.dart';
 import '../transfer/transfer_queue.dart' show LedgerStore;
 import 'detected.dart';
@@ -107,6 +109,13 @@ class WebTransferTask {
 
   /// 一時停止を頼まれた。止まった時に取り消しと区別し、落とした分を残すため。
   bool pauseRequested = false;
+
+  /// 回線が設定に合わなくなって止めた（#27）。一時停止と同じく取り消しの仕組みで止めるが、
+  /// 止まった行は一時停止ではなく待機に戻し、落とせた分・確定したパートは残す
+  bool netStopRequested = false;
+
+  /// いまの段。取得済みの一時ファイルが無ければ取得（Web→端末）、あれば送信（端末→R2）
+  TransferLeg get leg => staged == null ? TransferLeg.download : TransferLeg.upload;
 
   /// 一覧に出す進捗。HLS は総バイト数が分からんのでセグメント数で数える。
   int get percent {
@@ -482,6 +491,7 @@ class WebTransferQueue extends ChangeNotifier {
     final t = _find(id);
     if (t == null || !(t.active || t.status == WebTaskStatus.paused)) return;
     t.pauseRequested = false;
+    t.netStopRequested = false;
     if (t.cancel == null || t.status == WebTaskStatus.paused) {
       t.cancel = null;
       unawaited(_dropStaged(t));
@@ -650,25 +660,97 @@ class WebTransferQueue extends ChangeNotifier {
     return cur != null && isSameEndpoint(cur.endpoint, e);
   }
 
-  /// 回線があるか。通常のアップロード（TransferQueue）と同じ知らせを受ける。
-  /// 切れている間は新しい行を始めず、通信の失敗で止まった行も失敗にせず待たせる（#28 28-B）。
-  bool online = true;
+  /// 端末の回線の様子。通常のアップロード（TransferQueue）と同じ知らせを受ける。
+  /// 合わない行は新しく始めず、通信の失敗で止まった行も失敗にせず待たせる（#28 28-B）。
+  /// 回線が設定に合わなくなった行は止めて待機に戻す（#27）。既定は「オンラインで Wi‑Fi かは不明」
+  NetState net = NetState.unknownOnline;
 
-  /// 回線の知らせ。動いている行は止めない（通信が切れれば失敗として返ってくる）。
-  /// 戻った時は待っていた行を続きから始める。
+  /// Wi‑Fi 限定の設定。取得の段はダウンロード、送信の段はアップロードの設定で見る。
+  /// 既定は制限なし（設定を変えていない人の動きを変えない）
+  TransferNetPolicy policy = const TransferNetPolicy();
+
+  /// アプリが前面か。省データ設定で裏の通信を止められる回線の判定に使う
+  bool foreground = true;
+
+  /// 回線があるか。
+  bool get online => net.online;
+
+  NetWait? _wait(WebTransferTask t) =>
+      transferWait(net, policy, t.leg, foreground: foreground);
+
+  /// 一覧の文言用。待機の行が、今の回線と設定のどれで待っているか。待っていなければ null
+  NetWait? waitOf(String id) {
+    final t = _find(id);
+    if (t == null || t.status != WebTaskStatus.queued) return null;
+    return _wait(t);
+  }
+
+  /// 設定か省データで待っている行の数。サービスの通知に出す。
+  /// オフラインで待つ行は数えない（今まで通り「転送中」のまま回線の戻りを待つ）
+  int get waitingCount => _tasks
+      .where((t) =>
+          t.status == WebTaskStatus.queued &&
+          _forThisConn(t) &&
+          (_wait(t) == NetWait.wifi || _wait(t) == NetWait.dataSaver))
+      .length;
+
+  /// 回線の知らせ。戻った時は待っていた行を続きから始める。
+  void setNetwork(NetState s) {
+    if (net == s) return;
+    net = s;
+    _applyNet();
+  }
+
+  /// 旧来の「使えるか」だけの知らせ。回線の種類は変えず、使えるかだけを替える
   void setOnline(bool value) {
     if (online == value) return;
-    online = value;
-    if (value) _pump();
+    setNetwork(value ? NetState.unknownOnline : NetState.offline);
+  }
+
+  void setPolicy(TransferNetPolicy p) {
+    if (policy == p) return;
+    policy = p;
+    _applyNet();
+  }
+
+  void setForeground(bool v) {
+    if (foreground == v) return;
+    foreground = v;
+    _applyNet();
+  }
+
+  void _applyNet() {
+    for (final t in _tasks) {
+      if (_running.contains(t.id) && _stopsForNet(_wait(t))) {
+        _stopForNetwork(t);
+      }
+    }
+    _pump();
+    _changed();
+  }
+
+  /// 動いている行を止める理由か。オフラインは含めない。通信が切れれば失敗として返り、
+  /// 回線が無い間は待機に戻す（#28 の扱い）。ここでも取り消すと、回線が切れた瞬間に
+  /// 届いた HTTP の拒否まで待機に化けて、失敗が見えなくなる
+  bool _stopsForNet(NetWait? w) => w == NetWait.wifi || w == NetWait.dataSaver;
+
+  /// 走っている行を取り消しの仕組みで止める。一時停止と違い、止まった行は待機に戻る。
+  /// 一時ファイル・確定したパート・送り先の名前は残す
+  void _stopForNetwork(WebTransferTask t) {
+    final token = t.cancel;
+    if (token == null || token.isCancelled) return;
+    t.netStopRequested = true;
+    token.cancel('network');
   }
 
   void _pump() {
     for (final t in _tasks) {
-      if (!online) break;
       if (_running.length >= parallel) break;
+      // 回線と設定が合わない行は始めず待たせる。行ごとに、その段（取得か送信か）の設定で見る
       if (t.status == WebTaskStatus.queued &&
           !_running.contains(t.id) &&
-          _forThisConn(t)) {
+          _forThisConn(t) &&
+          _wait(t) == null) {
         _running.add(t.id);
         unawaited(_run(t));
       }
@@ -687,6 +769,7 @@ class WebTransferQueue extends ChangeNotifier {
   Future<void> _run(WebTransferTask t) async {
     final token = CancelToken();
     t.cancel = token;
+    t.netStopRequested = false;
     try {
       if (t.staged == null) {
         t.status = WebTaskStatus.fetching;
@@ -695,6 +778,12 @@ class WebTransferQueue extends ChangeNotifier {
         t.staged = t.hls ? await _fetchHls(t, token) : await _fetchFile(t, token);
         _checkCancelled(token);
         await _persist(requireSuccess: true);
+      }
+      // 取得の間に回線か設定が変わって、送信の段は今動かせない時は、取れた一時ファイルを残して待機に戻す。
+      // 取得の段で通った判定のまま送信まで走ると、アップロードだけ Wi‑Fi 限定の設定がすり抜ける
+      if (_wait(t) != null) {
+        t.status = WebTaskStatus.queued;
+        return;
       }
       // 取り込み中に接続先が替わっていたら、取れた一時ファイルは残したまま待機に戻す。
       // 新しい送り先へは送らない。元の接続に戻れば続きから上げる（#149）
@@ -721,6 +810,9 @@ class WebTransferQueue extends ChangeNotifier {
     } catch (e) {
       if (token.isCancelled && t.pauseRequested) {
         t.status = WebTaskStatus.paused;
+      } else if (token.isCancelled && t.netStopRequested && !_disposed) {
+        // 回線が設定に合わなくなって止めた。失敗や取り消しにせず待機に戻し、落とせた分は残す
+        t.status = WebTaskStatus.queued;
       } else if (_disposed) {
         // キューごと畳まれただけ。一時ファイルと台帳は次の起動の再開に残す
         t.status = WebTaskStatus.cancelled;
@@ -738,6 +830,10 @@ class WebTransferQueue extends ChangeNotifier {
       }
     } finally {
       _running.remove(t.id);
+      t.netStopRequested = false;
+      // 止まった行に使い終わった取り消しの印を残さない。待機の行を取り消す・一時停止する時に、
+      // 動いている行と取り違えて何も起きなくなるため
+      if (t.cancel == token) t.cancel = null;
       _changed();
       unawaited(_persist());
       _pump();

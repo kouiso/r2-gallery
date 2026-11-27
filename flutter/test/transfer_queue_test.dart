@@ -7,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:r2_gallery/src/api/client.dart';
 import 'package:r2_gallery/src/api/models.dart';
 import 'package:r2_gallery/src/offline/offline_store.dart';
+import 'package:r2_gallery/src/transfer/net_policy.dart';
+import 'package:r2_gallery/src/transfer/net_state.dart';
 import 'package:r2_gallery/src/transfer/transfer_api.dart';
 import 'package:r2_gallery/src/transfer/transfer_ledger.dart';
 import 'package:r2_gallery/src/transfer/transfer_queue.dart';
@@ -1031,6 +1033,175 @@ void main() {
         UploadSource(name: 'n.jpg', size: 1, mime: 'image/jpeg', bytes: bytesOf(1)),
       ]);
       expect(added.single.id, 'u8');
+    });
+  });
+
+  group('回線の判定で待つ（#27 27-B）', () {
+    const mobile =
+        NetState(online: true, wifi: false, metered: true, dataSaver: false);
+    const wifi =
+        NetState(online: true, wifi: true, metered: false, dataSaver: false);
+
+    Future<void> pickVideo(TransferQueue q, Uint8List data) async {
+      await q.enqueueUploads('lib', [
+        UploadSource(
+            name: 'v.mp4',
+            size: data.length,
+            mime: 'video/mp4',
+            path: await source('v.mp4', data)),
+      ]);
+    }
+
+    test('Wi‑Fi 限定のアップロードは Wi‑Fi に戻るまで始めない', () async {
+      final q = make();
+      await q.restore();
+      q.setPolicy(const TransferNetPolicy(uploadWifiOnly: true));
+      q.setNetwork(mobile);
+      await q.enqueueUploads('lib', [
+        UploadSource(name: 'a.jpg', size: 3, mime: 'image/jpeg', bytes: bytesOf(3)),
+      ]);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(q.tasks.single.status, TransferStatus.queued);
+      expect(q.waitOf(q.tasks.single.id), NetWait.wifi);
+      expect(q.waitingCount, 1);
+      // 送信の呼び出しは Wi‑Fi に戻った後だけ
+      expect(w.objects, isEmpty);
+      expect(w.creates, 0);
+      // 待っていても操作は効く（一時停止の行だけ再開できる）
+      expect(rowOfTask(q.tasks.single, q, online: true).label, 'Wi‑Fi接続待ち');
+      expect(rowOfTask(q.tasks.single, q, online: true).onPause, isNotNull);
+      expect(rowOfTask(q.tasks.single, q, online: true).onCancel, isNotNull);
+      expect(rowOfTask(q.tasks.single, q, online: true).onResume, isNull);
+
+      q.setNetwork(wifi);
+      await until(() => q.tasks.single.status == TransferStatus.done);
+      expect(w.objects['a.jpg'], bytesOf(3));
+      expect(q.waitingCount, 0);
+    });
+
+    test('送信中にモバイル回線へ替わったら待機に戻り、確定したパートは残る', () async {
+      final q = make();
+      await q.restore();
+      q.setPolicy(const TransferNetPolicy(uploadWifiOnly: true));
+      q.setNetwork(wifi);
+      // パート 2 の通信を返さずに止め、パート 1 だけ確定した所を作る
+      w.holdPart = 2;
+      final data = bytesOf(2500);
+      await pickVideo(q, data);
+      await until(() => w.partsRequested.contains('up1#2'), what: 'part 2 in flight');
+      final t = q.tasks.single;
+      expect(t.parts, hasLength(1));
+
+      q.setNetwork(mobile);
+      await until(() => t.status == TransferStatus.queued, what: 'back to queued');
+      expect(q.waitOf(t.id), NetWait.wifi);
+      // 失敗や取り消しにはしない。確定したパートと multipart は残す
+      expect(t.error, isNull);
+      expect(t.parts, hasLength(1));
+      expect(t.uploadId, 'up1');
+      expect(w.aborts, isEmpty);
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      expect(t.status, TransferStatus.queued);
+
+      // Wi‑Fi に戻ると、パート 1 は送り直さずパート 2 から
+      w.holdPart = null;
+      q.setNetwork(wifi);
+      await until(() => t.status == TransferStatus.done, what: 'resumed');
+      expect(w.objects['v.mp4'], data);
+      expect(w.partsSeen.where((p) => p == 'up1#1'), hasLength(1));
+      expect(w.partsSeen, containsAll(['up1#2', 'up1#3']));
+      expect(w.creates, 1);
+    });
+
+    test('オフライン保存はダウンロードの設定で待つ。アップロードの行は動く', () async {
+      w.media['p.jpg'] = bytesOf(100);
+      final q = make();
+      await q.restore();
+      q.setPolicy(const TransferNetPolicy(downloadWifiOnly: true));
+      q.setNetwork(mobile);
+      await q.enqueueDownloads('lib', [
+        MediaItem(key: 'p.jpg', type: 'image', url: '${w.base}/m/p.jpg'),
+      ]);
+      await q.enqueueUploads('lib', [
+        UploadSource(name: 'a.jpg', size: 3, mime: 'image/jpeg', bytes: bytesOf(3)),
+      ]);
+      final down = q.tasks.firstWhere((t) => !t.isUpload);
+      final up = q.tasks.firstWhere((t) => t.isUpload);
+      await until(() => up.status == TransferStatus.done);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(down.status, TransferStatus.queued);
+      expect(q.waitOf(down.id), NetWait.wifi);
+      expect(q.waitOf(up.id), isNull);
+      expect(await offline.readBytes('lib', 'p.jpg'), isNull);
+
+      // 設定をオフにすると待っていた行がすぐ始まる
+      q.setPolicy(const TransferNetPolicy());
+      await until(() => down.status == TransferStatus.done);
+      expect(await offline.readBytes('lib', 'p.jpg'), bytesOf(100));
+    });
+
+    test('省データで従量制の回線は裏にいる間だけ待ち、前面に戻ると動く', () async {
+      final q = make();
+      await q.restore();
+      q.setNetwork(const NetState(
+          online: true, wifi: false, metered: true, dataSaver: true));
+      q.setForeground(false);
+      await q.enqueueUploads('lib', [
+        UploadSource(name: 'a.jpg', size: 3, mime: 'image/jpeg', bytes: bytesOf(3)),
+      ]);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      final t = q.tasks.single;
+      expect(t.status, TransferStatus.queued);
+      expect(q.waitOf(t.id), NetWait.dataSaver);
+      expect(rowOfTask(t, q, online: true).label, '省データ設定のため待機中');
+
+      q.setForeground(true);
+      await until(() => t.status == TransferStatus.done);
+    });
+
+    test('待っている行は一時停止・再開・取り消しができる', () async {
+      final q = make();
+      await q.restore();
+      q.setPolicy(const TransferNetPolicy(uploadWifiOnly: true));
+      q.setNetwork(mobile);
+      await q.enqueueUploads('lib', [
+        UploadSource(name: 'a.jpg', size: 3, mime: 'image/jpeg', bytes: bytesOf(3)),
+        UploadSource(name: 'b.jpg', size: 3, mime: 'image/jpeg', bytes: bytesOf(3, 5)),
+      ]);
+      final a = q.tasks.first, b = q.tasks.last;
+      q.pause(a.id);
+      expect(a.status, TransferStatus.paused);
+      expect(q.waitOf(a.id), isNull);
+      q.resume(a.id);
+      expect(a.status, TransferStatus.queued);
+      expect(q.waitOf(a.id), NetWait.wifi);
+      await q.cancel(b.id);
+      expect(q.tasks.map((t) => t.id), [a.id]);
+      q.setNetwork(wifi);
+      await until(() => a.status == TransferStatus.done);
+      expect(w.objects.keys, ['a.jpg']);
+    });
+
+    test('今まで通り: オフラインの間の文言と、設定を変えなければモバイル回線でも上がる', () async {
+      final q = make();
+      await q.restore();
+      q.setNetwork(mobile);
+      await q.enqueueUploads('lib', [
+        UploadSource(name: 'a.jpg', size: 3, mime: 'image/jpeg', bytes: bytesOf(3)),
+      ]);
+      await until(() => q.tasks.single.status == TransferStatus.done);
+
+      q.setNetwork(NetState.offline);
+      expect(q.online, isFalse);
+      await q.enqueueUploads('lib', [
+        UploadSource(name: 'b.jpg', size: 3, mime: 'image/jpeg', bytes: bytesOf(3)),
+      ]);
+      final b = q.tasks.last;
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      expect(q.waitOf(b.id), NetWait.offline);
+      expect(rowOfTask(b, q, online: false).label, '待機中（オフライン）');
+      // オフラインは通知の「Wi‑Fi接続待ち」に数えない
+      expect(q.waitingCount, 0);
     });
   });
 

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../webdl/web_transfer.dart';
+import 'net_policy.dart';
 import 'transfer_queue.dart';
 
 /// 転送バーと転送シートに出す1行。アップロード・オフライン保存（TransferQueue）と
@@ -47,11 +48,20 @@ class TransferRow {
 
 String _pct(int p) => '$p%';
 
+/// 待つ理由の文言。null なら null（呼び手が今の「待機中」の文言を使う）
+String? netWaitLabel(NetWait? w) => switch (w) {
+      null => null,
+      NetWait.offline => '待機中（オフライン）',
+      NetWait.wifi => 'Wi‑Fi接続待ち',
+      NetWait.dataSaver => '省データ設定のため待機中',
+    };
+
 /// アップロード・オフライン保存の行。文言は KMP 版 TransfersParts.kt の statusLabel と同じ。
 TransferRow rowOfTask(TransferTask t, TransferQueue q, {required bool online}) {
   final label = switch (t.status) {
     TransferStatus.preparing => '端末に保存中',
-    TransferStatus.queued => online ? '待機中' : '待機中（オフライン）',
+    TransferStatus.queued =>
+      netWaitLabel(q.waitOf(t.id)) ?? (online ? '待機中' : '待機中（オフライン）'),
     TransferStatus.running => t.isUpload
         ? 'アップロード中 ${_pct(t.percent)}'
         : 'オフライン保存中 ${_pct(t.percent)}',
@@ -106,7 +116,8 @@ TransferRow rowOfWeb(WebTransferTask t, WebTransferQueue q,
     {required bool online}) {
   final s = _webStatus(t.status);
   final label = switch (t.status) {
-    WebTaskStatus.queued => online ? '待機中' : '待機中（オフライン）',
+    WebTaskStatus.queued =>
+      netWaitLabel(q.waitOf(t.id)) ?? (online ? '待機中' : '待機中（オフライン）'),
     WebTaskStatus.fetching => t.hls && t.hlsTotal > 0
         ? 'ネットから取得中 ${t.hlsSeg}/${t.hlsTotal}'
         : 'ネットから取得中 ${_pct(t.percent)}',

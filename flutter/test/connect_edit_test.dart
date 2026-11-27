@@ -43,7 +43,9 @@ class _Api extends ApiClient {
 // 端末の口を通らない転送の見張り。回線の知らせは出さない
 class _NoPlatform implements TransferPlatform {
   @override
-  Future<void> setKeepAlive(bool active) async {}
+  Future<void> setKeepAlive(bool active, {int waiting = 0}) async {}
+  @override
+  Future<void> updateWaiting(int waiting) async {}
   @override
   Stream<NetState> get network => const Stream.empty();
 }

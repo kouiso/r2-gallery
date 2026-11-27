@@ -235,7 +235,13 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
             onOpen: (it) async {
               // 切れた署名URLの行はその1件だけ引き直してから開く（#24 作業B）
               final target = await s.openTarget(it);
-              if (target == null || !context.mounted) return;
+              if (!context.mounted) return;
+              if (target == null) {
+                // 引き直しに失敗しても無反応にしない（写真タブにはまだ無いので、ここだけ先に出す）
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text('開けませんでした。通信を確かめてもう一度お試しください')));
+                return;
+              }
               openViewer(context,
                   app: widget.app,
                   lib: widget.lib,

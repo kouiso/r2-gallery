@@ -176,10 +176,12 @@ class AlbumPage {
   });
 }
 
-/// 相手が要求を断った（4xx）か。回線や相手の一時の不調（5xx・通信の失敗）と分け、
-/// 裏の手入れでは断られた時だけ利用者に見せるのに使う。
+/// 利用者の手で直すしかない断られ方（認証切れ・権限なし・消えた・無効）か。
+/// 408・429 のように待てば通る4xxや、5xx・通信の失敗は一時の不調なので含めない。
+/// 裏の手入れでは、これに当たる時だけ利用者に見せるのに使う。
 bool isClientRejection(Object e) =>
-    e is ApiError && e.status >= 400 && e.status < 500;
+    e is ApiError &&
+    (e.status == 401 || e.status == 403 || e.status == 404 || e.status == 410);
 
 class ApiError implements Exception {
   final int status;

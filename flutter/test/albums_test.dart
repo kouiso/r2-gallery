@@ -141,6 +141,13 @@ AppState _app(_FakeApi api, {bool readOnly = false}) {
 Widget _host(Widget child) =>
     MaterialApp(home: Scaffold(body: child));
 
+/// 1件の引き直しが失敗する worker（圏外）。
+class _NoObjectApi extends _FakeApi {
+  @override
+  Future<MediaItem?> objectAt(String libId, String key) =>
+      Future.error(const ApiError(503, 'offline'));
+}
+
 Finder _tile(String key) =>
     find.byWidgetPredicate((w) => w is MediaTile && w.item.key == key);
 
@@ -465,6 +472,21 @@ void main() {
       expect(_tile('1.jpg'), findsNothing);
       expect(_tile('3.jpg'), findsNothing);
       expect(find.text('旅（1）'), findsOneWidget);
+    });
+
+    testWidgets('切れた署名URLの行を引き直せなかったら、無反応にせず知らせる（#24）', (t) async {
+      final api = _NoObjectApi()
+        ..albumList = [const Album(id: 'x', title: '旅', readOnly: false)]
+        ..albumTitle['x'] = '旅'
+        ..albumItems['x'] = [
+          MediaItem(key: '1.jpg', type: 'image', url: 'https://w.example/m/1.jpg?e=1'),
+        ];
+      await t.pumpWidget(screen(api));
+      await t.pumpAndSettle();
+      await t.tap(_tile('1.jpg'));
+      await t.pumpAndSettle();
+      expect(find.text('開けませんでした。通信を確かめてもう一度お試しください'),
+          findsOneWidget);
     });
 
     testWidgets('A7: ゴミ箱へ→元に戻すで復元する', (t) async {

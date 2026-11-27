@@ -404,7 +404,7 @@ class AppState extends ChangeNotifier {
       Kv.get(Keys.token),
       _loadLockSettings(),
     ).wait;
-    // PerfLog(#24 作業D): 起動の読み出しの区間の終わり
+    // 作業Dで起動の待ちを区間に分けて測るため、読み出しが終わった時刻をここに残す
     PerfLog.mark('init.read');
     if (intent != _connectionIntent) return;
     if (ep != null && tk != null) {
@@ -825,12 +825,18 @@ class AppState extends ChangeNotifier {
     locked = false;
     _backgroundedAt = null;
     notifyListeners();
-    // ロック中の先読みが通っていれば取り直さない。控えだけで起動した時は回線の一覧を取り直す
-    // 取得中に頼み直すと世代が進んで先の答えが捨てられ、同じ要求が2本飛ぶ。失敗したら次の復帰で取り直す
-    if ((libraries.isEmpty || activeLib == null || !librariesFromNet) &&
-        !librariesLoading) {
-      _loadLibraries();
-    }
+    _refetchLibrariesIfStale();
+  }
+
+  /// ロック中の先読みが通っていれば取り直さない。控えだけで起動した時は回線の一覧を取り直す。
+  /// 控えがある時は、取得中に頼み直すと世代が進んで先の答えが捨てられ同じ要求が2本飛ぶので重ねない
+  /// （失敗したら次の復帰で取り直す）。一覧が全く無い時は、固まった要求を待つと
+  /// 何分も何も出せないので、重ねてでも頼み直す。
+  void _refetchLibrariesIfStale() {
+    final stale = libraries.isEmpty || activeLib == null || !librariesFromNet;
+    if (!stale) return;
+    if (libraries.isNotEmpty && librariesLoading) return;
+    _loadLibraries();
   }
 
   /// 端末の画面ロックで解除する。成功したらロックを外す。
@@ -976,11 +982,12 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       await refreshDeviceLockAvailable();
       notifyListeners();
-      _emitResumed();
+      // 裏にいた時間は測っていない。ここでも署名URLとライブラリの取り直しは要る
+      _settledForeground();
       return;
     }
     if (at == null || !sessionOpen) {
-      _emitResumed();
+      _settledForeground();
       return;
     }
     final elapsed = elapsedBetween(await at, await _clock.read());
@@ -996,13 +1003,20 @@ class AppState extends ChangeNotifier {
     }
     await refreshDeviceLockAvailable();
     notifyListeners();
-    PerfLog.mark('resume', {'awayMs': elapsed, 'locked': locked});
+    _settledForeground(awayMs: elapsed);
+  }
+
+  /// 前面へ戻ってロックの判定が済んだ後の仕上げ。どの戻り方でも同じ事をするよう1か所に集める。
+  void _settledForeground({int? awayMs}) {
+    if (!sessionOpen) return;
+    PerfLog.mark('resume', {
+      'awayMs': ?awayMs,
+      'locked': locked,
+    });
     _emitResumed();
     // 控えだけで起動して回線の一覧をまだ取れていない時は、戻ったついでに取り直す。
-    // 一覧のメタ情報だけなので、起動の先読みと同じくロック中でも取る。取得中なら重ねない（#24 決めた事 A-4a）
-    if (connected && !librariesFromNet && !librariesLoading) {
-      unawaited(_loadLibraries());
-    }
+    // 一覧のメタ情報だけなので、起動の先読みと同じくロック中でも取る（#24 決めた事 A-4a）
+    if (connected) _refetchLibrariesIfStale();
   }
 
   Future<void> refreshPinState() async {
@@ -1402,9 +1416,20 @@ class GalleryState extends ChangeNotifier {
     if (_disposed || loading || _softRun != null || items.isEmpty) {
       return Future.value();
     }
+    // 走っている間に重ねて頼まれても同じ取り直しを待たせる
+    final running = _resigning;
+    if (running != null) return running;
     if (!hasExpiredUrls) return Future.value();
-    return _resignLoaded(lib);
+    final run = _resignLoaded(lib);
+    _resigning = run;
+    return run.whenComplete(() {
+      if (identical(_resigning, run)) _resigning = null;
+    });
   }
+
+  /// 走っている署名URLの差し替え。開く時に、終わるのを待ってからその1件だけの引き直しへ進むため
+  /// （待たずに引き直すと、差し替えが替える行まで1件ずつ重ねて取る）。
+  Future<void>? _resigning;
 
   /// 載っている行を ID で新しい行へ差し替える。消えた行や続きのページの
   /// 有無はここでは変えない（差分は softRefresh の仕事）。取り直しは
@@ -1470,6 +1495,20 @@ class GalleryState extends ChangeNotifier {
     final it = shown[index];
     if (!signedUrlExpired(it.url)) {
       return (items: shown, index: index);
+    }
+    // 復帰の差し替えが走っていれば終わりを待つ。それで直っていればそのまま開き、
+    // 直らなかった時だけ下でその1件を引き直す（#24 決めた事 5）
+    final resigning = _resigning;
+    if (resigning != null) {
+      try {
+        await resigning;
+      } catch (_) {}
+      if (_disposed) return null;
+      final now = ordered();
+      final at = now.indexWhere((x) => x.key == it.key && x.lib == it.lib);
+      if (at >= 0 && !signedUrlExpired(now[at].url)) {
+        return (items: now, index: at);
+      }
     }
     if (showingCached) {
       while (showingCached && loading) {

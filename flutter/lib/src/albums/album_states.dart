@@ -73,15 +73,42 @@ class AlbumsHomeState extends ChangeNotifier with _SafeNotify {
     notifyListeners();
   }
 
+  bool _resigning = false;
+
   /// 前面へ戻った時の復帰。表紙URLが切れている時だけ取り直す（#24 作業B）。
   /// フォルダ名にURLは無いので、表紙だけ見れば十分。
-  Future<void> refreshIfExpired(String lib) {
-    if (loading) return Future.value();
-    if (albums.any(
+  /// 裏の手入れなので、読み込み中の表示にはせず、断られた時（認証切れなど）だけ帯で見せる。
+  /// 回線の不調なら今のアルバムを残す（`load` だと失敗のたびに帯が出て一覧が消える見た目になる）。
+  Future<void> refreshIfExpired(String lib) async {
+    if (loading || _resigning || this.lib != lib) return;
+    if (!albums.any(
         (a) => a.coverUrl != null && signedUrlExpired(a.coverUrl!))) {
-      return load(lib);
+      return;
     }
-    return Future.value();
+    _resigning = true;
+    final e = ++_epoch;
+    try {
+      final got = await Future.wait([
+        api.albums(lib),
+        api.folder(lib, prefix: ''),
+      ]);
+      if (e != _epoch) return;
+      final a = got[0];
+      final f = got[1];
+      if (a is List<Album>) albums = a;
+      if (f is FolderPage) folders = f.folders;
+      notifyListeners();
+    } on Object catch (err) {
+      if (e != _epoch) return;
+      if (isClientRejection(err)) {
+        error = err.toString();
+        notifyListeners();
+      } else {
+        debugPrint('albums resign stopped: $err');
+      }
+    } finally {
+      _resigning = false;
+    }
   }
 
   /// 失敗時は画面に出す文言を返す。成功したら一覧を取り直す。
@@ -301,10 +328,25 @@ abstract class _PagedMediaState extends ChangeNotifier with _SafeNotify {
   /// 前面へ戻った時の復帰。載っている行のURLが切れている時だけ、先頭から
   /// 載っている分を覆える所まで取り直して各行を新しいURLへ差し替える。
   /// 並び・cursor・loaded はそのまま残す（#24 作業B）。
-  Future<void> refreshIfExpired() async {
-    if (!loaded || loading || _disposed || items.isEmpty || !hasExpiredUrls) {
-      return;
+  Future<void> refreshIfExpired() {
+    if (!loaded || loading || _disposed || items.isEmpty) {
+      return Future.value();
     }
+    // 走っている間に重ねて頼まれても同じ取り直しを待たせる
+    final running = _resigning;
+    if (running != null) return running;
+    if (!hasExpiredUrls) return Future.value();
+    final run = _resignLoaded();
+    _resigning = run;
+    return run.whenComplete(() {
+      if (identical(_resigning, run)) _resigning = null;
+    });
+  }
+
+  /// 走っている署名URLの差し替え。開く時に終わりを待ってから、その1件だけの引き直しへ進むため
+  Future<void>? _resigning;
+
+  Future<void> _resignLoaded() async {
     final e = _epoch;
     final remaining = {for (final it in items) _rowId(it)};
     final byKey = <String, MediaItem>{};
@@ -349,6 +391,19 @@ abstract class _PagedMediaState extends ChangeNotifier with _SafeNotify {
     if (!signedUrlExpired(it.url)) {
       final at = indexIn(items);
       return at < 0 ? null : (items: items, index: at);
+    }
+    // 復帰の差し替えが走っていれば終わりを待つ。直っていればそのまま開き、
+    // 直らなかった時だけ下でその1件を引き直す（#24 決めた事 5）
+    final resigning = _resigning;
+    if (resigning != null) {
+      try {
+        await resigning;
+      } catch (_) {}
+      if (_disposed) return null;
+      final at = indexIn(items);
+      if (at >= 0 && !signedUrlExpired(items[at].url)) {
+        return (items: items, index: at);
+      }
     }
     final MediaItem? fresh;
     try {

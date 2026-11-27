@@ -1,5 +1,5 @@
 # Copy to wrangler.toml (git-ignored) and fill in your own values.
-name = "r2-gallery-worker"
+name = "r2-gallery"
 main = "src/index.ts"
 compatibility_date = "2026-09-01"
 workers_dev = true

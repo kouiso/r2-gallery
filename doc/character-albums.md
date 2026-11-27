@@ -28,7 +28,7 @@
 ## 使い方
 
 ```bash
-export R2G_ENDPOINT=https://notes-sync.kouiso.workers.dev
+export R2G_ENDPOINT=https://r2-gallery.kouiso.workers.dev
 export R2G_TOKEN=...   # 1Password「R2 Gallery worker (notes-sync)」の access_token
 
 # 初回の一括仕分け: 最近追加された 200 枚を対象にする

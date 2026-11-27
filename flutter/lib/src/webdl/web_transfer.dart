@@ -659,6 +659,8 @@ class WebTransferQueue extends ChangeNotifier {
   void setOnline(bool value) {
     if (online == value) return;
     online = value;
+    // 待機の表示（オフライン）が変わるので、通常のアップロードと同じく画面へ知らせる
+    _changed();
     if (value) _pump();
   }
 
@@ -705,7 +707,9 @@ class WebTransferQueue extends ChangeNotifier {
       t.status = WebTaskStatus.uploading;
       t.loaded = 0;
       _changed();
-      await _upload(t, token);
+      // 回線の知らせが失敗より遅れる時や、Wi-Fi から LTE への切り替えで知らせが来ない時のために、
+      // 取得の段と同じ短い取り直しで救う。名前の確認（pendingKey）があるので取り直しても二重には置かない
+      await _withNetRetry(token, () => _upload(t, token));
       _checkCancelled(token);
       // 履歴と台帳に完了を書き終えてから完了にする。完了にした途端に転送中の通知（サービス）が外れ、
       // 画面の無いエンジンは畳まれる。書き終える前に畳まれると、次の起動で同じ物を取り直してしまう

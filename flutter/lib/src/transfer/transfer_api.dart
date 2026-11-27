@@ -92,7 +92,9 @@ class ApiClientTransferApi implements TransferApi {
   ApiError _err(Object e) {
     if (e is ApiError) return e;
     if (e is DioException) {
-      return ApiError(e.response?.statusCode ?? 0, e.message ?? 'network error');
+      // 回線で落ちたものだけ印を付ける。取り込みのキューが待つか失敗にするかをこれで分ける（#28）
+      return ApiError(e.response?.statusCode ?? 0, e.message ?? 'network error',
+          network: isDroppedConnection(e));
     }
     return ApiError(0, e.toString());
   }

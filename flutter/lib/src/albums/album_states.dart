@@ -324,8 +324,13 @@ abstract class _PagedMediaState extends ChangeNotifier with _SafeNotify {
         if (c == null) break;
       }
     } on Object catch (err) {
-      // 写真タブと同じく、裏の差し替えの失敗では帯を出さず取れた分だけ替える（#24 作業B）
       if (e != _epoch || _disposed) return;
+      // 写真タブと同じく、断られた時だけ帯で見せ、回線の不調なら取れた分だけ替える（#24 作業B）
+      if (isClientRejection(err)) {
+        error = err.toString();
+        notifyListeners();
+        return;
+      }
       debugPrint('album resign stopped: $err');
     }
     if (byKey.isEmpty) return;

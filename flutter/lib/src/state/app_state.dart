@@ -262,18 +262,11 @@ class AppState extends ChangeNotifier {
   /// 前面へ戻ってロック判定が済んだ合図。画面はこれに乗って期限切れURLを差し替える。
   Stream<void> get resumed => _resumed.stream;
 
-  /// ロック中に戻った分の合図。長く裏にいた後はふつうロックが掛かるので、ここで捨てると
-  /// 一番要る場面で差し替えが走らない。解除した時に流す（#24 作業B）。
-  bool _resumePending = false;
-
+  // ロック中に戻った時も流す。長く裏にいた後はふつうロックが掛かるので、ロック中に止めると
+  // 一番要る場面で差し替えが走らない。一覧は Offstage で残り、画面はロックが覆うので、
+  // ライブラリの先読みと同じく裏で URL を取り直してよい（#24 詳細設計の端の場合「ロック中に戻った」）
   void _emitResumed() {
-    if (!sessionOpen || _resumed.isClosed) return;
-    if (locked) {
-      _resumePending = true;
-      return;
-    }
-    _resumePending = false;
-    _resumed.add(null);
+    if (sessionOpen && !_resumed.isClosed) _resumed.add(null);
   }
 
   final StreamController<String> _contentChanged =
@@ -803,7 +796,8 @@ class AppState extends ChangeNotifier {
       final raw = await Kv.get(Keys.libraries);
       if (raw == null) return;
       final j = jsonDecode(raw);
-      if (j is! Map || j['endpoint'] != endpoint) return;
+      // 形の違う控え（v が 1 でない）は読み違えるので使わず、回線の答えを待つ
+      if (j is! Map || j['v'] != 1 || j['endpoint'] != endpoint) return;
       final libs = (j['libraries'] as List?)
               ?.whereType<Map>()
               .map((m) => Library.fromJson(Map<String, dynamic>.from(m)))
@@ -832,10 +826,11 @@ class AppState extends ChangeNotifier {
     _backgroundedAt = null;
     notifyListeners();
     // ロック中の先読みが通っていれば取り直さない。控えだけで起動した時は回線の一覧を取り直す
-    if (libraries.isEmpty || activeLib == null || !librariesFromNet) {
+    // 取得中に頼み直すと世代が進んで先の答えが捨てられ、同じ要求が2本飛ぶ。失敗したら次の復帰で取り直す
+    if ((libraries.isEmpty || activeLib == null || !librariesFromNet) &&
+        !librariesLoading) {
       _loadLibraries();
     }
-    if (_resumePending) _emitResumed();
   }
 
   /// 端末の画面ロックで解除する。成功したらロックを外す。
@@ -989,7 +984,6 @@ class AppState extends ChangeNotifier {
       return;
     }
     final elapsed = elapsedBetween(await at, await _clock.read());
-    PerfLog.mark('resume', {'awayMs': elapsed});
     if (shouldRelock(
       elapsedMs: elapsed,
       graceMs: effectiveGraceMs(
@@ -1002,10 +996,11 @@ class AppState extends ChangeNotifier {
     }
     await refreshDeviceLockAvailable();
     notifyListeners();
+    PerfLog.mark('resume', {'awayMs': elapsed, 'locked': locked});
     _emitResumed();
     // 控えだけで起動して回線の一覧をまだ取れていない時は、戻ったついでに取り直す。
-    // ロック中なら解除の側（unlock）が取り直すので、ここでは二重に頼まない（#24 決めた事 A-4a）
-    if (connected && !locked && !librariesFromNet && !librariesLoading) {
+    // 一覧のメタ情報だけなので、起動の先読みと同じくロック中でも取る。取得中なら重ねない（#24 決めた事 A-4a）
+    if (connected && !librariesFromNet && !librariesLoading) {
       unawaited(_loadLibraries());
     }
   }
@@ -1420,9 +1415,12 @@ class GalleryState extends ChangeNotifier {
     final byKey = <String, MediaItem>{};
     final loaded = items.length;
     var seen = 0;
+    var pages = 0;
+    final watch = Stopwatch()..start();
     String? c;
     try {
       while (remaining.isNotEmpty && seen < loaded) {
+        pages++;
         final page = await api.folder(lib,
             prefix: prefix,
             cursor: c,
@@ -1439,12 +1437,23 @@ class GalleryState extends ChangeNotifier {
         if (c == null) break;
       }
     } catch (err) {
-      // 差し替えは裏の手入れ。途中で切れても帯は出さず、取れた分だけ替える。
-      // 残りは開く時に openTarget が1件ずつ引き直す（#24 作業B の端の場合）
       if (e != epoch || _disposed) return;
+      // 断られた（認証切れなど 4xx）は直すのに利用者の手が要るので、今まで通り帯で見せる
+      if (isClientRejection(err)) {
+        error = err.toString();
+        notifyListeners();
+        return;
+      }
+      // 回線や相手の一時の不調なら、差し替えは裏の手入れなので帯を出さず取れた分だけ替える。
+      // 残りは開く時に openTarget が1件ずつ引き直す（#24 作業B の端の場合）
       debugPrint('resign stopped: $err');
     }
-    PerfLog.mark('resign.done', {'n': byKey.length, 'left': remaining.length});
+    PerfLog.mark('resign.done', {
+      'n': byKey.length,
+      'left': remaining.length,
+      'pages': pages,
+      'ms': watch.elapsedMilliseconds,
+    });
     if (byKey.isEmpty) return;
     items = [
       for (final it in items) byKey[_rowId(it)] ?? it,

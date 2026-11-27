@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:r2_gallery/src/api/client.dart';
+import 'package:r2_gallery/src/albums/album_states.dart';
 import 'package:r2_gallery/src/api/models.dart';
 import 'package:r2_gallery/src/state/app_state.dart';
 import 'package:r2_gallery/src/store/kv.dart';
@@ -52,6 +53,7 @@ class _PageApi extends ApiClient {
 
 /// 2ページ目で回線が切れる一覧。差し替えの途中で失敗した時の扱いを見る。
 class _CutApi extends _PageApi {
+  Object rejectWith = const ApiError(503, 'offline');
   @override
   Future<FolderPage> folder(String libId,
       {String prefix = '',
@@ -62,7 +64,7 @@ class _CutApi extends _PageApi {
       bool fresh = false}) {
     if (generation > 0 && cursor != null) {
       calls.add(cursor);
-      return Future.error(const ApiError(503, 'offline'));
+      return Future.error(rejectWith);
     }
     return super.folder(libId,
         prefix: prefix,
@@ -78,11 +80,30 @@ class _CutApi extends _PageApi {
 class _FlakyLibApi extends ApiClient {
   var calls = 0;
   var failures = 2;
+  Completer<void>? gate;
   @override
   Future<List<Library>> libraries() async {
     calls++;
+    await gate?.future;
     if (calls <= failures) throw const ApiError(503, 'offline');
     return const [Library(id: 'photos', title: '写真')];
+  }
+}
+
+/// アルバムの中身を1件ずつ返し、取り直しの2ページ目で回線が切れる偽物。
+class _AlbumApi extends ApiClient {
+  int generation = 0;
+  @override
+  Future<AlbumPage> album(String libId, String albumId,
+      {String? cursor, int limit = 60}) async {
+    if (generation > 0 && cursor != null) throw const ApiError(503, 'offline');
+    final key = cursor == null ? 'a.jpg' : 'b.jpg';
+    return AlbumPage(
+        items: [MediaItem(key: key, type: 'image', url: _url('$key$generation'))],
+        cursor: cursor == null ? '1' : null,
+        title: 't',
+        count: 2,
+        readOnly: false);
   }
 }
 
@@ -151,7 +172,9 @@ void main() {
     app.dispose();
   });
 
-  test('ロックが掛かったままなら resumed は立たない', () async {
+  test('ロック中に戻っても resumed は立つ（差し替えはロックの裏で進める）', () async {
+    // 長く裏にいた後はふつうロックが掛かる。そこで止めると一番要る場面で差し替えが走らない。
+    // 一覧は Offstage で残り画面はロックが覆うので、#24 の設計どおり裏で進める
     FlutterSecureStorage.setMockInitialValues({});
     final app = AppState(bakedEndpoint: '', bakedToken: '')
       ..connected = true
@@ -160,7 +183,8 @@ void main() {
     final sub = app.resumed.listen((_) => seen++);
     await app.onForeground();
     await pumpEventQueue();
-    expect(seen, 0);
+    expect(seen, 1);
+    expect(app.locked, isTrue);
     await sub.cancel();
     app.dispose();
   });
@@ -182,25 +206,49 @@ void main() {
     expect(g.items.map((it) => it.url.contains('-old')), [false, false, true, true]);
   });
 
-  test('ロック中に戻った分は、解除した時に resumed が立つ', () async {
-    FlutterSecureStorage.setMockInitialValues({});
-    final app = AppState(bakedEndpoint: '', bakedToken: '')
-      ..connected = true
-      ..locked = true;
-    var seen = 0;
-    final sub = app.resumed.listen((_) => seen++);
-    await app.onForeground();
+  test('差し替えが断られた（401）時は今まで通り帯で見せる', () async {
+    final api = _CutApi()..rejectWith = const ApiError(401, 'unauthorized');
+    final g = GalleryState(api);
+    await g.refresh('photos');
+    await g.loadMore('photos');
+    g.items = [
+      for (final it in g.items)
+        MediaItem(key: it.key, type: it.type, url: _url('${it.key}-old', expired: true)),
+    ];
+    api.generation = 1;
+    await g.refreshIfExpired('photos');
+    expect(g.error, contains('401'));
+  });
+
+  test('アルバムの差し替えも途中で回線が切れたら帯を出さず取れた分だけ替える', () async {
+    final api = _AlbumApi();
+    final s = AlbumDetailState(api, 'photos', 'al');
+    await s.refresh();
+    await s.loadMore();
+    expect(s.items.length, 2);
+    s.items = [
+      for (final it in s.items)
+        MediaItem(key: it.key, type: it.type, url: _url('${it.key}-old', expired: true)),
+    ];
+    api.generation = 1;
+    await s.refreshIfExpired();
+    expect(s.error, isNull);
+    expect(s.items.map((it) => it.url.contains('-old')), [false, true]);
+    s.dispose();
+  });
+
+  test('ライブラリの控えの形が違えば（v が 1 でない）使わない', () async {
+    FlutterSecureStorage.setMockInitialValues({
+      Keys.endpoint: 'https://w.example',
+      Keys.token: 'tk',
+      Keys.libraries:
+          '{"v":2,"endpoint":"https://w.example","activeLib":"photos","libraries":[{"id":"photos","title":"写真","readOnly":false}]}',
+    });
+    final api = _FlakyLibApi()..failures = 1 << 30;
+    final app = AppState(api: api, bakedEndpoint: '', bakedToken: '');
+    await app.init();
+    expect(app.libraries, isEmpty);
     await pumpEventQueue();
-    expect(seen, 0);
-    app.unlock();
-    await pumpEventQueue();
-    expect(seen, 1);
-    // 一度流したら、次の解除では重ねて流さない
-    app.lockNow();
-    app.unlock();
-    await pumpEventQueue();
-    expect(seen, 1);
-    await sub.cancel();
     app.dispose();
   });
 
@@ -234,6 +282,33 @@ void main() {
     await app.onForeground();
     await pumpEventQueue();
     expect(api.calls, before + 1);
+    app.dispose();
+  });
+
+  test('一覧の取得中に解除・復帰しても、同じ要求を重ねない', () async {
+    FlutterSecureStorage.setMockInitialValues({
+      Keys.endpoint: 'https://w.example',
+      Keys.token: 'tk',
+      Keys.libraries:
+          '{"v":1,"endpoint":"https://w.example","activeLib":"photos","libraries":[{"id":"photos","title":"写真","readOnly":false}]}',
+    });
+    final api = _FlakyLibApi()
+      ..failures = 0
+      ..gate = Completer<void>();
+    final app = AppState(api: api, bakedEndpoint: '', bakedToken: '');
+    await app.init();
+    expect(api.calls, 1);
+    expect(app.librariesLoading, isTrue);
+    app.unlock();
+    app.onBackground();
+    await app.onForeground();
+    await pumpEventQueue();
+    expect(api.calls, 1);
+    api.gate!.complete();
+    await pumpEventQueue();
+    // 先の答えが捨てられずに使われる
+    expect(app.librariesFromNet, isTrue);
+    expect(api.calls, 1);
     app.dispose();
   });
 

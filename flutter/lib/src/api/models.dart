@@ -176,6 +176,11 @@ class AlbumPage {
   });
 }
 
+/// 相手が要求を断った（4xx）か。回線や相手の一時の不調（5xx・通信の失敗）と分け、
+/// 裏の手入れでは断られた時だけ利用者に見せるのに使う。
+bool isClientRejection(Object e) =>
+    e is ApiError && e.status >= 400 && e.status < 500;
+
 class ApiError implements Exception {
   final int status;
   final String message;

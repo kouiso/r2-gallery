@@ -101,7 +101,7 @@ void main() {
     expect(app.connected, isFalse);
   });
 
-  test('控えだけで起動した時はロック解除で回線の一覧を取り直す', () async {
+  test('控えだけで起動し、起動の取得がまだ終わっていなければ解除で重ねて頼まずその答えを使う', () async {
     FlutterSecureStorage.setMockInitialValues({
       Keys.endpoint: 'https://w.example',
       Keys.token: 'tk',
@@ -123,9 +123,12 @@ void main() {
     expect(app2.librariesFromNet, isFalse);
     final before = api2.callCount;
     app2.unlock();
+    // 取得中に頼み直すと世代が進んで先の答えが捨てられ、同じ要求が2本飛んでいた。
+    // 起動の取得が失敗していた時の取り直しは resume_resign_test の
+    // 「控えだけで起動して一覧を取れていなければ、前面へ戻った時に取り直す」が見る
     api2.gate.complete();
     await pumpEventQueue();
-    expect(api2.callCount, before + 1);
+    expect(api2.callCount, before);
     expect(app2.librariesFromNet, isTrue);
   });
 }

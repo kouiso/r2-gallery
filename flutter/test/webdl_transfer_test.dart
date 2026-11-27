@@ -69,6 +69,14 @@ class FakeServer {
   final List<String?> abortTokens = [];
   // 失効した続き。このパートの送信は 404 になる
   final Set<String> staleUploads = {};
+  // 上げている最中（本文を受け取っている途中）に接続を切る残り回数。0 なら切らない
+  int cutBodies = 0;
+  // 本文をこのバイト数まで受けたところで切る
+  int cutBodyAfter = 1;
+  // 切った時に呼ぶ。回線が切れた状況（オフライン通知）を作るために使う
+  void Function()? onCut;
+  // 一覧の問い合わせ（アップロード前の名前の確認）を受けた時に呼ぶ
+  void Function()? onFolders;
 
   Future<void> start() async {
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -83,6 +91,22 @@ class FakeServer {
       b.add(c);
     }
     return b.takeBytes();
+  }
+
+  /// 本文を受ける。cutBodies が残っていれば受け取りの途中で接続を切って null を返す。
+  /// 送り手から見ると「書き込みの最中にソケットが落ちた」状況（返事は無い）になる
+  Future<Uint8List?> _bodyOrCut(HttpRequest r) async {
+    if (cutBodies <= 0) return _body(r);
+    final b = BytesBuilder(copy: false);
+    await for (final c in r) {
+      b.add(c);
+      if (b.length >= cutBodyAfter) break;
+    }
+    cutBodies--;
+    onCut?.call();
+    final sock = await r.response.detachSocket(writeHeaders: false);
+    sock.destroy();
+    return null;
   }
 
   Future<void> _handle(HttpRequest r) async {
@@ -182,6 +206,7 @@ class FakeServer {
 
     if (r.method == 'GET' && p.endsWith('/folders')) {
       folderListings++;
+      onFolders?.call();
       if (failFolders) {
         res.statusCode = 500;
         await res.close();
@@ -206,7 +231,8 @@ class FakeServer {
     }
     if (r.method == 'PUT' && p.endsWith('/objects')) {
       objectPuts++;
-      final body = await _body(r);
+      final body = await _bodyOrCut(r);
+      if (body == null) return;
       onPut?.call();
       if (dropPut) {
         final sock = await res.detachSocket(writeHeaders: false);
@@ -229,7 +255,8 @@ class FakeServer {
       return json({'uploadId': 'u1'});
     }
     if (p.endsWith('/objects/multipart/part') && r.method == 'PUT') {
-      final body = await _body(r);
+      final body = await _bodyOrCut(r);
+      if (body == null) return;
       if (r.uri.queryParameters['part'] == '$failPart') {
         res.statusCode = 500;
         await res.close();
@@ -924,6 +951,85 @@ void main() {
       s.media['clip.mp4'] = _bytes(2000);
       s.failPutStatus = 500;
       s.onPut = () => queue.setOnline(false);
+      final t = queue.enqueue('lib', [video('clip.mp4')]).single;
+      await run();
+      expect(t.status, WebTaskStatus.error);
+    });
+
+    test('大きい物を上げている最中にソケットが落ちても、オフラインなら待機に戻り一時ファイルを残す', () async {
+      // 9MB 超は multipart。パートの本文を受け取っている途中で相手が切ると、dio は
+      // connectionError ではなく unknown（中身は SocketException）で返す。これも回線の失敗として扱う
+      final data = _bytes(9 * 1024 * 1024 + 7);
+      s.media['big.mp4'] = data;
+      s.cutBodies = 1000;
+      s.cutBodyAfter = 256 * 1024;
+      s.onCut = () => queue.setOnline(false);
+      final t = queue.enqueue('lib', [video('big.mp4')]).single;
+      await until(() =>
+          s.cutBodies < 1000 &&
+          (t.status == WebTaskStatus.queued || t.status == WebTaskStatus.error));
+      expect(t.status, WebTaskStatus.queued, reason: t.error);
+      expect(t.staged, isNotNull);
+      expect(t.staged!.existsSync(), isTrue);
+      expect(queue.activeCount, 1);
+
+      // 戻ったら取り直さずに上げて終わる
+      final fetched = s.mediaRequests.length;
+      s.cutBodies = 0;
+      s.onCut = null;
+      queue.setOnline(true);
+      await run();
+      expect(t.status, WebTaskStatus.done, reason: t.error);
+      expect(s.mediaRequests.length, fetched);
+      expect(s.objects['downloads/big.mp4'], data);
+    });
+
+    test('上げている最中の一度きりの失敗は、オンラインのままでも短く取り直して終える', () async {
+      // 回線の知らせより先に失敗が届いた時や、Wi-Fi から LTE への切り替えで知らせが来ない時に、
+      // 取得の段と同じ短い取り直しで救う
+      s.media['clip.mp4'] = _bytes(2000);
+      s.dropPut = true;
+      s.onPut = () {
+        if (s.objectPuts >= 2) s.dropPut = false;
+      };
+      final t = queue.enqueue('lib', [video('clip.mp4')]).single;
+      await run();
+      expect(t.status, WebTaskStatus.done, reason: t.error);
+      expect(s.objectPuts, 2);
+      // 取り直しても同じ名前で上がり、二重に置かない
+      expect(s.objects.keys.where((k) => k.startsWith('downloads/')), ['downloads/clip.mp4']);
+      expect(s.objects['downloads/clip.mp4'], hasLength(2000));
+    });
+
+    test('続きから送る経路でも、上げている最中の一度きりの断は同じ multipart の続きで取り直して終える', () async {
+      final data = _bytes(9 * 1024 * 1024 + 7);
+      s.media['big.mp4'] = data;
+      s.cutBodies = 1;
+      s.cutBodyAfter = 256 * 1024;
+      final q = WebTransferQueue(
+        api: api,
+        stageDir: tmp,
+        transferApi: ApiClientTransferApi(api),
+        retryDelay: Duration.zero,
+        history: WebHistoryStore(
+            read: () async => historyJson, write: (v) async => historyJson = v),
+      );
+      addTearDown(q.dispose);
+      final t = q.enqueue('lib', [video('big.mp4')]).single;
+      await q.idle().timeout(const Duration(seconds: 20));
+      expect(t.status, WebTaskStatus.done, reason: t.error);
+      // 取り直しは開いていた multipart の続き。作り直して二重に置かない
+      expect(s.multipartCreates, 1);
+      expect(s.objects['downloads/big.mp4'], data);
+    });
+
+    test('オフラインでも回線の失敗ではない status 0（未設定など）は待たせず失敗にする', () async {
+      s.media['clip.mp4'] = _bytes(2000);
+      // 取得後、上げる前の名前の確認の時に接続が外れた状況
+      s.onFolders = () {
+        api.setConnection(null);
+        queue.setOnline(false);
+      };
       final t = queue.enqueue('lib', [video('clip.mp4')]).single;
       await run();
       expect(t.status, WebTaskStatus.error);

@@ -192,6 +192,7 @@ class _ViewerScreenState extends State<ViewerScreen>
     _pager = PageController(initialPage: _index);
     _enterPage(_index);
     widget.source?.addListener(_appendLoaded);
+    widget.app.addListener(_unlockedAfterDefer);
     widget.offline?.changes?.addListener(_offlineChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) => _askMoreIfNearEnd());
   }
@@ -199,6 +200,7 @@ class _ViewerScreenState extends State<ViewerScreen>
   @override
   void dispose() {
     widget.source?.removeListener(_appendLoaded);
+    widget.app.removeListener(_unlockedAfterDefer);
     widget.offline?.changes?.removeListener(_offlineChanged);
     _pager.dispose();
     _review.dispose();
@@ -238,10 +240,35 @@ class _ViewerScreenState extends State<ViewerScreen>
     if (mounted && _index >= _items.length - 3) widget.onNearEnd?.call();
   }
 
+  /// ロック中に来た一覧の更新を、解除まで待たせているか
+  bool _deferredByLock = false;
+
+  // ロック中に復帰の署名URL差し替えが届くと、動画の VideoView が作り直されて
+  // ロックの裏でプレイヤー（OS のメディアセッション）をつなぎ直してしまう。解除後にまとめて反映する（#24 作業B）
+  void _unlockedAfterDefer() {
+    if (!_deferredByLock || widget.app.locked) return;
+    void apply() {
+      if (!mounted || !_deferredByLock || widget.app.locked) return;
+      _deferredByLock = false;
+      _appendLoaded();
+    }
+
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => apply());
+    } else {
+      apply();
+    }
+  }
+
   /// 一覧が先頭から取り直されても並びが崩れんよう、今の末尾より後ろにあるものだけを足す
   void _appendLoaded() {
     final latest = widget.readItems?.call();
     if (latest == null || !mounted) return;
+    if (widget.app.locked) {
+      _deferredByLock = true;
+      return;
+    }
     // 署名URLの引き直しでは並びが変わらないので、同じメディアの行は新しい物へ差し替える（#24 作業B）
     var replaced = false;
     final next = <MediaItem>[];

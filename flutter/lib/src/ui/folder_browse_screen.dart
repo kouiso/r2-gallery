@@ -8,6 +8,7 @@ import '../grid/media_list_body.dart';
 import '../grid/selection_widgets.dart';
 import '../grid/sort_mode.dart';
 import '../grid/state_views.dart';
+import 'open_failed_notice.dart';
 import '../state/app_state.dart';
 import 'viewer_screen.dart';
 
@@ -102,10 +103,30 @@ class _FolderBrowseScreenState extends State<FolderBrowseScreen> {
     super.dispose();
   }
 
+  // 署名URLの引き直しを待つ間の連打で、ビューアが二重に積まれないようにする
+  bool _opening = false;
+
   Future<void> _open(List<MediaItem> sorted, int index) async {
+    if (_opening) return;
+    _opening = true;
+    try {
+      await _openOnce(sorted, index);
+    } finally {
+      _opening = false;
+    }
+  }
+
+  Future<void> _openOnce(List<MediaItem> sorted, int index) async {
     // 控えの一覧から開く時は、期限の切れた署名URLを新しいものに替えてから開く
     final target = await _g.openTarget(sorted, index, lib: widget.lib);
-    if (target == null || !mounted) return;
+    if (!mounted) return;
+    // 引き直しの間にロックされたら開かない（ロック層は下の画面を残すので mounted では防げない）
+    if (widget.app.locked) return;
+    if (target == null) {
+      // 消えていた時も引き直しの失敗も null なので、どちらにも当てはまる文言で知らせる
+      showOpenFailedNotice(context);
+      return;
+    }
     await openViewer(context,
         app: widget.app,
         lib: widget.lib,

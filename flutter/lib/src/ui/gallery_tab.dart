@@ -18,6 +18,7 @@ import '../webdl/web_transfer.dart';
 import 'media_tile.dart';
 import 'theme.dart';
 import 'viewer_screen.dart';
+import 'open_failed_notice.dart';
 import 'write_guard_notice.dart';
 
 /// 写真タブ: 並び替え・日付見出しつきの密なグリッド + 複数選択 + アップロード。
@@ -198,12 +199,32 @@ class _GalleryTabState extends State<GalleryTab> {
 
   Future<void> _refresh() => _stateFor(widget.lib).refresh(widget.lib);
 
+  // 署名URLの引き直しを待つ間の連打で、ビューアが二重に積まれないようにする
+  bool _opening = false;
+
   Future<void> _openPlayer(List<MediaItem> sorted, int index) async {
+    if (_opening) return;
+    _opening = true;
+    try {
+      await _openPlayerOnce(sorted, index);
+    } finally {
+      _opening = false;
+    }
+  }
+
+  Future<void> _openPlayerOnce(List<MediaItem> sorted, int index) async {
     final lib = widget.lib;
     final g = _stateFor(lib);
     // 控えの一覧から開く時は、期限の切れた署名URLを新しいものに替えてから開く
     final target = await g.openTarget(sorted, index, lib: lib);
-    if (target == null || !mounted || widget.lib != lib) return;
+    if (!mounted || widget.lib != lib) return;
+    // 引き直しの間にロックされたら開かない（ロック層は下の画面を残すので mounted では防げない）
+    if (widget.app.locked) return;
+    if (target == null) {
+      // 消えていた時も引き直しの失敗も null なので、どちらにも当てはまる文言で知らせる
+      showOpenFailedNotice(context);
+      return;
+    }
     await openViewer(context,
         app: widget.app,
         lib: lib,

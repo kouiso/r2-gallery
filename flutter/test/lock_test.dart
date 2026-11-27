@@ -74,6 +74,18 @@ class _Api extends ApiClient {
   Future<List<Library>> libraries() async => const [];
 }
 
+/// 初めの [failures] 回は圏外で落ち、その後は一覧を返す。前面への復帰の取り直しを数える
+class _CountLibApi extends ApiClient {
+  var calls = 0;
+  var failures = 0;
+  @override
+  Future<List<Library>> libraries() async {
+    calls++;
+    if (calls <= failures) throw const ApiError(503, 'offline');
+    return const [Library(id: 'photos', title: '写真')];
+  }
+}
+
 // 起動前に保存されている値（PIN や設定）を差し込む
 Map<String, String> _seededValues = {};
 
@@ -81,6 +93,7 @@ Future<AppState> _connected({
   required _FakeAuth auth,
   LockClock? clock,
   bool isWeb = false,
+  ApiClient? api,
 }) async {
   FlutterSecureStorage.setMockInitialValues({
     Keys.endpoint: 'https://w.example',
@@ -88,7 +101,7 @@ Future<AppState> _connected({
     ..._seededValues,
   });
   final app = AppState(
-    api: _Api(),
+    api: api ?? _Api(),
     bakedEndpoint: '',
     bakedToken: '',
     deviceAuth: auth,
@@ -126,6 +139,20 @@ void main() {
           shouldGateAtStart(
               hasPin: true, deviceLockEnabled: false, isWeb: true),
           isTrue);
+    });
+
+    test('web は hidden を裏扱いにする（paused が来ないため）。Android は paused だけ', () {
+      // web は visibilitychange が hidden / resumed にしか写らない
+      expect(isBackgroundedState(AppLifecycleState.hidden, isWeb: true), isTrue);
+      expect(isBackgroundedState(AppLifecycleState.paused, isWeb: true), isTrue);
+      expect(isBackgroundedState(AppLifecycleState.resumed, isWeb: true), isFalse);
+      expect(isBackgroundedState(AppLifecycleState.inactive, isWeb: true), isFalse);
+      // Android の hidden は paused の手前の中間状態。ここで数えると挙動が変わる
+      expect(isBackgroundedState(AppLifecycleState.hidden, isWeb: false), isFalse);
+      expect(isBackgroundedState(AppLifecycleState.paused, isWeb: false), isTrue);
+      expect(isBackgroundedState(AppLifecycleState.inactive, isWeb: false), isFalse);
+      expect(isBackgroundedState(AppLifecycleState.resumed, isWeb: false), isFalse);
+      expect(isBackgroundedState(AppLifecycleState.detached, isWeb: false), isFalse);
     });
 
     test('解除手段が無ければロックできない（行き止まりを作らない）', () {
@@ -301,6 +328,48 @@ void main() {
       clock.advance(relockGraceDefaultMs + 1);
       await app.onForeground();
       expect(app.locked, isTrue);
+    });
+
+    test('猶予を超えて戻ると、ロックが掛かった上で resumed も立つ（差し替えはロックの裏で進む）', () async {
+      final clock = _FakeClock();
+      final app = await _connected(auth: _FakeAuth(), clock: clock);
+      app.unlock();
+      var resumed = 0;
+      final sub = app.resumed.listen((_) => resumed++);
+      app.onBackground();
+      clock.advance(relockGraceDefaultMs + 1);
+      await app.onForeground();
+      await pumpEventQueue();
+      expect(app.canLock, isTrue);
+      expect(app.locked, isTrue);
+      expect(resumed, 1);
+      await sub.cancel();
+    });
+
+    test('画面が閉じられた後に戻った経路でも resumed が立ち、取れていない一覧を取り直す', () async {
+      final clock = _FakeClock();
+      // 起動の先読みと解除の取り直しが圏外で落ちた後の復帰
+      final api = _CountLibApi()..failures = 2;
+      final app = await _connected(auth: _FakeAuth(), clock: clock, api: api);
+      app.unlock();
+      await pumpEventQueue();
+      expect(api.calls, 2);
+      expect(app.librariesFromNet, isFalse);
+      // 失敗から 30 秒以上空いた後の復帰（直後なら取り直しを間引く）
+      final failedAt = DateTime.now();
+      app.nowForRetry = () => failedAt.add(const Duration(seconds: 31));
+      var resumed = 0;
+      final sub = app.resumed.listen((_) => resumed++);
+      app.onBackground();
+      app.onDetached();
+      clock.advance(60000);
+      await app.onForeground();
+      await pumpEventQueue();
+      expect(app.locked, isTrue);
+      expect(resumed, 1);
+      expect(api.calls, 3);
+      expect(app.librariesFromNet, isTrue);
+      await sub.cancel();
     });
 
     test('猶予内に戻ったらロックしない', () async {

@@ -1,3 +1,5 @@
+import 'dart:ui' show AppLifecycleState;
+
 import 'kv.dart';
 
 /// 再ロックまでの猶予の既定値（KMP版 RELOCK_GRACE_DEFAULT_MS と同じ 1 時間）。
@@ -30,6 +32,14 @@ bool shouldGateAtStart({
   required bool isWeb,
 }) =>
     hasPin || (deviceLockEnabled && !isWeb);
+
+/// このライフサイクルの通知を「裏へ回った」として数えるか。
+/// Flutter Web は visibilitychange を hidden / resumed にしか写さず paused が来ないので、
+/// web だけ hidden を裏扱いにする。Android では hidden は paused の手前に必ず通る中間状態で、
+/// 認証ダイアログ等でも出うるため数えない。
+bool isBackgroundedState(AppLifecycleState state, {required bool isWeb}) =>
+    state == AppLifecycleState.paused ||
+    (isWeb && state == AppLifecycleState.hidden);
 
 /// 「今すぐロック」や再ロックが実際に何かをロックできるか。
 /// 認証手段が無いまま画面だけ覆うと、利用者が自力で抜けられなくなる。

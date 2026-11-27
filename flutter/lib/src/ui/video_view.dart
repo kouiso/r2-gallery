@@ -117,6 +117,9 @@ class _VideoViewState extends State<VideoView>
   bool _wasPlaying = false;
   // 署名URLの引き直しで同じ動画が新URLへ変わった時、停止中なら動かし直さないための印（#24 作業B）
   bool? _refreshAutoplay;
+  // 読み込み中（まだ再生を始めていない）にロックが掛かった印。ロックは再生の意図を取り消すので、
+  // 解除後の URL 差し替えで null の _refreshAutoplay が「自動再生する」に化けないよう覚えておく
+  bool _startCancelledByLock = false;
   // 初期化が終わる前に背面へ回ることがあるので、コントローラの状態と別に覚えておく
   bool _background = false;
   int _resumeGeneration = 0;
@@ -156,6 +159,7 @@ class _VideoViewState extends State<VideoView>
     _session?.addListener(_onPlaybackChanged);
     _initFailed = false;
     _started = false;
+    _startCancelledByLock = false;
     _initializing = false;
     c.addListener(_onTick);
     // PageViewの隣ページは準備だけに留め、可視動画のdecoder所有権を奪わない。
@@ -210,13 +214,16 @@ class _VideoViewState extends State<VideoView>
     if (_started || !widget.active || isAppLocked) return;
     if (!_c.value.isInitialized) return;
     _started = true;
+    // ロックで取り消された開始は、読み込みが解除の後に終わっても自動で鳴らさない
+    final cancelledByLock = _startCancelledByLock;
+    _startCancelledByLock = false;
     // 読み込み中に背面へ回っていたら、ここで鳴らさず戻った時に再生する
     if (_background) {
       _wasPlaying = true;
       return;
     }
     // URL差し替えで作り直した直後に元が止まっていたなら、動かし直さない
-    final auto = _refreshAutoplay ?? true;
+    final auto = _refreshAutoplay ?? !cancelledByLock;
     _refreshAutoplay = null;
     if (!auto) return;
     unawaited(_resumeAfterForeground(_c, ++_resumeGeneration));
@@ -384,6 +391,7 @@ class _VideoViewState extends State<VideoView>
     }
     // 解除後に勝手に鳴り出さんよう、背面から戻った時の再開の印も消す
     _wasPlaying = false;
+    if (!_started && widget.active) _startCancelledByLock = true;
   }
 
   @override
@@ -396,6 +404,9 @@ class _VideoViewState extends State<VideoView>
       if (_c.value.isInitialized) {
         _resumePosition = _c.value.position;
         _refreshAutoplay = _c.value.isPlaying;
+      } else if (_startCancelledByLock) {
+        // 読み込み中にロックされた動画は、差し替えなくても解除後に鳴らない。差し替えでも鳴らさない
+        _refreshAutoplay = false;
       }
       _disposeController();
       _create();

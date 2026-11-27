@@ -44,6 +44,10 @@ class AlbumsHomeState extends ChangeNotifier with _SafeNotify {
   String? error;
   int _epoch = 0;
 
+  /// 作成・名前変更・削除で進める。表紙の取り直しが飛んでいる間に手元で変えた一覧を、
+  /// 変える前の時点の答えで上書きしないための印（load と違い取り直しの世代は進めない）
+  int _mutations = 0;
+
   Future<void> load(String lib) async {
     final e = ++_epoch;
     if (this.lib != lib) {
@@ -73,15 +77,45 @@ class AlbumsHomeState extends ChangeNotifier with _SafeNotify {
     notifyListeners();
   }
 
+  bool _resigning = false;
+
   /// 前面へ戻った時の復帰。表紙URLが切れている時だけ取り直す（#24 作業B）。
   /// フォルダ名にURLは無いので、表紙だけ見れば十分。
-  Future<void> refreshIfExpired(String lib) {
-    if (loading) return Future.value();
-    if (albums.any(
+  /// 裏の手入れなので、読み込み中の表示にはせず、断られた時（認証切れなど）だけ帯で見せる。
+  /// 回線の不調なら今のアルバムを残す（`load` だと失敗のたびに帯が出て一覧が消える見た目になる）。
+  Future<void> refreshIfExpired(String lib) async {
+    if (loading || _resigning || this.lib != lib) return;
+    if (!albums.any(
         (a) => a.coverUrl != null && signedUrlExpired(a.coverUrl!))) {
-      return load(lib);
+      return;
     }
-    return Future.value();
+    _resigning = true;
+    final e = ++_epoch;
+    final m = _mutations;
+    try {
+      final got = await Future.wait([
+        api.albums(lib),
+        api.folder(lib, prefix: ''),
+      ]);
+      if (e != _epoch || m != _mutations) return;
+      final a = got[0];
+      final f = got[1];
+      if (a is List<Album>) albums = a;
+      if (f is FolderPage) folders = f.folders;
+      // 取り直せたので、前の拒否で出した帯を残さない（load と同じ）
+      error = null;
+      notifyListeners();
+    } on Object catch (err) {
+      if (e != _epoch || m != _mutations) return;
+      if (isClientRejection(err)) {
+        error = err.toString();
+        notifyListeners();
+      } else {
+        debugPrint('albums resign stopped: $err');
+      }
+    } finally {
+      _resigning = false;
+    }
   }
 
   /// 失敗時は画面に出す文言を返す。成功したら一覧を取り直す。
@@ -104,6 +138,7 @@ class AlbumsHomeState extends ChangeNotifier with _SafeNotify {
   /// 結果を待たずに一覧へ足し、失敗したら外す。作成は id が要るので仮の id で出して差し替える。
   Future<String?> create(String lib, String title) async {
     final tempId = 'pending:${++_tempSeq}';
+    _mutations++;
     pending.add(tempId);
     albums = [...albums, Album(id: tempId, title: title, readOnly: false)];
     notifyListeners();
@@ -130,6 +165,7 @@ class AlbumsHomeState extends ChangeNotifier with _SafeNotify {
   Future<String?> rename(String lib, String albumId, String title) async {
     final before = albums.where((a) => a.id == albumId).firstOrNull;
     if (before == null) return null;
+    _mutations++;
     _replace(albumId, _withTitle(before, title));
     try {
       await api.albumRename(lib, albumId, title);
@@ -148,6 +184,7 @@ class AlbumsHomeState extends ChangeNotifier with _SafeNotify {
     final at = albums.indexWhere((a) => a.id == albumId);
     if (at < 0) return null;
     final removed = albums[at];
+    _mutations++;
     albums = [...albums]..removeAt(at);
     notifyListeners();
     try {
@@ -301,10 +338,25 @@ abstract class _PagedMediaState extends ChangeNotifier with _SafeNotify {
   /// 前面へ戻った時の復帰。載っている行のURLが切れている時だけ、先頭から
   /// 載っている分を覆える所まで取り直して各行を新しいURLへ差し替える。
   /// 並び・cursor・loaded はそのまま残す（#24 作業B）。
-  Future<void> refreshIfExpired() async {
-    if (!loaded || loading || _disposed || items.isEmpty || !hasExpiredUrls) {
-      return;
+  Future<void> refreshIfExpired() {
+    if (!loaded || loading || _disposed || items.isEmpty) {
+      return Future.value();
     }
+    // 走っている間に重ねて頼まれても同じ取り直しを待たせる
+    final running = _resigning;
+    if (running != null) return running;
+    if (!hasExpiredUrls) return Future.value();
+    final run = _resignLoaded();
+    _resigning = run;
+    return run.whenComplete(() {
+      if (identical(_resigning, run)) _resigning = null;
+    });
+  }
+
+  /// 走っている署名URLの差し替え。開く時に終わりを待ってから、その1件だけの引き直しへ進むため
+  Future<void>? _resigning;
+
+  Future<void> _resignLoaded() async {
     final e = _epoch;
     final remaining = {for (final it in items) _rowId(it)};
     final byKey = <String, MediaItem>{};
@@ -325,9 +377,13 @@ abstract class _PagedMediaState extends ChangeNotifier with _SafeNotify {
       }
     } on Object catch (err) {
       if (e != _epoch || _disposed) return;
-      error = err.toString();
-      notifyListeners();
-      return;
+      // 写真タブと同じく、断られた時だけ帯で見せ、回線の不調なら取れた分だけ替える（#24 作業B）
+      if (isClientRejection(err)) {
+        error = err.toString();
+        notifyListeners();
+        return;
+      }
+      debugPrint('album resign stopped: $err');
     }
     if (byKey.isEmpty) return;
     items = [for (final it in items) byKey[_rowId(it)] ?? it];
@@ -335,6 +391,45 @@ abstract class _PagedMediaState extends ChangeNotifier with _SafeNotify {
   }
 
   String _rowId(MediaItem it) => '${it.lib ?? lib}:${it.key}';
+
+  /// タップした行で開く一覧と位置。行の署名URLが切れていればその1件だけ引き直して差し替える。
+  /// 復帰の差し替えが途中で切れると切れたURLの行が残り、そのまま開くと原本を読めないため
+  /// （写真タブの GalleryState.openTarget と同じ扱い。#24 作業B）。消えていた・引けない時は null。
+  Future<({List<MediaItem> items, int index})?> openTarget(MediaItem it) async {
+    int indexIn(List<MediaItem> list) =>
+        list.indexWhere((x) => _rowId(x) == _rowId(it));
+    if (!signedUrlExpired(it.url)) {
+      final at = indexIn(items);
+      return at < 0 ? null : (items: items, index: at);
+    }
+    // 復帰の差し替えが走っていれば終わりを待つ。直っていればそのまま開き、
+    // 直らなかった時だけ下でその1件を引き直す（#24 決めた事 5）
+    final resigning = _resigning;
+    if (resigning != null) {
+      try {
+        await resigning;
+      } catch (_) {}
+      if (_disposed) return null;
+      final at = indexIn(items);
+      if (at >= 0 && !signedUrlExpired(items[at].url)) {
+        return (items: items, index: at);
+      }
+    }
+    final MediaItem? fresh;
+    try {
+      fresh = await api.objectAt(it.lib ?? lib, it.key);
+    } catch (_) {
+      return null;
+    }
+    if (_disposed || fresh == null) return null;
+    final row = it.lib != null && fresh.lib == null
+        ? MediaItem.fromJson({...fresh.toJson(), 'lib': it.lib})
+        : fresh;
+    items = [for (final x in items) _rowId(x) == _rowId(it) ? row : x];
+    notifyListeners();
+    final at = indexIn(items);
+    return at < 0 ? null : (items: items, index: at);
+  }
 
   @override
   void dispose() {

@@ -94,6 +94,13 @@ class AppState extends ChangeNotifier {
   /// ロック解除や復帰の機会に取り直す（#24 作業A）。
   bool librariesFromNet = false;
 
+  /// 回線の一覧を取れなかった最後の時刻。圏外のまま通知シェードなどで前面に戻るたびに
+  /// 取りに行かないよう、復帰の取り直しだけこの時刻から間を空ける（解除・再試行は空けない）
+  DateTime? _librariesFailedAt;
+  static const _librariesRetryGap = Duration(seconds: 30);
+  @visibleForTesting
+  DateTime Function() nowForRetry = DateTime.now;
+
   /// 接続済みか、接続なしでの利用を選んだか。ロックや窓の保護はこの間ずっと効かせる。
   bool get sessionOpen => connected || browseOnly;
 
@@ -185,6 +192,7 @@ class AppState extends ChangeNotifier {
     librariesLoading = false;
     libraries = [];
     librariesFromNet = false;
+    _librariesFailedAt = null;
     activeLib = null;
     startupError = null;
     notifyListeners();
@@ -262,8 +270,11 @@ class AppState extends ChangeNotifier {
   /// 前面へ戻ってロック判定が済んだ合図。画面はこれに乗って期限切れURLを差し替える。
   Stream<void> get resumed => _resumed.stream;
 
+  // ロック中に戻った時も流す。長く裏にいた後はふつうロックが掛かるので、ロック中に止めると
+  // 一番要る場面で差し替えが走らない。一覧は Offstage で残り、画面はロックが覆うので、
+  // ライブラリの先読みと同じく裏で URL を取り直してよい（#24 詳細設計の端の場合「ロック中に戻った」）
   void _emitResumed() {
-    if (sessionOpen && !locked && !_resumed.isClosed) _resumed.add(null);
+    if (sessionOpen && !_resumed.isClosed) _resumed.add(null);
   }
 
   final StreamController<String> _contentChanged =
@@ -401,6 +412,8 @@ class AppState extends ChangeNotifier {
       Kv.get(Keys.token),
       _loadLockSettings(),
     ).wait;
+    // 作業Dで起動の待ちを区間に分けて測るため、読み出しが終わった時刻をここに残す
+    PerfLog.mark('init.read');
     if (intent != _connectionIntent) return;
     if (ep != null && tk != null) {
       api.setConnection(Connection(ep, tk));
@@ -545,6 +558,8 @@ class AppState extends ChangeNotifier {
     }
     if (intent != _connectionIntent) return connectFailedMessage;
     api.setConnection(next);
+    // 一覧の控えは _lastEndpoint が無いと書かれない。繋いだ所で必ず入れる
+    _lastEndpoint = next.endpoint;
     connected = true;
     bakedProbeFailed = false;
     notifyListeners();
@@ -625,6 +640,8 @@ class AppState extends ChangeNotifier {
     await _persistConnection(next, intent: intent);
     if (connected || intent != _connectionIntent) return;
     api.setConnection(next);
+    // 焼き込みの初回接続でも控えが書かれるよう、保存済み接続の起動と同じく覚える
+    _lastEndpoint = next.endpoint;
     connected = true;
     locked = _gateAtStart;
     _loadLibraries();
@@ -746,6 +763,8 @@ class AppState extends ChangeNotifier {
       if (!current()) return;
       libraries = loaded;
       librariesFromNet = true;
+      _librariesFailedAt = null;
+      PerfLog.mark('libs.net', {'n': loaded.length});
       _offlineLibrariesKnown = true;
       activeLib = loaded.any((l) => l.id == saved)
           ? saved
@@ -754,6 +773,7 @@ class AppState extends ChangeNotifier {
       unawaited(_saveLibrarySnapshot());
     } on Object catch (e) {
       if (!current()) return;
+      _librariesFailedAt = nowForRetry();
       if (libraries.isEmpty) {
         startupError = 'ライブラリを取得できませんでした（${describeStartupError(e)}）';
       }
@@ -790,7 +810,8 @@ class AppState extends ChangeNotifier {
       final raw = await Kv.get(Keys.libraries);
       if (raw == null) return;
       final j = jsonDecode(raw);
-      if (j is! Map || j['endpoint'] != endpoint) return;
+      // 形の違う控え（v が 1 でない）は読み違えるので使わず、回線の答えを待つ
+      if (j is! Map || j['v'] != 1 || j['endpoint'] != endpoint) return;
       final libs = (j['libraries'] as List?)
               ?.whereType<Map>()
               .map((m) => Library.fromJson(Map<String, dynamic>.from(m)))
@@ -802,6 +823,7 @@ class AppState extends ChangeNotifier {
       final savedActive = await Kv.get(Keys.library) ?? j['activeLib'] as String?;
       activeLib =
           libs.any((l) => l.id == savedActive) ? savedActive : libs.first.id;
+      PerfLog.mark('libs.cached', {'n': libs.length});
     } on Object catch (e) {
       debugPrint('library snapshot restore failed: $e');
     }
@@ -817,10 +839,24 @@ class AppState extends ChangeNotifier {
     locked = false;
     _backgroundedAt = null;
     notifyListeners();
-    // ロック中の先読みが通っていれば取り直さない。控えだけで起動した時は回線の一覧を取り直す
-    if (libraries.isEmpty || activeLib == null || !librariesFromNet) {
-      _loadLibraries();
+    _refetchLibrariesIfStale();
+  }
+
+  /// ロック中の先読みが通っていれば取り直さない。控えだけで起動した時は回線の一覧を取り直す。
+  /// 控えがある時は、取得中に頼み直すと世代が進んで先の答えが捨てられ同じ要求が2本飛ぶので重ねない
+  /// （失敗したら次の復帰で取り直す）。一覧が全く無い時は、固まった要求を待つと
+  /// 何分も何も出せないので、重ねてでも頼み直す。
+  void _refetchLibrariesIfStale({bool throttle = false}) {
+    final stale = libraries.isEmpty || activeLib == null || !librariesFromNet;
+    if (!stale) return;
+    final failedAt = _librariesFailedAt;
+    if (throttle &&
+        failedAt != null &&
+        nowForRetry().difference(failedAt) < _librariesRetryGap) {
+      return;
     }
+    if (libraries.isNotEmpty && librariesLoading) return;
+    _loadLibraries();
   }
 
   /// 端末の画面ロックで解除する。成功したらロックを外す。
@@ -966,11 +1002,12 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       await refreshDeviceLockAvailable();
       notifyListeners();
-      _emitResumed();
+      // 裏にいた時間は測っていない。ここでも署名URLとライブラリの取り直しは要る
+      _settledForeground();
       return;
     }
     if (at == null || !sessionOpen) {
-      _emitResumed();
+      _settledForeground();
       return;
     }
     final elapsed = elapsedBetween(await at, await _clock.read());
@@ -986,7 +1023,20 @@ class AppState extends ChangeNotifier {
     }
     await refreshDeviceLockAvailable();
     notifyListeners();
+    _settledForeground(awayMs: elapsed);
+  }
+
+  /// 前面へ戻ってロックの判定が済んだ後の仕上げ。どの戻り方でも同じ事をするよう1か所に集める。
+  void _settledForeground({int? awayMs}) {
+    if (!sessionOpen) return;
+    PerfLog.mark('resume', {
+      'awayMs': ?awayMs,
+      'locked': locked,
+    });
     _emitResumed();
+    // 控えだけで起動して回線の一覧をまだ取れていない時は、戻ったついでに取り直す。
+    // 一覧のメタ情報だけなので、起動の先読みと同じくロック中でも取る（#24 決めた事 A-4a）
+    if (connected) _refetchLibrariesIfStale(throttle: true);
   }
 
   Future<void> refreshPinState() async {
@@ -1272,6 +1322,7 @@ class GalleryState extends ChangeNotifier {
     items = hit.items;
     folders = hit.folders;
     total = hit.total;
+    PerfLog.mark('grid.cached', {'n': hit.items.length});
     _serverSorted = hit.serverSort == sort.apiValue;
     // 控えの cursor は古くて当てにならない。続きは回線の先頭ページが取れてから頼む
     cursor = null;
@@ -1385,9 +1436,20 @@ class GalleryState extends ChangeNotifier {
     if (_disposed || loading || _softRun != null || items.isEmpty) {
       return Future.value();
     }
+    // 走っている間に重ねて頼まれても同じ取り直しを待たせる
+    final running = _resigning;
+    if (running != null) return running;
     if (!hasExpiredUrls) return Future.value();
-    return _resignLoaded(lib);
+    final run = _resignLoaded(lib);
+    _resigning = run;
+    return run.whenComplete(() {
+      if (identical(_resigning, run)) _resigning = null;
+    });
   }
+
+  /// 走っている署名URLの差し替え。開く時に、終わるのを待ってからその1件だけの引き直しへ進むため
+  /// （待たずに引き直すと、差し替えが替える行まで1件ずつ重ねて取る）。
+  Future<void>? _resigning;
 
   /// 載っている行を ID で新しい行へ差し替える。消えた行や続きのページの
   /// 有無はここでは変えない（差分は softRefresh の仕事）。取り直しは
@@ -1398,9 +1460,12 @@ class GalleryState extends ChangeNotifier {
     final byKey = <String, MediaItem>{};
     final loaded = items.length;
     var seen = 0;
+    var pages = 0;
+    final watch = Stopwatch()..start();
     String? c;
     try {
       while (remaining.isNotEmpty && seen < loaded) {
+        pages++;
         final page = await api.folder(lib,
             prefix: prefix,
             cursor: c,
@@ -1418,10 +1483,22 @@ class GalleryState extends ChangeNotifier {
       }
     } catch (err) {
       if (e != epoch || _disposed) return;
-      error = err.toString();
-      notifyListeners();
-      return;
+      // 断られた（認証切れなど 4xx）は直すのに利用者の手が要るので、今まで通り帯で見せる
+      if (isClientRejection(err)) {
+        error = err.toString();
+        notifyListeners();
+        return;
+      }
+      // 回線や相手の一時の不調なら、差し替えは裏の手入れなので帯を出さず取れた分だけ替える。
+      // 残りは開く時に openTarget が1件ずつ引き直す（#24 作業B の端の場合）
+      debugPrint('resign stopped: $err');
     }
+    PerfLog.mark('resign.done', {
+      'n': byKey.length,
+      'left': remaining.length,
+      'pages': pages,
+      'ms': watch.elapsedMilliseconds,
+    });
     if (byKey.isEmpty) return;
     items = [
       for (final it in items) byKey[_rowId(it)] ?? it,
@@ -1439,6 +1516,20 @@ class GalleryState extends ChangeNotifier {
     if (!signedUrlExpired(it.url)) {
       return (items: shown, index: index);
     }
+    // 復帰の差し替えが走っていれば終わりを待つ。それで直っていればそのまま開き、
+    // 直らなかった時だけ下でその1件を引き直す（#24 決めた事 5）
+    final resigning = _resigning;
+    if (resigning != null) {
+      try {
+        await resigning;
+      } catch (_) {}
+      if (_disposed) return null;
+      final now = ordered();
+      final at = now.indexWhere((x) => x.key == it.key && x.lib == it.lib);
+      if (at >= 0 && !signedUrlExpired(now[at].url)) {
+        return (items: now, index: at);
+      }
+    }
     if (showingCached) {
       while (showingCached && loading) {
         final r = _revalidation;
@@ -1448,7 +1539,9 @@ class GalleryState extends ChangeNotifier {
       if (_disposed) return null;
       final now = ordered();
       final at = now.indexWhere((x) => x.key == it.key && x.lib == it.lib);
-      return at < 0 ? null : (items: now, index: at);
+      if (at < 0) return null;
+      // 取り直しが失敗して控えのまま止まった時は、切れたURLのまま開かず下でその1件を引き直す
+      if (!signedUrlExpired(now[at].url)) return (items: now, index: at);
     }
     // 先頭ページへ巻き戻す refresh は読み進めた位置を失うので、その行だけを引き直して差し替える
     final rowLib = it.lib ?? lib;

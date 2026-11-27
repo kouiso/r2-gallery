@@ -1,0 +1,7 @@
+2026-11-27T23:38:19.702+09:00 [log] r2g.perf {"t":0,"ev":"main"}
+2026-11-27T23:38:19.873+09:00 [log] r2g.perf {"t":168,"ev":"init.read"}
+2026-11-27T23:38:21.419+09:00 [log] r2g.perf {"t":1717,"ev":"libs.net","n":2}
+2026-11-27T23:38:47.839+09:00 [log] ev229.visibilitychange hidden
+2026-11-27T23:40:10.184+09:00 [log] r2g.perf {"t":110480,"ev":"resume","awayMs":82345,"locked":false}
+2026-11-27T23:40:10.187+09:00 [log] ev229.visibilitychange visible
+2026-11-27T23:40:10.407+09:00 [log] r2g.perf {"t":110705,"ev":"resign.done","n":200,"left":0,"pages":1,"ms":222}

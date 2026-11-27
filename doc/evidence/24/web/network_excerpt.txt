@@ -1,0 +1,26 @@
+# Worker (127.0.0.1:8787) へのリクエスト抜粋。署名 s= は <redacted>。時刻は JST +09:00。
+# /t/（サムネ）は件数を末尾にまとめ、先頭と復帰直後の数件だけ載せる。
+
+2026-11-27T23:38:20.393+09:00 GET 200 XHR http://127.0.0.1:8787/v1/libraries
+2026-11-27T23:38:20.393+09:00 OPTIONS 204 Other http://127.0.0.1:8787/v1/libraries
+2026-11-27T23:38:21.207+09:00 GET 200 XHR http://127.0.0.1:8787/v1/libraries
+2026-11-27T23:38:21.843+09:00 GET 200 XHR http://127.0.0.1:8787/v1/a/folders?prefix=&recursive=1&order=recent&sort=new
+2026-11-27T23:38:21.843+09:00 OPTIONS 204 Other http://127.0.0.1:8787/v1/a/folders?prefix=&recursive=1&order=recent&sort=new
+2026-11-27T23:40:10.357+09:00 GET 200 XHR http://127.0.0.1:8787/v1/a/folders?prefix=&recursive=1&order=recent&sort=new
+2026-11-27T23:40:28.691+09:00 GET 200 Image http://127.0.0.1:8787/m/a/photo-027.jpg?e=1795790520&s=<redacted>
+2026-11-27T23:40:29.175+09:00 OPTIONS 204 Other http://127.0.0.1:8787/v1/a/meta?key=photo-027.jpg
+2026-11-27T23:40:29.179+09:00 GET 500 XHR http://127.0.0.1:8787/v1/a/meta?key=photo-027.jpg
+2026-11-27T23:40:30.547+09:00 GET 500 XHR http://127.0.0.1:8787/v1/a/meta?key=photo-027.jpg
+2026-11-27T23:40:30.884+09:00 GET 500 XHR http://127.0.0.1:8787/v1/a/meta?key=photo-027.jpg
+
+# --- サムネ（/t/a/）---
+182 件  GET 200  e=1795790400
+18 件  GET 200  e=1795790520
+# 先頭 3 件
+2026-11-27T23:38:22.455+09:00 GET 200 Image http://127.0.0.1:8787/t/a/photo-200.jpg?e=1795790400&s=<redacted>
+2026-11-27T23:38:22.455+09:00 GET 200 Image http://127.0.0.1:8787/t/a/photo-199.jpg?e=1795790400&s=<redacted>
+2026-11-27T23:38:22.455+09:00 GET 200 Image http://127.0.0.1:8787/t/a/photo-198.jpg?e=1795790400&s=<redacted>
+# 復帰後に新しい e= で取った最初の 3 件
+2026-11-27T23:40:18.934+09:00 GET 200 Image http://127.0.0.1:8787/t/a/photo-018.jpg?e=1795790520&s=<redacted>
+2026-11-27T23:40:18.934+09:00 GET 200 Image http://127.0.0.1:8787/t/a/photo-017.jpg?e=1795790520&s=<redacted>
+2026-11-27T23:40:18.935+09:00 GET 200 Image http://127.0.0.1:8787/t/a/photo-016.jpg?e=1795790520&s=<redacted>

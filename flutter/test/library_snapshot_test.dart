@@ -23,6 +23,18 @@ class _LibApi extends ApiClient {
   }
 }
 
+/// 接続の確かめ（probe）が通り、ライブラリもすぐ返す API。
+class _BakedApi extends ApiClient {
+  _BakedApi(this.netLibs);
+  final List<Library> netLibs;
+
+  @override
+  Future<bool> probe(String endpoint, String token) async => true;
+
+  @override
+  Future<List<Library>> libraries() async => netLibs;
+}
+
 Map<String, dynamic> _snap(
         String endpoint, List<Map<String, dynamic>> libs, String? active) =>
     {'v': 1, 'endpoint': endpoint, 'activeLib': active, 'libraries': libs};
@@ -101,7 +113,7 @@ void main() {
     expect(app.connected, isFalse);
   });
 
-  test('控えだけで起動した時はロック解除で回線の一覧を取り直す', () async {
+  test('控えだけで起動し、起動の取得がまだ終わっていなければ解除で重ねて頼まずその答えを使う', () async {
     FlutterSecureStorage.setMockInitialValues({
       Keys.endpoint: 'https://w.example',
       Keys.token: 'tk',
@@ -123,9 +135,40 @@ void main() {
     expect(app2.librariesFromNet, isFalse);
     final before = api2.callCount;
     app2.unlock();
+    // 取得中に頼み直すと世代が進んで先の答えが捨てられ、同じ要求が2本飛んでいた。
+    // 起動の取得が失敗していた時の取り直しは resume_resign_test の
+    // 「控えだけで起動して一覧を取れていなければ、前面へ戻った時に取り直す」が見る
     api2.gate.complete();
     await pumpEventQueue();
-    expect(api2.callCount, before + 1);
+    expect(api2.callCount, before);
     expect(app2.librariesFromNet, isTrue);
+  });
+
+  test('焼き込み接続の初回でも、取れた一覧を控えに書く', () async {
+    // 焼き込みの接続は _lastEndpoint を入れず、控えが黙って書かれなかった（次の起動で libs.cached が出ない）
+    final api = _BakedApi(const [Library(id: 'net', title: 'Net')]);
+    final app = AppState(
+        api: api, bakedEndpoint: 'https://baked.example', bakedToken: 'tk');
+
+    await app.init();
+    expect(app.connected, isTrue);
+    await pumpEventQueue();
+    expect(app.librariesFromNet, isTrue);
+    final saved = jsonDecode((await Kv.get(Keys.libraries))!) as Map;
+    expect(saved['endpoint'], 'https://baked.example');
+    expect(saved['activeLib'], 'net');
+    expect((saved['libraries'] as List).single['id'], 'net');
+  });
+
+  test('手入力の接続（connect）の初回でも、取れた一覧を控えに書く', () async {
+    final api = _BakedApi(const [Library(id: 'net', title: 'Net')]);
+    final app = AppState(api: api, bakedEndpoint: '', bakedToken: '');
+    await app.init();
+
+    expect(await app.connect('https://manual.example', 'tk'), isNull);
+    await pumpEventQueue();
+    final saved = jsonDecode((await Kv.get(Keys.libraries))!) as Map;
+    expect(saved['endpoint'], 'https://manual.example');
+    expect((saved['libraries'] as List).single['id'], 'net');
   });
 }

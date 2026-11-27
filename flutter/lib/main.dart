@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:app_links/app_links.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
@@ -9,6 +10,7 @@ import 'src/state/app_state.dart';
 import 'src/playback/mobile_playback.dart';
 import 'src/state/pairing.dart';
 import 'src/store/lock_platform.dart';
+import 'src/store/lock_policy.dart';
 import 'src/ui/app_lock_layer.dart';
 import 'src/ui/connect_screen.dart';
 import 'src/ui/home_shell.dart';
@@ -139,7 +141,8 @@ class _R2GalleryAppState extends State<R2GalleryApp>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // inactive は認証ダイアログや通知シェードでも出るので、完全に裏へ行った paused だけ数える
-    if (state == AppLifecycleState.paused) {
+    // web は paused が来ず hidden が裏扱い。そのままだと復帰の計測も再ロックの判定も走らない
+    if (isBackgroundedState(state, isWeb: kIsWeb)) {
       app.onBackground();
     } else if (state == AppLifecycleState.detached) {
       app.onDetached();

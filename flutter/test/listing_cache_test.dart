@@ -241,6 +241,27 @@ void main() {
       expect(signedUrlExpired(t.items[1].url), isFalse);
     });
 
+    test('控えの取り直しが失敗して控えのまま止まっても、切れた行はその1件を引き直して開く', () async {
+      final cache = MemoryListingCache();
+      await _seed(cache, [_it('a.jpg', e: _past)]);
+      final api = _GateApi('https://w1');
+      final g = GalleryState(api, cache: cache);
+      final f = g.refresh('a');
+      await pumpEventQueue();
+      api.fail();
+      await f;
+      expect(g.showingCached, isTrue);
+      expect(g.loading, isFalse);
+
+      final target = g.openTarget(g.ordered(), 0, lib: 'a');
+      await pumpEventQueue();
+      api.answer([_it('a.jpg')]);
+      final t = await target;
+      expect(t!.items[0].key, 'a.jpg');
+      expect(signedUrlExpired(t.items[0].url), isFalse,
+          reason: '切れたURLのまま開かない');
+    });
+
     test('取り直したら消えていた行は開かない', () async {
       final cache = MemoryListingCache();
       await _seed(cache, [_it('a.jpg', e: _past)]);

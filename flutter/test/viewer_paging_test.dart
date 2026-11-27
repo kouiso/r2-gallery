@@ -345,6 +345,61 @@ void main() {
       expect(find.text('c.mp4'), findsOneWidget);
     });
 
+    testWidgets('ロック中に届いた署名URLの差し替えは解除まで待ち、動画を作り直さない', (tester) async {
+      final ctl = _Controllers();
+      MediaItem v(String url) =>
+          MediaItem(key: 'a.mp4', type: 'video', url: url);
+      final feed = _Feed([v('https://w.example/m/a.mp4?e=1')]);
+      final app = _LockApp();
+      await _pump(
+        tester,
+        _viewer(
+          app: app,
+          items: feed.items,
+          initialIndex: 0,
+          source: feed,
+          readItems: () => feed.items,
+          controllerFactory: ctl.create,
+        ),
+      );
+      expect(ctl.made, hasLength(1));
+
+      app.setLocked(true);
+      feed.load([v('https://w.example/m/a.mp4?e=2')]);
+      await tester.pump();
+      await tester.pump();
+      // ロックの裏でプレイヤーをつなぎ直さない
+      expect(ctl.made, hasLength(1));
+
+      app.setLocked(false);
+      await tester.pump();
+      await tester.pump();
+      // 解除後に新しいURLで作り直す
+      expect(ctl.made, hasLength(2));
+      expect(ctl.made.last.dataSource, contains('e=2'));
+    });
+
+    testWidgets('ロックしていなければ、差し替えはその場で動画に反映される', (tester) async {
+      final ctl = _Controllers();
+      MediaItem v(String url) =>
+          MediaItem(key: 'a.mp4', type: 'video', url: url);
+      final feed = _Feed([v('https://w.example/m/a.mp4?e=1')]);
+      await _pump(
+        tester,
+        _viewer(
+          items: feed.items,
+          initialIndex: 0,
+          source: feed,
+          readItems: () => feed.items,
+          controllerFactory: ctl.create,
+        ),
+      );
+      feed.load([v('https://w.example/m/a.mp4?e=2')]);
+      await tester.pump();
+      await tester.pump();
+      expect(ctl.made, hasLength(2));
+    });
+
     testWidgets('一覧が先頭から取り直されても並びは崩れない', (tester) async {
       final ctl = _Controllers();
       final feed = _Feed([_video('a.mp4'), _video('b.mp4')]);
@@ -542,6 +597,48 @@ void main() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       expect(c.value.isPlaying, isFalse);
+    });
+
+    testWidgets('読み込み中にロックされた動画は、解除後のURL差し替えでも鳴らさない', (tester) async {
+      MediaItem v(String url) =>
+          MediaItem(key: 'a.mp4', type: 'video', url: url);
+      final feed = _Feed([v('https://w.example/m/a.mp4?e=1')]);
+      final app = _LockApp();
+      final gate = Completer<void>();
+      final made = <_FakeController>[];
+      // 最初の1本だけ読み込みを止めておき、差し替え後の1本はすぐ読み込み終わる
+      _FakeController create(String url) {
+        final c = made.isEmpty ? _GatedController(url, gate) : _FakeController(url);
+        made.add(c);
+        return c;
+      }
+
+      await _pumpLocked(
+        tester,
+        app,
+        _viewer(
+          app: app,
+          items: feed.items,
+          initialIndex: 0,
+          source: feed,
+          readItems: () => feed.items,
+          controllerFactory: create,
+        ),
+      );
+      expect(made.single.value.isInitialized, isFalse);
+
+      app.setLocked(true);
+      feed.load([v('https://w.example/m/a.mp4?e=2')]);
+      await tester.pump();
+      expect(made, hasLength(1));
+
+      app.setLocked(false);
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+      expect(made, hasLength(2));
+      expect(made.last.value.isInitialized, isTrue);
+      expect(made.last.log, isNot(contains('play')));
     });
 
     testWidgets('ロック中に読み込みが終わった動画は鳴らさない', (tester) async {

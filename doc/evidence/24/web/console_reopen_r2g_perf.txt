@@ -1,0 +1,9 @@
+2026-11-27T23:41:10.823+09:00 [step] navigate again with the SAME profile as run2 (snapshot present)
+2026-11-27T23:41:11.573+09:00 [log] r2g.perf {"t":0,"ev":"main"}
+2026-11-27T23:41:11.627+09:00 [log] r2g.perf {"t":42,"ev":"init.read"}
+2026-11-27T23:41:11.627+09:00 [log] r2g.perf {"t":44,"ev":"libs.cached","n":2}
+2026-11-27T23:41:11.704+09:00 [log] r2g.perf {"t":134,"ev":"grid.cached","n":200}
+2026-11-27T23:41:12.575+09:00 [net] GET http://127.0.0.1:8787/v1/libraries
+2026-11-27T23:41:12.575+09:00 [net] GET http://127.0.0.1:8787/v1/a/folders?prefix=&recursive=1&order=recent&sort=new
+2026-11-27T23:41:12.857+09:00 [log] r2g.perf {"t":1287,"ev":"libs.net","n":2}
+2026-11-27T23:41:13.114+09:00 [step] screenshot 06_reopen_cached_1.8s.png

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../api/models.dart';
 import '../state/app_state.dart';
 import '../state/write_guard.dart';
+import '../ui/open_failed_notice.dart';
 import '../ui/write_guard_notice.dart';
 import '../ui/album_picker.dart';
 import '../ui/viewer_screen.dart' show openViewer;
@@ -58,6 +59,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
       albumId: widget.album.id);
 
   bool _selecting = false;
+  bool _opening = false;
   StreamSubscription<void>? _resumeSub;
 
   @override
@@ -232,12 +234,31 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
             loadingMore: s.loadingMore,
             onRefresh: s.refresh,
             onNearEnd: s.loadMore,
-            onOpen: (it) => openViewer(context,
-                app: widget.app,
-                lib: widget.lib,
-                items: items,
-                index: items.indexOf(it).clamp(0, items.length - 1),
-                onChanged: s.refresh),
+            onOpen: (it) async {
+              // 引き直しを待つ間の連打で、ビューアが二重に積まれないようにする
+              if (_opening) return;
+              _opening = true;
+              try {
+                // 切れた署名URLの行はその1件だけ引き直してから開く（#24 作業B）
+                final target = await s.openTarget(it);
+                if (!context.mounted) return;
+                // 引き直しの間にロックされたら開かない。ロック層は下の画面を残すので mounted では防げない
+                if (widget.app.locked) return;
+                if (target == null) {
+                  // 引き直しに失敗しても無反応にしない（写真タブ・フォルダと同じ文言）
+                  showOpenFailedNotice(context);
+                  return;
+                }
+                await openViewer(context,
+                    app: widget.app,
+                    lib: widget.lib,
+                    items: target.items,
+                    index: target.index,
+                    onChanged: s.refresh);
+              } finally {
+                _opening = false;
+              }
+            },
             onToggle: s.toggle,
             onLongPress: _onLongPress,
           );

@@ -262,8 +262,18 @@ class AppState extends ChangeNotifier {
   /// 前面へ戻ってロック判定が済んだ合図。画面はこれに乗って期限切れURLを差し替える。
   Stream<void> get resumed => _resumed.stream;
 
+  /// ロック中に戻った分の合図。長く裏にいた後はふつうロックが掛かるので、ここで捨てると
+  /// 一番要る場面で差し替えが走らない。解除した時に流す（#24 作業B）。
+  bool _resumePending = false;
+
   void _emitResumed() {
-    if (sessionOpen && !locked && !_resumed.isClosed) _resumed.add(null);
+    if (!sessionOpen || _resumed.isClosed) return;
+    if (locked) {
+      _resumePending = true;
+      return;
+    }
+    _resumePending = false;
+    _resumed.add(null);
   }
 
   final StreamController<String> _contentChanged =
@@ -401,6 +411,8 @@ class AppState extends ChangeNotifier {
       Kv.get(Keys.token),
       _loadLockSettings(),
     ).wait;
+    // PerfLog(#24 作業D): 起動の読み出しの区間の終わり
+    PerfLog.mark('init.read');
     if (intent != _connectionIntent) return;
     if (ep != null && tk != null) {
       api.setConnection(Connection(ep, tk));
@@ -746,6 +758,7 @@ class AppState extends ChangeNotifier {
       if (!current()) return;
       libraries = loaded;
       librariesFromNet = true;
+      PerfLog.mark('libs.net', {'n': loaded.length});
       _offlineLibrariesKnown = true;
       activeLib = loaded.any((l) => l.id == saved)
           ? saved
@@ -802,6 +815,7 @@ class AppState extends ChangeNotifier {
       final savedActive = await Kv.get(Keys.library) ?? j['activeLib'] as String?;
       activeLib =
           libs.any((l) => l.id == savedActive) ? savedActive : libs.first.id;
+      PerfLog.mark('libs.cached', {'n': libs.length});
     } on Object catch (e) {
       debugPrint('library snapshot restore failed: $e');
     }
@@ -821,6 +835,7 @@ class AppState extends ChangeNotifier {
     if (libraries.isEmpty || activeLib == null || !librariesFromNet) {
       _loadLibraries();
     }
+    if (_resumePending) _emitResumed();
   }
 
   /// 端末の画面ロックで解除する。成功したらロックを外す。
@@ -974,6 +989,7 @@ class AppState extends ChangeNotifier {
       return;
     }
     final elapsed = elapsedBetween(await at, await _clock.read());
+    PerfLog.mark('resume', {'awayMs': elapsed});
     if (shouldRelock(
       elapsedMs: elapsed,
       graceMs: effectiveGraceMs(
@@ -987,6 +1003,11 @@ class AppState extends ChangeNotifier {
     await refreshDeviceLockAvailable();
     notifyListeners();
     _emitResumed();
+    // 控えだけで起動して回線の一覧をまだ取れていない時は、戻ったついでに取り直す。
+    // ロック中なら解除の側（unlock）が取り直すので、ここでは二重に頼まない（#24 決めた事 A-4a）
+    if (connected && !locked && !librariesFromNet && !librariesLoading) {
+      unawaited(_loadLibraries());
+    }
   }
 
   Future<void> refreshPinState() async {
@@ -1272,6 +1293,7 @@ class GalleryState extends ChangeNotifier {
     items = hit.items;
     folders = hit.folders;
     total = hit.total;
+    PerfLog.mark('grid.cached', {'n': hit.items.length});
     _serverSorted = hit.serverSort == sort.apiValue;
     // 控えの cursor は古くて当てにならない。続きは回線の先頭ページが取れてから頼む
     cursor = null;
@@ -1417,11 +1439,12 @@ class GalleryState extends ChangeNotifier {
         if (c == null) break;
       }
     } catch (err) {
+      // 差し替えは裏の手入れ。途中で切れても帯は出さず、取れた分だけ替える。
+      // 残りは開く時に openTarget が1件ずつ引き直す（#24 作業B の端の場合）
       if (e != epoch || _disposed) return;
-      error = err.toString();
-      notifyListeners();
-      return;
+      debugPrint('resign stopped: $err');
     }
+    PerfLog.mark('resign.done', {'n': byKey.length, 'left': remaining.length});
     if (byKey.isEmpty) return;
     items = [
       for (final it in items) byKey[_rowId(it)] ?? it,

@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:r2_gallery/src/api/client.dart';
 import 'package:r2_gallery/src/api/models.dart';
 import 'package:r2_gallery/src/state/app_state.dart';
+import 'package:r2_gallery/src/store/kv.dart';
 import 'package:r2_gallery/src/ui/video_view.dart';
 import 'package:r2_gallery/src/viewer/player_system.dart';
 import 'package:video_player/video_player.dart';
@@ -46,6 +47,42 @@ class _PageApi extends ApiClient {
       ],
       cursor: null,
     );
+  }
+}
+
+/// 2ページ目で回線が切れる一覧。差し替えの途中で失敗した時の扱いを見る。
+class _CutApi extends _PageApi {
+  @override
+  Future<FolderPage> folder(String libId,
+      {String prefix = '',
+      String? cursor,
+      bool recursive = false,
+      String? sort,
+      String? type,
+      bool fresh = false}) {
+    if (generation > 0 && cursor != null) {
+      calls.add(cursor);
+      return Future.error(const ApiError(503, 'offline'));
+    }
+    return super.folder(libId,
+        prefix: prefix,
+        cursor: cursor,
+        recursive: recursive,
+        sort: sort,
+        type: type,
+        fresh: fresh);
+  }
+}
+
+/// 初めの [failures] 回は落ち、その後は返すライブラリ一覧。圏外で控えから起動した後の取り直しを見る。
+class _FlakyLibApi extends ApiClient {
+  var calls = 0;
+  var failures = 2;
+  @override
+  Future<List<Library>> libraries() async {
+    calls++;
+    if (calls <= failures) throw const ApiError(503, 'offline');
+    return const [Library(id: 'photos', title: '写真')];
   }
 }
 
@@ -125,6 +162,78 @@ void main() {
     await pumpEventQueue();
     expect(seen, 0);
     await sub.cancel();
+    app.dispose();
+  });
+
+  test('差し替えの途中で回線が切れても帯を出さず、取れた分だけ替える', () async {
+    final api = _CutApi();
+    final g = GalleryState(api);
+    await g.refresh('photos');
+    await g.loadMore('photos');
+    expect(g.items.length, 4);
+    g.items = [
+      for (final it in g.items)
+        MediaItem(key: it.key, type: it.type, url: _url('${it.key}-old', expired: true)),
+    ];
+    api.generation = 1;
+    await g.refreshIfExpired('photos');
+    expect(g.error, isNull);
+    // 1ページ目の2件は新しいURL、取れなかった2件は元のまま（開く時に1件ずつ引き直す）
+    expect(g.items.map((it) => it.url.contains('-old')), [false, false, true, true]);
+  });
+
+  test('ロック中に戻った分は、解除した時に resumed が立つ', () async {
+    FlutterSecureStorage.setMockInitialValues({});
+    final app = AppState(bakedEndpoint: '', bakedToken: '')
+      ..connected = true
+      ..locked = true;
+    var seen = 0;
+    final sub = app.resumed.listen((_) => seen++);
+    await app.onForeground();
+    await pumpEventQueue();
+    expect(seen, 0);
+    app.unlock();
+    await pumpEventQueue();
+    expect(seen, 1);
+    // 一度流したら、次の解除では重ねて流さない
+    app.lockNow();
+    app.unlock();
+    await pumpEventQueue();
+    expect(seen, 1);
+    await sub.cancel();
+    app.dispose();
+  });
+
+  test('控えだけで起動して一覧を取れていなければ、前面へ戻った時に取り直す', () async {
+    FlutterSecureStorage.setMockInitialValues({
+      Keys.endpoint: 'https://w.example',
+      Keys.token: 'tk',
+      Keys.libraries:
+          '{"v":1,"endpoint":"https://w.example","activeLib":"photos","libraries":[{"id":"photos","title":"写真","readOnly":false}]}',
+    });
+    final api = _FlakyLibApi();
+    final app = AppState(api: api, bakedEndpoint: '', bakedToken: '');
+    await app.init();
+    await pumpEventQueue();
+    // 起動の先読みと解除の取り直しが2回とも圏外で落ちる
+    expect(app.locked, isTrue);
+    app.unlock();
+    await pumpEventQueue();
+    final before = api.calls;
+    expect(before, 2);
+    expect(app.librariesFromNet, isFalse);
+
+    app.onBackground();
+    await app.onForeground();
+    await pumpEventQueue();
+    expect(api.calls, before + 1);
+    expect(app.librariesFromNet, isTrue);
+
+    // 取れた後の復帰では頼まない
+    app.onBackground();
+    await app.onForeground();
+    await pumpEventQueue();
+    expect(api.calls, before + 1);
     app.dispose();
   });
 

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../api/models.dart';
 import '../state/app_state.dart';
 import '../state/write_guard.dart';
+import '../ui/open_failed_notice.dart';
 import '../ui/write_guard_notice.dart';
 import '../ui/album_picker.dart';
 import '../ui/viewer_screen.dart' show openViewer;
@@ -237,9 +238,8 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
               final target = await s.openTarget(it);
               if (!context.mounted) return;
               if (target == null) {
-                // 引き直しに失敗しても無反応にしない（写真タブにはまだ無いので、ここだけ先に出す）
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('開けませんでした。通信を確かめてもう一度お試しください')));
+                // 引き直しに失敗しても無反応にしない（写真タブ・フォルダと同じ文言）
+                showOpenFailedNotice(context);
                 return;
               }
               openViewer(context,

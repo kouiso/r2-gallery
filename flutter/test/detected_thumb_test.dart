@@ -435,12 +435,15 @@ void main() {
       final gate = Completer<void>();
       var running = 0;
       var peak = 0;
+      // 実HTTPの取得を終えて2本が動き出した時点を待つ（固定の待ちだと全体テストの負荷で間に合わない）
+      final twoRunning = Completer<void>();
       final t = DetectedThumbs(
         fetcher: WebFetcher(),
         maxParallel: 2,
         videoFrame: (video, headers) async {
           running++;
           if (running > peak) peak = running;
+          if (running == 2 && !twoRunning.isCompleted) twoRunning.complete();
           await gate.future;
           running--;
           return null;
@@ -450,7 +453,10 @@ void main() {
         for (var i = 0; i < 5; i++)
           t.of(DetectedItem('${site.base}/v/$i.mp4', DetectedKind.video)),
       ];
-      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await twoRunning.future.timeout(const Duration(seconds: 30));
+      // 3本目以降が抜け出さないことも見たいので、上限に着いた後にもう少し流してから数える。
+      // 待ちが足りなくても見逃すだけで（誤って落ちはしない）、通る時の結果は変わらない
+      await Future<void>.delayed(const Duration(milliseconds: 100));
       expect(peak, 2);
       gate.complete();
       await Future.wait(all);

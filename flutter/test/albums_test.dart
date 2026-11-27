@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:r2_gallery/src/albums/album_detail_screen.dart';
 import 'package:r2_gallery/src/albums/album_states.dart';
 import 'package:r2_gallery/src/ui/folder_browse_screen.dart';
+import 'package:r2_gallery/src/ui/gallery_tab.dart';
 import 'package:r2_gallery/src/grid/day_label.dart';
 import 'package:r2_gallery/src/grid/sort_mode.dart';
 import 'package:r2_gallery/src/api/client.dart';
@@ -148,6 +149,8 @@ class _NoObjectApi extends _FakeApi {
       Future.error(const ApiError(503, 'offline'));
 }
 
+const _openFailed = '開けませんでした。消えたか、通信の不調かもしれません。もう一度お試しください';
+
 Finder _tile(String key) =>
     find.byWidgetPredicate((w) => w is MediaTile && w.item.key == key);
 
@@ -283,6 +286,43 @@ void main() {
         ],
         folders: <String>[],
       );
+
+    testWidgets('切れた署名URLの行を引き直せなかったら、フォルダでも無反応にせず知らせる（#24）', (t) async {
+      final api = _NoObjectApi()
+        ..tree['f/'] = (
+          items: [
+            MediaItem(
+                key: 'f/1.jpg',
+                type: 'image',
+                url: 'https://w.example/m/f/1.jpg?e=1'),
+          ],
+          folders: <String>[],
+        );
+      await t.pumpWidget(_host(FolderBrowseScreen(
+          app: _app(api), lib: 'a', prefix: 'f/')));
+      await t.pumpAndSettle();
+      await t.tap(_tile('f/1.jpg'));
+      await t.pumpAndSettle();
+      expect(find.text(_openFailed), findsOneWidget);
+    });
+
+    testWidgets('切れた署名URLの行を引き直せなかったら、写真タブでも無反応にせず知らせる（#24）', (t) async {
+      final api = _NoObjectApi()
+        ..tree[''] = (
+          items: [
+            MediaItem(
+                key: '1.jpg',
+                type: 'image',
+                url: 'https://w.example/m/1.jpg?e=1'),
+          ],
+          folders: <String>[],
+        );
+      await t.pumpWidget(_host(GalleryTab(app: _app(api), lib: 'a')));
+      await t.pumpAndSettle();
+      await t.tap(_tile('1.jpg'));
+      await t.pumpAndSettle();
+      expect(find.text(_openFailed), findsOneWidget);
+    });
 
     testWidgets('A3: 複数選択して「アルバムへ」→書けるアルバムだけ出て追加できる', (t) async {
       final api = seeded();
@@ -485,7 +525,7 @@ void main() {
       await t.pumpAndSettle();
       await t.tap(_tile('1.jpg'));
       await t.pumpAndSettle();
-      expect(find.text('開けませんでした。通信を確かめてもう一度お試しください'),
+      expect(find.text(_openFailed),
           findsOneWidget);
     });
 

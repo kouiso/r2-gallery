@@ -141,6 +141,20 @@ void main() {
           isTrue);
     });
 
+    test('web は hidden を裏扱いにする（paused が来ないため）。Android は paused だけ', () {
+      // web は visibilitychange が hidden / resumed にしか写らない
+      expect(isBackgroundedState(AppLifecycleState.hidden, isWeb: true), isTrue);
+      expect(isBackgroundedState(AppLifecycleState.paused, isWeb: true), isTrue);
+      expect(isBackgroundedState(AppLifecycleState.resumed, isWeb: true), isFalse);
+      expect(isBackgroundedState(AppLifecycleState.inactive, isWeb: true), isFalse);
+      // Android の hidden は paused の手前の中間状態。ここで数えると挙動が変わる
+      expect(isBackgroundedState(AppLifecycleState.hidden, isWeb: false), isFalse);
+      expect(isBackgroundedState(AppLifecycleState.paused, isWeb: false), isTrue);
+      expect(isBackgroundedState(AppLifecycleState.inactive, isWeb: false), isFalse);
+      expect(isBackgroundedState(AppLifecycleState.resumed, isWeb: false), isFalse);
+      expect(isBackgroundedState(AppLifecycleState.detached, isWeb: false), isFalse);
+    });
+
     test('解除手段が無ければロックできない（行き止まりを作らない）', () {
       expect(
           canLockNow(

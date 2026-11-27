@@ -23,6 +23,18 @@ class _LibApi extends ApiClient {
   }
 }
 
+/// 接続の確かめ（probe）が通り、ライブラリもすぐ返す API。
+class _BakedApi extends ApiClient {
+  _BakedApi(this.netLibs);
+  final List<Library> netLibs;
+
+  @override
+  Future<bool> probe(String endpoint, String token) async => true;
+
+  @override
+  Future<List<Library>> libraries() async => netLibs;
+}
+
 Map<String, dynamic> _snap(
         String endpoint, List<Map<String, dynamic>> libs, String? active) =>
     {'v': 1, 'endpoint': endpoint, 'activeLib': active, 'libraries': libs};
@@ -130,5 +142,33 @@ void main() {
     await pumpEventQueue();
     expect(api2.callCount, before);
     expect(app2.librariesFromNet, isTrue);
+  });
+
+  test('焼き込み接続の初回でも、取れた一覧を控えに書く', () async {
+    // 焼き込みの接続は _lastEndpoint を入れず、控えが黙って書かれなかった（次の起動で libs.cached が出ない）
+    final api = _BakedApi(const [Library(id: 'net', title: 'Net')]);
+    final app = AppState(
+        api: api, bakedEndpoint: 'https://baked.example', bakedToken: 'tk');
+
+    await app.init();
+    expect(app.connected, isTrue);
+    await pumpEventQueue();
+    expect(app.librariesFromNet, isTrue);
+    final saved = jsonDecode((await Kv.get(Keys.libraries))!) as Map;
+    expect(saved['endpoint'], 'https://baked.example');
+    expect(saved['activeLib'], 'net');
+    expect((saved['libraries'] as List).single['id'], 'net');
+  });
+
+  test('手入力の接続（connect）の初回でも、取れた一覧を控えに書く', () async {
+    final api = _BakedApi(const [Library(id: 'net', title: 'Net')]);
+    final app = AppState(api: api, bakedEndpoint: '', bakedToken: '');
+    await app.init();
+
+    expect(await app.connect('https://manual.example', 'tk'), isNull);
+    await pumpEventQueue();
+    final saved = jsonDecode((await Kv.get(Keys.libraries))!) as Map;
+    expect(saved['endpoint'], 'https://manual.example');
+    expect((saved['libraries'] as List).single['id'], 'net');
   });
 }

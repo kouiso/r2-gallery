@@ -550,6 +550,8 @@ class AppState extends ChangeNotifier {
     }
     if (intent != _connectionIntent) return connectFailedMessage;
     api.setConnection(next);
+    // 一覧の控えは _lastEndpoint が無いと書かれない。繋いだ所で必ず入れる
+    _lastEndpoint = next.endpoint;
     connected = true;
     bakedProbeFailed = false;
     notifyListeners();
@@ -630,6 +632,8 @@ class AppState extends ChangeNotifier {
     await _persistConnection(next, intent: intent);
     if (connected || intent != _connectionIntent) return;
     api.setConnection(next);
+    // 焼き込みの初回接続でも控えが書かれるよう、保存済み接続の起動と同じく覚える
+    _lastEndpoint = next.endpoint;
     connected = true;
     locked = _gateAtStart;
     _loadLibraries();

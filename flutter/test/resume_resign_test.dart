@@ -8,6 +8,7 @@ import 'package:r2_gallery/src/albums/album_states.dart';
 import 'package:r2_gallery/src/api/models.dart';
 import 'package:r2_gallery/src/state/app_state.dart';
 import 'package:r2_gallery/src/store/kv.dart';
+import 'package:r2_gallery/src/store/listing_cache.dart' show signedUrlExpired;
 import 'package:r2_gallery/src/ui/video_view.dart';
 import 'package:r2_gallery/src/viewer/player_system.dart';
 import 'package:video_player/video_player.dart';
@@ -93,6 +94,13 @@ class _FlakyLibApi extends ApiClient {
 /// アルバムの中身を1件ずつ返し、取り直しの2ページ目で回線が切れる偽物。
 class _AlbumApi extends ApiClient {
   int generation = 0;
+  final objectAtCalls = <String>[];
+  @override
+  Future<MediaItem?> objectAt(String libId, String key) async {
+    objectAtCalls.add(key);
+    return MediaItem(key: key, type: 'image', url: _url('$key-fresh'));
+  }
+
   @override
   Future<AlbumPage> album(String libId, String albumId,
       {String? cursor, int limit = 60}) async {
@@ -234,6 +242,15 @@ void main() {
     await s.refreshIfExpired();
     expect(s.error, isNull);
     expect(s.items.map((it) => it.url.contains('-old')), [false, true]);
+
+    // 替わらずに残った行は、開く時にその1件だけ引き直す
+    final t = await s.openTarget(s.items[1]);
+    expect(api.objectAtCalls, ['b.jpg']);
+    expect(t!.index, 1);
+    expect(signedUrlExpired(t.items[1].url), isFalse);
+    // 期限内の行は引き直さない
+    await s.openTarget(s.items[0]);
+    expect(api.objectAtCalls, ['b.jpg']);
     s.dispose();
   });
 

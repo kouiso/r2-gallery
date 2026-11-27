@@ -232,12 +232,17 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
             loadingMore: s.loadingMore,
             onRefresh: s.refresh,
             onNearEnd: s.loadMore,
-            onOpen: (it) => openViewer(context,
-                app: widget.app,
-                lib: widget.lib,
-                items: items,
-                index: items.indexOf(it).clamp(0, items.length - 1),
-                onChanged: s.refresh),
+            onOpen: (it) async {
+              // 切れた署名URLの行はその1件だけ引き直してから開く（#24 作業B）
+              final target = await s.openTarget(it);
+              if (target == null || !context.mounted) return;
+              openViewer(context,
+                  app: widget.app,
+                  lib: widget.lib,
+                  items: target.items,
+                  index: target.index,
+                  onChanged: s.refresh);
+            },
             onToggle: s.toggle,
             onLongPress: _onLongPress,
           );

@@ -1480,7 +1480,9 @@ class GalleryState extends ChangeNotifier {
       if (_disposed) return null;
       final now = ordered();
       final at = now.indexWhere((x) => x.key == it.key && x.lib == it.lib);
-      return at < 0 ? null : (items: now, index: at);
+      if (at < 0) return null;
+      // 取り直しが失敗して控えのまま止まった時は、切れたURLのまま開かず下でその1件を引き直す
+      if (!signedUrlExpired(now[at].url)) return (items: now, index: at);
     }
     // 先頭ページへ巻き戻す refresh は読み進めた位置を失うので、その行だけを引き直して差し替える
     final rowLib = it.lib ?? lib;

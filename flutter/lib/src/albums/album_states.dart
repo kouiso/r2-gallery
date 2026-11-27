@@ -340,6 +340,32 @@ abstract class _PagedMediaState extends ChangeNotifier with _SafeNotify {
 
   String _rowId(MediaItem it) => '${it.lib ?? lib}:${it.key}';
 
+  /// タップした行で開く一覧と位置。行の署名URLが切れていればその1件だけ引き直して差し替える。
+  /// 復帰の差し替えが途中で切れると切れたURLの行が残り、そのまま開くと原本を読めないため
+  /// （写真タブの GalleryState.openTarget と同じ扱い。#24 作業B）。消えていた・引けない時は null。
+  Future<({List<MediaItem> items, int index})?> openTarget(MediaItem it) async {
+    int indexIn(List<MediaItem> list) =>
+        list.indexWhere((x) => _rowId(x) == _rowId(it));
+    if (!signedUrlExpired(it.url)) {
+      final at = indexIn(items);
+      return at < 0 ? null : (items: items, index: at);
+    }
+    final MediaItem? fresh;
+    try {
+      fresh = await api.objectAt(it.lib ?? lib, it.key);
+    } catch (_) {
+      return null;
+    }
+    if (_disposed || fresh == null) return null;
+    final row = it.lib != null && fresh.lib == null
+        ? MediaItem.fromJson({...fresh.toJson(), 'lib': it.lib})
+        : fresh;
+    items = [for (final x in items) _rowId(x) == _rowId(it) ? row : x];
+    notifyListeners();
+    final at = indexIn(items);
+    return at < 0 ? null : (items: items, index: at);
+  }
+
   @override
   void dispose() {
     _backoffTimer?.cancel();

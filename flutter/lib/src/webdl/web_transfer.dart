@@ -630,8 +630,21 @@ class WebTransferQueue extends ChangeNotifier {
     return cur != null && isSameEndpoint(cur.endpoint, e);
   }
 
+  /// 回線があるか。通常のアップロード（TransferQueue）と同じ知らせを受ける。
+  /// 切れている間は新しい行を始めず、通信の失敗で止まった行も失敗にせず待たせる（#28 28-B）。
+  bool online = true;
+
+  /// 回線の知らせ。動いている行は止めない（通信が切れれば失敗として返ってくる）。
+  /// 戻った時は待っていた行を続きから始める。
+  void setOnline(bool value) {
+    if (online == value) return;
+    online = value;
+    if (value) _pump();
+  }
+
   void _pump() {
     for (final t in _tasks) {
+      if (!online) break;
       if (_running.length >= parallel) break;
       if (t.status == WebTaskStatus.queued &&
           !_running.contains(t.id) &&
@@ -694,6 +707,10 @@ class WebTransferQueue extends ChangeNotifier {
       } else if (token.isCancelled) {
         t.status = WebTaskStatus.cancelled;
         await _dropStaged(t);
+      } else if (!online && _isTransient(e)) {
+        // 回線が切れて取り直しが尽きた。裏で失敗にすると前面に戻るまで誰も積み直さず、
+        // サービスも外れて畳まれる。一時ファイルと台帳は残し、回線が戻るのを待つ
+        t.status = WebTaskStatus.queued;
       } else {
         // 落とせた分は残す。再試行は続きから取る／上げ直すだけで済む
         t.status = WebTaskStatus.error;

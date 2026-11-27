@@ -812,6 +812,51 @@ void main() {
     });
   });
 
+  group('回線が切れている間は取り込みを待たせる（#28 28-B）', () {
+    Future<void> until(bool Function() ok) async {
+      final sw = Stopwatch()..start();
+      while (!ok()) {
+        if (sw.elapsed > const Duration(seconds: 20)) fail('timed out');
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    }
+
+    test('オフラインの間は始めず、戻ったら取る', () async {
+      s.media['clip.mp4'] = _bytes(2000);
+      queue.setOnline(false);
+      final t = queue.enqueue('lib', [video('clip.mp4')]).single;
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(t.status, WebTaskStatus.queued);
+      expect(s.mediaRequests, isEmpty);
+      // 待っている行は動いている数に入る。裏のサービスとエンジンを残すため
+      expect(queue.activeCount, 1);
+
+      queue.setOnline(true);
+      await run();
+      expect(t.status, WebTaskStatus.done, reason: t.error);
+      expect(s.objects['downloads/clip.mp4'], hasLength(2000));
+    });
+
+    test('取得中に回線が切れたら失敗にせず待機に戻る', () async {
+      // 閉じたポートを指して、取得が毎回つながらずに落ちるようにする
+      final t = queue.enqueue('lib', [
+        DetectedItem('http://127.0.0.1:9/m/clip.mp4', DetectedKind.video, const {}),
+      ]).single;
+      queue.setOnline(false);
+      await until(() => t.status != WebTaskStatus.fetching);
+      expect(t.status, WebTaskStatus.queued, reason: t.error);
+      expect(queue.activeCount, 1);
+    });
+
+    test('オンラインのまま通信の失敗が尽きたら今通り失敗', () async {
+      final t = queue.enqueue('lib', [
+        DetectedItem('http://127.0.0.1:9/m/clip.mp4', DetectedKind.video, const {}),
+      ]).single;
+      await run();
+      expect(t.status, WebTaskStatus.error);
+    });
+  });
+
   group('アプリを消しても取り込みを失わない（#163）', () {
     late MemLedger ledger;
     late Directory stage;

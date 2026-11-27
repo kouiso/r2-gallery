@@ -284,7 +284,11 @@ class AppState extends ChangeNotifier {
     _transfersWired = true;
     transfers.addListener(_syncKeepAlive);
     webQueue.addListener(_syncKeepAlive);
-    _onlineSub = transferPlatform.online.listen(transfers.setOnline);
+    // ネット取り込みも同じ回線の知らせで待つ。片方だけだと取り込みは裏で失敗になる（#28 28-B）
+    _onlineSub = transferPlatform.online.listen((v) {
+      transfers.setOnline(v);
+      webQueue.setOnline(v);
+    });
     unawaited(transfers.restore());
     unawaited(webQueue.restore());
     // 目録を先に読み、一覧で「保存済み」を同期で引けるようにする

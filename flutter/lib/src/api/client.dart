@@ -8,6 +8,19 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'models.dart';
 import 'review_meta.dart';
 
+/// 返事（HTTP の応答）が無いまま回線で落ちた失敗か。
+/// 本文を送っている最中にソケットが落ちた時、dio の IO 実装は connectionError ではなく
+/// unknown（error が SocketException / HttpException）で返す。これも回線の失敗に数える。
+/// 取り消しや HTTP の拒否は含めない
+bool isDroppedConnection(DioException e) =>
+    e.response == null &&
+    (e.type == DioExceptionType.connectionError ||
+        e.type == DioExceptionType.connectionTimeout ||
+        e.type == DioExceptionType.sendTimeout ||
+        e.type == DioExceptionType.receiveTimeout ||
+        (e.type == DioExceptionType.unknown &&
+            (e.error is SocketException || e.error is HttpException)));
+
 /// 接続の確認結果。理由を画面に出し分けるための物
 class ProbeOutcome {
   final bool success;
@@ -70,11 +83,7 @@ class ApiClient {
       final body = e.response?.data;
       final code = body is Map ? body['error'] : null;
       // 返事が無いまま回線で落ちたものだけ印を付ける。400 番台の拒否や取り消しは含めない
-      final dropped = e.response == null &&
-          (e.type == DioExceptionType.connectionError ||
-              e.type == DioExceptionType.connectionTimeout ||
-              e.type == DioExceptionType.sendTimeout ||
-              e.type == DioExceptionType.receiveTimeout);
+      final dropped = isDroppedConnection(e);
       throw ApiError(e.response?.statusCode ?? 0, e.message ?? 'network error',
           code: code is String ? code : null, network: dropped);
     }

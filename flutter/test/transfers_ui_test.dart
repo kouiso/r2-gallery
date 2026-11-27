@@ -771,6 +771,19 @@ void main() {
       expect(app.transfers.online, isTrue);
       expect(app.webQueue.online, isTrue);
     });
+
+    test('回線の知らせは取り込みのキューにも届く（#28 28-B）', () async {
+      final app = makeApp(api: ApiClient());
+      await app.init();
+      expect(app.webQueue.online, isTrue);
+      platform.net.add(NetState.offline);
+      await until(() => !app.webQueue.online);
+      expect(app.transfers.online, isFalse);
+      platform.net.add(NetState.unknownOnline);
+      await until(() => app.webQueue.online);
+      expect(app.transfers.online, isTrue);
+    });
+
     const mobileNet =
         NetState(online: true, wifi: false, metered: true, dataSaver: false);
 

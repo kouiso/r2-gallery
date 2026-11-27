@@ -744,5 +744,17 @@ void main() {
       platform.net.add(true);
       await until(() => app.transfers.tasks.single.status == TransferStatus.done);
     });
+
+    test('回線の知らせは取り込みのキューにも届く（#28 28-B）', () async {
+      final app = makeApp(api: ApiClient());
+      await app.init();
+      expect(app.webQueue.online, isTrue);
+      platform.net.add(false);
+      await until(() => !app.webQueue.online);
+      expect(app.transfers.online, isFalse);
+      platform.net.add(true);
+      await until(() => app.webQueue.online);
+      expect(app.transfers.online, isTrue);
+    });
   });
 }

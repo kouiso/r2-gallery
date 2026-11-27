@@ -404,10 +404,11 @@ class AppState extends ChangeNotifier {
     // 旧PINの移行判定は hasPin 済みでないと発火しないので、PIN の有無だけ先に読む。
     // 残り3つは互いに依存しないので並べる。起動の待ちは一番遅い1本分だけになる（#24 作業A）
     hasPin = await PinLock.hasPin();
-    final (ep, tk, _) = await (
+    final (ep, tk, _, _) = await (
       Kv.get(Keys.endpoint),
       Kv.get(Keys.token),
       _loadLockSettings(),
+      _loadNetSettings(),
     ).wait;
     if (intent != _connectionIntent) return;
     if (ep != null && tk != null) {
@@ -876,6 +877,33 @@ class AppState extends ChangeNotifier {
     }
     notifyListeners();
     if (!locked) _loadLibraries();
+  }
+
+  /// 転送を Wi‑Fi だけに限るか（#27）。キューへ渡す `TransferNetPolicy` は 27-B で入るので、
+  /// それまでは 2 つの bool を持つだけにして、27-B がここから `netPolicy` を作って両キューの
+  /// `setPolicy` へ渡す。キーが無い・読めない時は false（設定を変えていない人の動きを変えない）
+  bool uploadWifiOnly = false;
+  bool downloadWifiOnly = false;
+
+  Future<void> _loadNetSettings() async {
+    try {
+      uploadWifiOnly = await Kv.get(Keys.uploadWifiOnly) == '1';
+      downloadWifiOnly = await Kv.get(Keys.downloadWifiOnly) == '1';
+    } on Object {
+      // 読めない時は既定のまま。設定の読み込みで起動を止めない
+    }
+  }
+
+  Future<void> setUploadWifiOnly(bool v) async {
+    uploadWifiOnly = v;
+    notifyListeners();
+    await Kv.set(Keys.uploadWifiOnly, v ? '1' : '0');
+  }
+
+  Future<void> setDownloadWifiOnly(bool v) async {
+    downloadWifiOnly = v;
+    notifyListeners();
+    await Kv.set(Keys.downloadWifiOnly, v ? '1' : '0');
   }
 
   Future<void> setRelockGraceMs(int ms) async {

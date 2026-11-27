@@ -60,6 +60,10 @@ class Keys {
   static const webHistory = 'r2g.webHistory';
   static const transferConns = 'r2g.transferConns';
 
+  /// 転送の回線の設定（#27）。値は '1'／'0'、キーが無ければ '0'（今まで通りモバイル回線でも動く）
+  static const uploadWifiOnly = 'r2g.net.uploadWifiOnly';
+  static const downloadWifiOnly = 'r2g.net.downloadWifiOnly';
+
   /// ピッカーを開いた時のライブラリ。アプリが落ちた後の選択は次の起動で拾い直すための控え
   static const pendingPickLib = 'r2g.upload.pendingPickLib';
 }

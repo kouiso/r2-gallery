@@ -5,6 +5,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:r2_gallery/src/api/client.dart';
 import 'package:r2_gallery/src/api/models.dart';
 import 'package:r2_gallery/src/state/app_state.dart';
+import 'package:r2_gallery/src/store/kv.dart';
 import 'package:r2_gallery/src/store/device_auth.dart';
 import 'package:r2_gallery/src/ui/settings_tab.dart';
 import 'package:r2_gallery/src/ui/theme.dart';
@@ -90,7 +91,7 @@ void main() {
   testWidgets('設定タブは見出しで区切られ、今ある操作が全部残っている', (t) async {
     await _pump(t, _mk());
     // テストは VM なので OfflineStore.supported が true: オフライン保存の見出しも出る
-    for (final h in ['接続', 'ロック', 'オフライン保存', 'このアプリについて']) {
+    for (final h in ['接続', 'ロック', '転送', 'オフライン保存', 'このアプリについて']) {
       expect(_heading(h), findsOneWidget, reason: h);
     }
     double y(String s) => t.getTopLeft(_heading(s)).dy;
@@ -112,11 +113,63 @@ void main() {
     }
   });
 
+  testWidgets('転送の見出しと2つの Wi‑Fi 限定スイッチ。切り替えは Kv に残る（#27）', (t) async {
+    final app = _mk();
+    await _pump(t, app);
+    expect(_heading('転送'), findsOneWidget);
+    // 転送はロックの下、オフライン保存の上
+    expect(t.getTopLeft(_heading('ロック')).dy < t.getTopLeft(_heading('転送')).dy,
+        isTrue);
+    expect(
+        t.getTopLeft(_heading('転送')).dy <
+            t.getTopLeft(_heading('オフライン保存')).dy,
+        isTrue);
+    for (final s in [
+      'アップロード：Wi‑Fi接続時のみ',
+      '写真・動画のアップロードと、取り込んだ物の保存。モバイル回線では待機します',
+      'ダウンロード：Wi‑Fi接続時のみ',
+      'ネットからの取り込みとオフライン保存。一覧の表示と再生は制限しません',
+    ]) {
+      expect(find.text(s), findsOneWidget, reason: s);
+    }
+    Finder sw(String title) =>
+        find.widgetWithText(SwitchListTile, title);
+    // 設定を変えていない人の動きは変えない: 既定はどちらもオフ
+    expect(t.widget<SwitchListTile>(sw('アップロード：Wi‑Fi接続時のみ')).value, isFalse);
+    expect(t.widget<SwitchListTile>(sw('ダウンロード：Wi‑Fi接続時のみ')).value, isFalse);
+    expect(await Kv.get(Keys.uploadWifiOnly), isNull);
+
+    await t.tap(sw('アップロード：Wi‑Fi接続時のみ'));
+    await t.pumpAndSettle();
+    expect(await Kv.get(Keys.uploadWifiOnly), '1');
+    expect(await Kv.get(Keys.downloadWifiOnly), isNull);
+    expect(app.uploadWifiOnly, isTrue);
+    expect(t.widget<SwitchListTile>(sw('アップロード：Wi‑Fi接続時のみ')).value, isTrue);
+
+    await t.tap(sw('ダウンロード：Wi‑Fi接続時のみ'));
+    await t.pumpAndSettle();
+    expect(await Kv.get(Keys.downloadWifiOnly), '1');
+    await t.tap(sw('アップロード：Wi‑Fi接続時のみ'));
+    await t.pumpAndSettle();
+    expect(await Kv.get(Keys.uploadWifiOnly), '0');
+  });
+
+  testWidgets('保存した Wi‑Fi 限定の設定は起動時に読み戻される（#27）', (t) async {
+    FlutterSecureStorage.setMockInitialValues({
+      Keys.uploadWifiOnly: '1',
+      Keys.downloadWifiOnly: '0',
+    });
+    final app = _mk();
+    await t.runAsync(app.init);
+    expect(app.uploadWifiOnly, isTrue);
+    expect(app.downloadWifiOnly, isFalse);
+  });
+
   testWidgets('見出しごとに枠は1つで、行の間は線で区切る', (t) async {
     await _pump(t, _mk());
-    // 接続 / ロック / オフライン保存 / このアプリについて
-    expect(find.byType(SettingsGroup), findsNWidgets(4));
-    expect(find.byType(Card), findsNWidgets(4));
+    // 接続 / ロック / 転送 / オフライン保存 / このアプリについて
+    expect(find.byType(SettingsGroup), findsNWidgets(5));
+    expect(find.byType(Card), findsNWidgets(5));
     // ロックは3行（PINの行は web だけ #29）→ 線は2本
     expect(
       find.descendant(
@@ -148,7 +201,7 @@ void main() {
     expect(_heading('オフライン保存'), findsNothing);
     expect(find.text('端末に暗号化して保存中'), findsNothing);
     expect(find.text('オフライン保存をすべて削除'), findsNothing);
-    for (final h in ['接続', 'ロック', 'このアプリについて']) {
+    for (final h in ['接続', 'ロック', '転送', 'このアプリについて']) {
       expect(_heading(h), findsOneWidget, reason: h);
     }
   });

@@ -239,6 +239,26 @@ class _SettingsTabState extends State<SettingsTab> {
               onTap: () => _editPin(isNew: !app.hasPin),
             ),
         ]),
+        const SettingsHeading('転送'),
+        SettingsGroup(children: [
+          SwitchListTile(
+            secondary: const Icon(Icons.upload_outlined, color: AppColors.accent),
+            title: const Text('アップロード：Wi‑Fi接続時のみ'),
+            subtitle: Text('写真・動画のアップロードと、取り込んだ物の保存。モバイル回線では待機します',
+                style: AppText.caption.copyWith(color: AppColors.textDim)),
+            value: app.uploadWifiOnly,
+            onChanged: app.setUploadWifiOnly,
+          ),
+          SwitchListTile(
+            secondary:
+                const Icon(Icons.download_outlined, color: AppColors.accent),
+            title: const Text('ダウンロード：Wi‑Fi接続時のみ'),
+            subtitle: Text('ネットからの取り込みとオフライン保存。一覧の表示と再生は制限しません',
+                style: AppText.caption.copyWith(color: AppColors.textDim)),
+            value: app.downloadWifiOnly,
+            onChanged: app.setDownloadWifiOnly,
+          ),
+        ]),
         // オフライン保存は接続なしでも見る・消すので、接続の有無に関わらず出す。
         // Web など非対応の環境では中身が空になるので見出しごと出さない
         if (app.offlineSupported) ...[

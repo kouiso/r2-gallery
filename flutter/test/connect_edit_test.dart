@@ -10,6 +10,7 @@ import 'package:r2_gallery/src/state/app_state.dart';
 import 'package:r2_gallery/src/state/pairing.dart';
 import 'package:r2_gallery/src/store/device_auth.dart';
 import 'package:r2_gallery/src/store/kv.dart';
+import 'package:r2_gallery/src/transfer/net_state.dart';
 import 'package:r2_gallery/src/transfer/transfer_platform.dart';
 import 'package:r2_gallery/src/transfer/transfer_queue.dart';
 import 'package:r2_gallery/src/ui/settings_tab.dart';
@@ -44,7 +45,7 @@ class _NoPlatform implements TransferPlatform {
   @override
   Future<void> setKeepAlive(bool active) async {}
   @override
-  Stream<bool> get online => const Stream.empty();
+  Stream<NetState> get network => const Stream.empty();
 }
 
 class _NoAuth implements DeviceAuth {

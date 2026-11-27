@@ -12,6 +12,7 @@ import 'package:r2_gallery/src/offline/offline_screen.dart';
 import 'package:r2_gallery/src/offline/offline_store.dart';
 import 'package:r2_gallery/src/state/app_state.dart';
 import 'package:r2_gallery/src/store/kv.dart';
+import 'package:r2_gallery/src/transfer/net_state.dart';
 import 'package:r2_gallery/src/transfer/transfer_api.dart';
 import 'package:r2_gallery/src/transfer/transfer_platform.dart';
 import 'package:r2_gallery/src/transfer/transfer_queue.dart';
@@ -30,11 +31,11 @@ import 'transfer_queue_test.dart' show FakeWorker, MemLedger, until;
 
 class FakePlatform implements TransferPlatform {
   final List<bool> keepAlive = [];
-  final StreamController<bool> net = StreamController<bool>.broadcast();
+  final StreamController<NetState> net = StreamController<NetState>.broadcast();
   @override
   Future<void> setKeepAlive(bool active) async => keepAlive.add(active);
   @override
-  Stream<bool> get online => net.stream;
+  Stream<NetState> get network => net.stream;
 }
 
 class _Api extends ApiClient {
@@ -736,14 +737,29 @@ void main() {
       await app.init();
       app.unlock();
       await until(() => app.libraries.isNotEmpty);
-      platform.net.add(false);
+      platform.net.add(NetState.offline);
       await until(() => !app.transfers.online);
       expect(await app.upload('lib', [_src('a.jpg', 5, 'image/jpeg')]), 1);
       await Future<void>.delayed(const Duration(milliseconds: 100));
       expect(app.transfers.tasks.single.status, TransferStatus.queued);
       expect(w.objects, isEmpty);
-      platform.net.add(true);
+      platform.net.add(NetState.unknownOnline);
       await until(() => app.transfers.tasks.single.status == TransferStatus.done);
+    });
+
+    test('モバイル回線の知らせでも、Wi‑Fi 限定の設定が入るまでは今まで通り動く', () async {
+      final app = makeApp(api: ApiClient());
+      await app.init();
+      app.unlock();
+      await until(() => app.libraries.isNotEmpty);
+      platform.net.add(NetState.offline);
+      await until(() => !app.transfers.online);
+      expect(await app.upload('lib', [_src('a.jpg', 5, 'image/jpeg')]), 1);
+      platform.net.add(const NetState(
+          online: true, wifi: false, metered: true, dataSaver: true));
+      await until(() => app.transfers.tasks.single.status == TransferStatus.done);
+      expect(app.transfers.online, isTrue);
+      expect(app.webQueue.online, isTrue);
     });
   });
 }

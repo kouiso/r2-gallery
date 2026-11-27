@@ -19,6 +19,7 @@ import '../store/listing_cache.dart';
 import '../store/lock_platform.dart';
 import '../store/lock_policy.dart';
 import '../store/pin.dart';
+import '../transfer/net_state.dart';
 import '../transfer/transfer_api.dart';
 import '../transfer/transfer_platform.dart';
 import '../transfer/transfer_queue.dart';
@@ -278,7 +279,7 @@ class AppState extends ChangeNotifier {
 
   bool _transfersWired = false;
   bool _keepAlive = false;
-  StreamSubscription<bool>? _onlineSub;
+  StreamSubscription<NetState>? _onlineSub;
 
   /// 前回の起動で残った転送を戻し、回線とサービスの見張りを始める。何度呼んでも1回だけ。
   void _wireTransfers() {
@@ -287,9 +288,10 @@ class AppState extends ChangeNotifier {
     transfers.addListener(_syncKeepAlive);
     webQueue.addListener(_syncKeepAlive);
     // ネット取り込みも同じ回線の知らせで待つ。片方だけだと取り込みは裏で失敗になる（#28 28-B）
-    _onlineSub = transferPlatform.online.listen((v) {
-      transfers.setOnline(v);
-      webQueue.setOnline(v);
+    // 回線の種類（#27 27-A）はまだ判定に使わない。両キューへは今まで通り「使えるか」だけを渡す
+    _onlineSub = transferPlatform.network.listen((s) {
+      transfers.setOnline(s.online);
+      webQueue.setOnline(s.online);
     });
     unawaited(transfers.restore());
     unawaited(webQueue.restore());

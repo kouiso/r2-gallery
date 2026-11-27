@@ -415,7 +415,9 @@ class ApiClient {
     }
   }
 
-  void _verifyStoredObject(Object? data, String key, int size) {
+  /// 保存の受け取り（{key, size}）が送った物と合うか。合わなければ完了にしない。
+  /// 続きから送る multipart（TransferApi）も同じ確かめ方をするので外から呼べるようにする
+  static void verifyStoredObject(Object? data, String key, int size) {
     if (data is! Map || data['key'] != key || data['size'] != size) {
       throw const ApiError(502, 'アップロード結果を確認できません。再試行してください');
     }
@@ -458,7 +460,7 @@ class ApiClient {
         onSendProgress: onProgress,
         cancelToken: cancelToken,
       );
-      if (verifyStorage) _verifyStoredObject(res.data, key, bytes.length);
+      if (verifyStorage) verifyStoredObject(res.data, key, bytes.length);
     } catch (e) {
       throw _toApiError(e);
     }
@@ -563,7 +565,7 @@ class ApiClient {
       List<Map<String, dynamic>> parts, {int? expectedSize}) {
     return _post('${_lib(libId)}/objects/multipart/complete',
         {'key': key, 'uploadId': uploadId, 'parts': parts}, (r) {
-      if (expectedSize != null) _verifyStoredObject(r.data, key, expectedSize);
+      if (expectedSize != null) verifyStoredObject(r.data, key, expectedSize);
     });
   }
 

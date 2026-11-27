@@ -143,7 +143,8 @@ class _RecordingTransferApi implements TransferApi {
       UploadPart(part, 'e$part');
   @override
   Future<void> multipartComplete(
-      String lib, String key, String uploadId, List<UploadPart> parts) async {}
+      String lib, String key, String uploadId, List<UploadPart> parts,
+      {int? expectedSize}) async {}
   @override
   Future<void> multipartAbort(String lib, String key, String uploadId) async {}
   @override

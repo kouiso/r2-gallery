@@ -146,6 +146,8 @@ class AppState extends ChangeNotifier {
     ledger: kIsWeb ? null : const KvWebLedgerStore(),
     persistentStageDir: kIsWeb ? null : WebTransferQueue.defaultStageDir,
     connOf: () => api.conn,
+    // 大きい物は確定したパートを台帳に残して送る。落とされても次の起動で続きのパートから送る
+    transferApi: kIsWeb ? null : ApiClientTransferApi(api),
   );
 
   /// 転送を裏でも続けるサービスと回線の知らせ。

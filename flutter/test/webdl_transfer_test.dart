@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:r2_gallery/src/api/client.dart';
 import 'package:r2_gallery/src/api/models.dart';
+import 'package:r2_gallery/src/transfer/transfer_api.dart';
 import 'package:r2_gallery/src/transfer/transfer_queue.dart' show LedgerStore;
 import 'package:r2_gallery/src/webdl/detected.dart';
 import 'package:r2_gallery/src/webdl/web_fetcher.dart';
@@ -48,6 +49,14 @@ class FakeServer {
   bool failFolders = false;
   int? failPart;
   Completer<void>? holdPut;
+  // 確定したパートの番号（届いた順）
+  final List<int> partNumbers = [];
+  // この番号のパートが届いたら知らせ、gate が開くまで返さない（送信中に消されたことを真似る）
+  int? holdPart;
+  Completer<void>? partGate;
+  Completer<void>? partHit;
+  // 完了の時にだけ、別の送信が先にその名前を取っていたことにする（キー → 置かれた物）
+  final Map<String, Uint8List> conflictOnComplete = {};
 
   Future<void> start() async {
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -205,13 +214,28 @@ class FakeServer {
         await res.close();
         return;
       }
-      partSizes.add(body.length);
-      _parts[r.uri.queryParameters['uploadId']!]!.add(body);
       final n = int.parse(r.uri.queryParameters['part']!);
+      if (n == holdPart && partGate != null) {
+        partHit?.complete();
+        await partGate!.future;
+        res.statusCode = 500;
+        await res.close();
+        return;
+      }
+      partSizes.add(body.length);
+      partNumbers.add(n);
+      // 前の起動で開いた multipart の続きも受ける
+      (_parts[r.uri.queryParameters['uploadId']!] ??= []).add(body);
       return json({'partNumber': n, 'etag': 'e$n'});
     }
     if (p.endsWith('/objects/multipart/complete')) {
       final b = jsonDecode(utf8.decode(await _body(r))) as Map<String, dynamic>;
+      final taken = conflictOnComplete.remove(b['key']);
+      if (taken != null) {
+        objects[b['key'] as String] = taken;
+        existingKeys.add(b['key'] as String);
+        return json({'error': 'exists'}, 409);
+      }
       final all = BytesBuilder();
       for (final part in _parts[b['uploadId']]!) {
         all.add(part);
@@ -881,9 +905,10 @@ void main() {
     });
 
     // 開き直すたびに同じ台帳と置き場を読む新しいキューを作る（前のキューは消されたものとして捨てる）
-    WebTransferQueue open() {
+    WebTransferQueue open({bool resumable = false}) {
       final q = WebTransferQueue(
         api: api,
+        transferApi: resumable ? ApiClientTransferApi(api) : null,
         retryDelay: Duration.zero,
         ledger: ledger,
         persistentStageDir: () async => stage,
@@ -912,6 +937,8 @@ void main() {
       int hlsBytes = 0,
       String? hlsVariant,
       String? error,
+      String? uploadId,
+      List<int> parts = const [],
     }) =>
         {
           'id': id,
@@ -931,7 +958,113 @@ void main() {
           'pendingKey': ?pendingKey,
           'keyAttempt': keyAttempt,
           'fetched': fetched,
+          'uploadId': ?uploadId,
+          if (parts.isNotEmpty)
+            'parts': [for (final n in parts) {'partNumber': n, 'etag': 'e$n'}],
         };
+
+    Future<void> stageFile(Uint8List data) async {
+      await stage.create(recursive: true);
+      File('${stage.path}/wold_1.mp4').writeAsBytesSync(data);
+    }
+
+    test('大きい取り込みの送信中に消されても、次の起動で続きのパートから送る', () async {
+      final data = _bytes(24 * 1024 * 1024);
+      await stageFile(data);
+      ledger.value = jsonEncode([row(url: video('clip.mp4').url)]);
+      s.holdPart = 3;
+      s.partGate = Completer<void>();
+      s.partHit = Completer<void>();
+      final first = open(resumable: true);
+      await first.restore();
+      await s.partHit!.future.timeout(const Duration(seconds: 20));
+      // パート 2 まで確定した所で台帳に残っている
+      final saved = ledger.rows.single as Map;
+      expect(saved['uploadId'], 'u1');
+      expect([for (final p in saved['parts'] as List) p['partNumber']], [1, 2]);
+      // アプリが消えた（パート 3 の送信中）
+      first.dispose();
+      opened.remove(first);
+      s.partGate!.complete();
+      s.holdPart = null;
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      final again = open(resumable: true);
+      await again.restore();
+      await settle(again);
+      final t = again.tasks.single;
+      expect(t.status, WebTaskStatus.done, reason: t.error);
+      // 2回目の起動で送ったのはパート 3 だけ。multipart は作り直していない
+      expect(s.partNumbers, [1, 2, 3]);
+      expect(s.multipartCreates, 1);
+      expect(s.multipartAborts, 0);
+      expect(s.objects.keys, ['downloads/clip.mp4']);
+      expect(s.objects['downloads/clip.mp4'], data);
+      expect(ledger.rows, isEmpty);
+      expect(stage.listSync(), isEmpty);
+    });
+
+    test('送信の続きで同じ名前を別の物が取っていたら、開いていた multipart を閉じて次の名前へ', () async {
+      final data = _bytes(24 * 1024 * 1024);
+      await stageFile(data);
+      final other = _bytes(10, 3);
+      s.conflictOnComplete['downloads/clip.mp4'] = other;
+      ledger.value = jsonEncode([
+        row(url: video('clip.mp4').url, pendingKey: 'downloads/clip.mp4',
+            keyAttempt: 1, uploadId: 'u1', parts: [1, 2])
+      ]);
+      final q = open(resumable: true);
+      await q.restore();
+      await settle(q);
+      final t = q.tasks.single;
+      expect(t.status, WebTaskStatus.done, reason: t.error);
+      expect(t.key, 'downloads/clip (2).mp4');
+      expect(s.multipartAborts, 1);
+      expect(s.multipartCreates, 1);
+      // 続きのパート 3 を送った後に 409。次の名前では最初から送る
+      expect(s.partNumbers, [3, 1, 2, 3]);
+      expect(s.objects['downloads/clip (2).mp4'], data);
+      expect(s.objects['downloads/clip.mp4'], other);
+      expect(ledger.rows, isEmpty);
+    });
+
+    test('uploadId の無い古い台帳も読める', () async {
+      final data = _bytes(17 * 1024 * 1024);
+      await stageFile(data);
+      // multipart の欄が入る前の版が書いた送信中の行
+      ledger.value = jsonEncode([
+        row(url: video('clip.mp4').url, pendingKey: 'downloads/clip.mp4', keyAttempt: 1)
+      ]);
+      expect((ledger.rows.single as Map).containsKey('uploadId'), isFalse);
+      final q = open(resumable: true);
+      await q.restore();
+      await settle(q);
+      final t = q.tasks.single;
+      expect(t.status, WebTaskStatus.done, reason: t.error);
+      expect(s.multipartCreates, 1);
+      expect(s.partNumbers, [1, 2, 3]);
+      expect(s.objects['downloads/clip.mp4'], data);
+      expect(ledger.rows, isEmpty);
+    });
+
+    test('取り終えたはずの一時ファイルが消えていたら、開いていた multipart を閉じて取り直した物を最初から送る', () async {
+      final data = _bytes(17 * 1024 * 1024);
+      s.media['clip.mp4'] = data;
+      // 一時ファイルは無いが、台帳には前の中身で開いた multipart が残っている
+      ledger.value = jsonEncode([
+        row(url: video('clip.mp4').url, pendingKey: 'downloads/clip.mp4',
+            keyAttempt: 1, uploadId: 'u1', parts: [1])
+      ]);
+      final q = open(resumable: true);
+      await q.restore();
+      await settle(q);
+      final t = q.tasks.single;
+      expect(t.status, WebTaskStatus.done, reason: t.error);
+      expect(s.multipartAborts, 1);
+      expect(s.multipartCreates, 1);
+      expect(s.partNumbers, [1, 2, 3]);
+      expect(s.objects['downloads/clip.mp4'], data);
+    });
 
     test('取得の途中で消されても、次の起動で続きから取って1つだけ上げる', () async {
       final data = _bytes(400 * 1024);
@@ -1115,14 +1248,18 @@ void main() {
       expect(stage.listSync(), isEmpty);
     });
 
-    for (final size in [3000, 9 * 1024 * 1024]) {
-      test('復旧の安全性: ${size > ApiClient.multipartThreshold ? 'multipart' : '単発PUT'}の保存結果が不正なら完了にせず原本と台帳を残す', () async {
+    for (final (size, resumable) in [
+      (3000, false),
+      (9 * 1024 * 1024, false),
+      (9 * 1024 * 1024, true),
+    ]) {
+      test('復旧の安全性: ${size > ApiClient.multipartThreshold ? 'multipart' : '単発PUT'}${resumable ? '（続きから送る経路）' : ''}の保存結果が不正なら完了にせず原本と台帳を残す', () async {
         final data = _bytes(size);
         await stage.create(recursive: true);
         final source = File('${stage.path}/wold_1.mp4')..writeAsBytesSync(data);
         ledger.value = jsonEncode([row(url: video('clip.mp4').url)]);
         s.wrongReceipt = true;
-        final q = open();
+        final q = open(resumable: resumable);
         await q.restore();
         await settle(q);
         expect(q.tasks.single.status, WebTaskStatus.error);

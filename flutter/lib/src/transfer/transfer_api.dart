@@ -28,8 +28,10 @@ abstract class TransferApi {
   Future<UploadPart> putPart(String lib, String key, String uploadId, int part,
       Uint8List bytes,
       {CancelToken? cancelToken, void Function(int sent)? onProgress});
+  /// [expectedSize] を渡すと、保存された物の大きさが合うかを受け取りで確かめ、違えば投げる。
   Future<void> multipartComplete(
-      String lib, String key, String uploadId, List<UploadPart> parts);
+      String lib, String key, String uploadId, List<UploadPart> parts,
+      {int? expectedSize});
   Future<void> multipartAbort(String lib, String key, String uploadId);
 
   /// 積んだ時の接続へ abort を送る。行が覚えている接続に送るのが正しいので、
@@ -149,12 +151,14 @@ class ApiClientTransferApi implements TransferApi {
 
   @override
   Future<void> multipartComplete(
-      String lib, String key, String uploadId, List<UploadPart> parts) async {
-    await _postJson('${_base(lib)}/objects/multipart/complete', {
+      String lib, String key, String uploadId, List<UploadPart> parts,
+      {int? expectedSize}) async {
+    final d = await _postJson('${_base(lib)}/objects/multipart/complete', {
       'key': key,
       'uploadId': uploadId,
       'parts': [for (final p in parts) p.toJson()],
     });
+    if (expectedSize != null) ApiClient.verifyStoredObject(d, key, expectedSize);
   }
 
   @override

@@ -10,6 +10,8 @@ import '../api/models.dart';
 import '../state/pairing.dart';
 import '../store/kv.dart';
 import '../store/private_storage.dart';
+import '../transfer/multipart_sender.dart';
+import '../transfer/transfer_api.dart';
 import '../transfer/transfer_queue.dart' show LedgerStore;
 import 'detected.dart';
 import 'hls.dart';
@@ -63,6 +65,10 @@ class WebTransferTask {
   /// 送り終えた直後に落とされても、次の起動でこのキーを確かめて二重に上げない。
   String? pendingKey;
   int keyAttempt = 0;
+
+  /// [pendingKey] へ開いた multipart と確定済みパート。落とされても次の起動で続きのパートから送る
+  String? uploadId;
+  List<UploadPart> parts = [];
   File? staged;
   CancelToken? cancel;
 
@@ -91,6 +97,8 @@ class WebTransferTask {
         if (hlsVariant != null) 'hlsVariant': hlsVariant,
         if (pendingKey != null) 'pendingKey': pendingKey,
         'keyAttempt': keyAttempt,
+        if (uploadId != null) 'uploadId': uploadId,
+        if (parts.isNotEmpty) 'parts': [for (final p in parts) p.toJson()],
         // 端末に取り終えたか。取り終えていれば次は送るだけで済む
         'fetched': staged != null,
         if (connEndpoint != null) 'connEndpoint': connEndpoint,
@@ -151,6 +159,8 @@ class WebTransferQueue extends ChangeNotifier {
     this.ledger,
     Future<Directory> Function()? persistentStageDir,
     Connection? Function()? connOf,
+    this.transferApi,
+    this.partSize = 8 * 1024 * 1024,
   })  : _connOf = connOf ?? (() => null),
         fetcher = fetcher ?? WebFetcher(),
         history = history ?? WebHistoryStore(),
@@ -164,6 +174,11 @@ class WebTransferQueue extends ChangeNotifier {
   final int parallel;
   final int maxNetRetries;
   final Duration retryDelay;
+
+  /// 大きい物を続きから送れる multipart の口。null ならテストと Web 版で、今通り api.putFile で送る
+  /// （落とされると最初から送り直す）。名前は WebTransferTask.parts と紛れんよう parts にしない
+  final TransferApi? transferApi;
+  final int partSize;
 
   /// 同名キーが既にある時に「name (2)」…「name (9)」まで順に試す回数（KMP 版と同じ）。
   static const maxKeyAttempts = 9;
@@ -331,6 +346,9 @@ class WebTransferQueue extends ChangeNotifier {
     t.pendingKey = str('pendingKey');
     t.connEndpoint = str('connEndpoint');
     t.connToken = str('connToken');
+    t.uploadId = str('uploadId');
+    final parts = e['parts'];
+    if (parts is List) t.parts = [for (final p in parts) ?UploadPart.fromJson(p)];
     final file = _stagePath(dir, t);
     final exists = await file.exists();
     if (e['fetched'] == true) {
@@ -338,7 +356,9 @@ class WebTransferQueue extends ChangeNotifier {
         t.staged = file;
         t.loaded = 0;
       } else {
-        // 取り終えたはずの一時ファイルが消えていた。最初から取り直す
+        // 取り終えたはずの一時ファイルが消えていた。最初から取り直す。
+        // 取り直した中身は前と同じとは限らんので、前の中身で開いた multipart は閉じて使わない
+        unawaited(_abortUpload(t));
         t.hlsSeg = 0;
         t.hlsBytes = 0;
         t.hlsVariant = null;
@@ -780,6 +800,8 @@ class WebTransferQueue extends ChangeNotifier {
     t.hlsSeg = 0;
     t.hlsBytes = 0;
     t.hlsVariant = null;
+    // 原本を消すと続きのパートは送れない。開いたままの multipart も閉じる
+    unawaited(_abortUpload(t));
     if (f == null) return;
     try {
       if (await f.exists()) await f.delete();
@@ -945,10 +967,14 @@ class WebTransferQueue extends ChangeNotifier {
           await api.fileMatches(there.url, file, cancelToken: token)) {
         _checkCancelled(token);
         t.key = pending;
+        // 送り終えていた。multipart はもう閉じている
+        t.uploadId = null;
+        t.parts = [];
         await _thumb(t, file, pending);
         return;
       } else {
-        // 落ちている間に別のファイルがその名前に置かれた。次の名前から探す
+        // 落ちている間に別のファイルがその名前に置かれた。開いていた multipart を閉じて次の名前から探す
+        await _abortUpload(t);
         first++;
       }
     }
@@ -961,27 +987,19 @@ class WebTransferQueue extends ChangeNotifier {
         _checkCancelled(token);
         continue;
       }
+      // multipart は開いた名前に紐づく。別の名前へ送る前に閉じる
+      if (key != t.pendingKey) await _abortUpload(t);
       t.pendingKey = key;
       t.keyAttempt = attempt;
       await _persist(requireSuccess: true);
       try {
-        await api.putFile(
-          t.lib,
-          key,
-          file,
-          t.mime,
-          cancelToken: token,
-          onProgress: (sent, total) {
-            t.loaded = sent;
-            t.size = total;
-            _progress();
-          },
-        );
+        await _send(t, key, file, token);
         t.key = key;
         break;
       } on ApiError catch (e) {
         // 確かめた後に別の送信が同じ名前を取った。自分の物ではないので送り先の記録を外して次の名前へ
         if (e.status == 409 && !token.isCancelled) {
+          await _abortUpload(t);
           t.pendingKey = null;
           freeKey = null;
           continue;
@@ -990,6 +1008,91 @@ class WebTransferQueue extends ChangeNotifier {
       }
     }
     await _thumb(t, file, t.key!);
+  }
+
+  Future<void> _send(
+      WebTransferTask t, String key, File file, CancelToken token) async {
+    final tapi = transferApi;
+    if (tapi == null || t.size <= ApiClient.multipartThreshold) {
+      await api.putFile(
+        t.lib,
+        key,
+        file,
+        t.mime,
+        cancelToken: token,
+        onProgress: (sent, total) {
+          t.loaded = sent;
+          t.size = total;
+          _progress();
+        },
+      );
+      return;
+    }
+    final size = t.size;
+    final done = t.parts.length * partSize;
+    t.loaded = done > size ? size : done;
+    final raf = await file.open();
+    try {
+      await sendMultipart(
+        api: tapi,
+        lib: t.lib,
+        key: key,
+        mime: t.mime,
+        size: size,
+        partSize: partSize,
+        read: (offset, len) async {
+          await raf.setPosition(offset);
+          // read は要求より短く返ることがある。足りんまま送ると壊れた動画になる
+          final buf = Uint8List(len);
+          var got = 0;
+          while (got < len) {
+            final n = await raf.readInto(buf, got, len);
+            if (n <= 0) throw const FileSystemException('file ended unexpectedly');
+            got += n;
+          }
+          return buf;
+        },
+        uploadId: t.uploadId,
+        parts: t.parts,
+        cancelToken: token,
+        // 一括 PUT と同じく、保存された大きさが合わなければ完了にしない
+        verifySize: true,
+        onCheckpoint: (id, parts) async {
+          t.uploadId = id;
+          t.parts = parts;
+          // 確定したパートを台帳に書けないまま進むと、落とされた時に続きから送れない
+          await _persist(requireSuccess: true);
+          _changed();
+        },
+        onProgress: (v) {
+          t.loaded = v;
+          _progress();
+        },
+      );
+    } finally {
+      await raf.close();
+    }
+    t.uploadId = null;
+    t.parts = [];
+  }
+
+  /// 開いたままの multipart を閉じる。開いた名前（[WebTransferTask.pendingKey]）と、
+  /// 積んだ時の接続へ送る。閉じられなくても送信は止めない（R2 側の期限で消える）
+  Future<void> _abortUpload(WebTransferTask t) async {
+    final id = t.uploadId, key = t.pendingKey, tapi = transferApi;
+    t.uploadId = null;
+    t.parts = [];
+    if (id == null || key == null || tapi == null) return;
+    try {
+      final e = t.connEndpoint, tok = t.connToken;
+      if (e != null && tok != null) {
+        await tapi.multipartAbortOn(e, tok, t.lib, key, id);
+      } else {
+        await tapi.multipartAbort(t.lib, key, id);
+      }
+    } on ApiError catch (e) {
+      debugPrint('web multipart not aborted: $e');
+    }
   }
 
   Future<void> _thumb(WebTransferTask t, File file, String key) async {

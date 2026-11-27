@@ -12,6 +12,7 @@ import 'transfer_api.dart';
 /// [uploadId] が null なら作り、[onCheckpoint] を待ってから送る。あれば [parts] の続きから送る。
 /// 続きの送信が 409 でも 400 未満でもない [ApiError] で失敗したら、サーバー側で失効しているので
 /// [abortStale]（無ければ multipartAbort）で閉じてから作り直して最初から送る。409 は呼び手へ投げる。
+/// [verifySize] なら完了の受け取りで保存された大きさを確かめる（putFile と同じ確かめ方）。
 Future<void> sendMultipart({
   required TransferApi api,
   required String lib,
@@ -27,11 +28,13 @@ Future<void> sendMultipart({
   required void Function(int loaded) onProgress,
   required CancelToken cancelToken,
   Future<void> Function(String uploadId)? abortStale,
+  bool verifySize = false,
 }) async {
+  final expectedSize = verifySize ? size : null;
   if (uploadId != null) {
     try {
       await _sendParts(api, lib, key, size, partSize, read, uploadId, parts,
-          onCheckpoint, onProgress, cancelToken);
+          onCheckpoint, onProgress, cancelToken, expectedSize);
       return;
     } on ApiError catch (e) {
       if (e.status == 409 || e.status < 400) rethrow;
@@ -51,7 +54,7 @@ Future<void> sendMultipart({
   // uploadId の確定は区切り。残さんと再開時に2つ目のセッションを作り、1つ目がサーバーに残る
   await onCheckpoint(id, const []);
   await _sendParts(api, lib, key, size, partSize, read, id, const [],
-      onCheckpoint, onProgress, cancelToken);
+      onCheckpoint, onProgress, cancelToken, expectedSize);
 }
 
 Future<void> _sendParts(
@@ -66,6 +69,7 @@ Future<void> _sendParts(
   Future<void> Function(String uploadId, List<UploadPart> parts) onCheckpoint,
   void Function(int loaded) onProgress,
   CancelToken token,
+  int? expectedSize,
 ) async {
   var parts = [...confirmedParts];
   int confirmedBytes() {
@@ -92,7 +96,8 @@ Future<void> _sendParts(
   }
   _checkCancelled(token);
   final sorted = [...parts]..sort((a, b) => a.partNumber.compareTo(b.partNumber));
-  await api.multipartComplete(lib, key, uploadId, sorted);
+  await api.multipartComplete(lib, key, uploadId, sorted,
+      expectedSize: expectedSize);
 }
 
 void _checkCancelled(CancelToken token) {

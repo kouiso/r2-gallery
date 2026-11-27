@@ -33,7 +33,8 @@ class FakeTransferApi implements TransferApi {
 
   @override
   Future<void> multipartComplete(
-      String lib, String key, String uploadId, List<UploadPart> parts) async {
+      String lib, String key, String uploadId, List<UploadPart> parts,
+      {int? expectedSize}) async {
     objects[key] = Uint8List(0);
   }
 

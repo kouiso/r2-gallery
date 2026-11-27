@@ -1058,6 +1058,11 @@ class WebTransferQueue extends ChangeNotifier {
         uploadId: t.uploadId,
         parts: t.parts,
         cancelToken: token,
+        // 失効した続きは、行が積まれた時の接続へ閉じる（#149）。今の接続へ送ると別の接続の物を閉じに行く
+        abortStale: (_) async {
+          await _abortUpload(t);
+          t.loaded = 0;
+        },
         // 一括 PUT と同じく、保存された大きさが合わなければ完了にしない
         verifySize: true,
         onCheckpoint: (id, parts) async {

@@ -425,7 +425,7 @@ class ApiClient {
   /// 続きから送る multipart（TransferApi）も同じ確かめ方をするので外から呼べるようにする
   static void verifyStoredObject(Object? data, String key, int size) {
     if (data is! Map || data['key'] != key || data['size'] != size) {
-      throw const ApiError(502, 'アップロード結果を確認できません。再試行してください');
+      throw const StoredObjectMismatch();
     }
   }
 

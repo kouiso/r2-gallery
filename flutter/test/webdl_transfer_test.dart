@@ -49,7 +49,6 @@ class FakeServer {
   bool failFolders = false;
   int? failPart;
   Completer<void>? holdPut;
-<<<<<<< ours
   // 確定したパートの番号（届いた順）
   final List<int> partNumbers = [];
   // この番号のパートが届いたら知らせ、gate が開くまで返さない（送信中に消されたことを真似る）
@@ -64,7 +63,12 @@ class FakeServer {
   bool dropPut = false;
   // 一括 PUT に返す HTTP の拒否
   int? failPutStatus;
->>>>>>> theirs
+  // 'tok' のほかに受ける token。行が積まれた時の接続（別の token）への送り先を見分けるため
+  final Set<String> extraTokens = {};
+  // abort が届いた時の token（届いた順）
+  final List<String?> abortTokens = [];
+  // 失効した続き。このパートの送信は 404 になる
+  final Set<String> staleUploads = {};
 
   Future<void> start() async {
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -163,7 +167,8 @@ class FakeServer {
     final res = r.response;
     final p = r.uri.path;
     final key = r.uri.queryParameters['key'];
-    if (r.headers.value('authorization') != 'Bearer tok') {
+    final auth = r.headers.value('authorization');
+    if (auth != 'Bearer tok' && !extraTokens.any((t) => auth == 'Bearer $t')) {
       res.statusCode = 401;
       await res.close();
       return;
@@ -231,6 +236,9 @@ class FakeServer {
         return;
       }
       final n = int.parse(r.uri.queryParameters['part']!);
+      if (staleUploads.contains(r.uri.queryParameters['uploadId'])) {
+        return json({'error': 'no such upload'}, 404);
+      }
       if (n == holdPart && partGate != null) {
         partHit?.complete();
         await partGate!.future;
@@ -263,6 +271,7 @@ class FakeServer {
     }
     if (p.endsWith('/objects/multipart/abort')) {
       multipartAborts++;
+      abortTokens.add(r.headers.value('authorization')?.replaceFirst('Bearer ', ''));
       await _body(r);
       return json({});
     }
@@ -953,9 +962,10 @@ void main() {
     });
 
     // 開き直すたびに同じ台帳と置き場を読む新しいキューを作る（前のキューは消されたものとして捨てる）
-    WebTransferQueue open({bool resumable = false}) {
+    WebTransferQueue open({bool resumable = false, Connection? Function()? connOf}) {
       final q = WebTransferQueue(
         api: api,
+        connOf: connOf,
         transferApi: resumable ? ApiClientTransferApi(api) : null,
         retryDelay: Duration.zero,
         ledger: ledger,
@@ -987,6 +997,8 @@ void main() {
       String? error,
       String? uploadId,
       List<int> parts = const [],
+      String? connEndpoint,
+      String? connToken,
     }) =>
         {
           'id': id,
@@ -1007,6 +1019,8 @@ void main() {
           'keyAttempt': keyAttempt,
           'fetched': fetched,
           'uploadId': ?uploadId,
+          'connEndpoint': ?connEndpoint,
+          'connToken': ?connToken,
           if (parts.isNotEmpty)
             'parts': [for (final n in parts) {'partNumber': n, 'etag': 'e$n'}],
         };
@@ -1074,6 +1088,97 @@ void main() {
       expect(s.objects['downloads/clip (2).mp4'], data);
       expect(s.objects['downloads/clip.mp4'], other);
       expect(ledger.rows, isEmpty);
+    });
+
+    test('続きの完了で保存の確認が合わなくても、閉じて作り直さず失敗にする（重複を作らない）', () async {
+      final data = _bytes(24 * 1024 * 1024);
+      await stageFile(data);
+      const mb8 = 8 * 1024 * 1024;
+      // 前の起動でパート 1,2 まで送り終えた multipart（サーバー側にも残っている）
+      s._parts['u1'] = [data.sublist(0, mb8), data.sublist(mb8, 2 * mb8)];
+      s.wrongReceipt = true;
+      ledger.value = jsonEncode([
+        row(url: video('clip.mp4').url, pendingKey: 'downloads/clip.mp4',
+            keyAttempt: 1, uploadId: 'u1', parts: [1, 2])
+      ]);
+      final q = open(resumable: true);
+      await q.restore();
+      await settle(q);
+      final t = q.tasks.single;
+      expect(t.status, WebTaskStatus.error);
+      expect(t.error, contains('アップロード結果を確認できません'));
+      // 受け取りが合わないのは失効ではない。完了済みの物を閉じて別名で送り直さない
+      expect(s.partNumbers, [3]);
+      expect(s.multipartCreates, 0);
+      expect(s.multipartAborts, 0);
+      expect(s.objects.keys, ['downloads/clip.mp4']);
+      expect(ledger.rows.single['id'], 'wold_1');
+    });
+
+    test('失効した続きは、行が積まれた時の接続へ閉じる（今の接続の token で閉じない）', () async {
+      final data = _bytes(17 * 1024 * 1024);
+      await stageFile(data);
+      s.extraTokens.add('rowtok');
+      s.staleUploads.add('old');
+      ledger.value = jsonEncode([
+        row(url: video('clip.mp4').url, pendingKey: 'downloads/clip.mp4',
+            keyAttempt: 1, uploadId: 'old', parts: [1],
+            connEndpoint: s.base, connToken: 'rowtok')
+      ]);
+      // 今の接続は同じ送り先で token だけ違う。閉じる先を取り違えると 'tok' で届く
+      final q = open(resumable: true, connOf: () => Connection(s.base, 'tok'));
+      await q.restore();
+      await settle(q);
+      final t = q.tasks.single;
+      expect(t.status, WebTaskStatus.done, reason: t.error);
+      expect(s.abortTokens, ['rowtok']);
+      expect(s.multipartCreates, 1);
+      expect(s.partNumbers, [1, 2, 3]);
+      expect(s.objects['downloads/clip.mp4'], data);
+    });
+
+    test('送信中に取り消したら、開いていた multipart を閉じる', () async {
+      final data = _bytes(24 * 1024 * 1024);
+      await stageFile(data);
+      ledger.value = jsonEncode([row(url: video('clip.mp4').url)]);
+      s.holdPart = 3;
+      s.partGate = Completer<void>();
+      s.partHit = Completer<void>();
+      final q = open(resumable: true);
+      await q.restore();
+      await s.partHit!.future.timeout(const Duration(seconds: 20));
+      q.cancel(q.tasks.single.id);
+      s.partGate!.complete();
+      await settle(q);
+      expect(q.tasks.single.status, WebTaskStatus.cancelled);
+      // 閉じるのは待たずに投げるので、届くまで待つ
+      for (var i = 0; i < 300 && s.multipartAborts == 0; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(s.multipartAborts, 1);
+      expect(s.multipartCreates, 1);
+      expect(stage.listSync(), isEmpty);
+    });
+
+    test('失敗した行を片付けたら、開いていた multipart を閉じる', () async {
+      final data = _bytes(24 * 1024 * 1024);
+      await stageFile(data);
+      ledger.value = jsonEncode([row(url: video('clip.mp4').url)]);
+      s.failPart = 3;
+      final q = open(resumable: true);
+      await q.restore();
+      await settle(q);
+      expect(q.tasks.single.status, WebTaskStatus.error);
+      // 失敗では閉じない。再試行は続きから送れる
+      expect(s.multipartAborts, 0);
+      q.clearFinished();
+      for (var i = 0; i < 300 && s.multipartAborts == 0; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(s.multipartAborts, 1);
+      expect(q.tasks, isEmpty);
     });
 
     test('uploadId の無い古い台帳も読める', () async {
@@ -1305,13 +1410,30 @@ void main() {
         final data = _bytes(size);
         await stage.create(recursive: true);
         final source = File('${stage.path}/wold_1.mp4')..writeAsBytesSync(data);
-        ledger.value = jsonEncode([row(url: video('clip.mp4').url)]);
+        // 続きから送る経路は、開いたままの multipart（uploadId とパート 1）を持つ行で通す
+        final resumed = resumable && size > ApiClient.multipartThreshold;
+        if (resumed) {
+          s._parts['u1'] = [data.sublist(0, 8 * 1024 * 1024)];
+        }
+        ledger.value = jsonEncode([
+          row(url: video('clip.mp4').url,
+              pendingKey: resumed ? 'downloads/clip.mp4' : null,
+              keyAttempt: resumed ? 1 : 0,
+              uploadId: resumed ? 'u1' : null,
+              parts: resumed ? [1] : const [])
+        ]);
         s.wrongReceipt = true;
         final q = open(resumable: resumable);
         await q.restore();
         await settle(q);
         expect(q.tasks.single.status, WebTaskStatus.error);
         expect(q.tasks.single.error, contains('アップロード結果を確認できません'));
+        if (resumed) {
+          // 続きの完了で合わなかっただけ。閉じて作り直さない
+          expect(s.partNumbers, [2]);
+          expect(s.multipartCreates, 0);
+          expect(s.multipartAborts, 0);
+        }
         expect(source.readAsBytesSync(), data);
         expect(ledger.rows.single['id'], 'wold_1');
         expect(await q.history.list(), isEmpty);

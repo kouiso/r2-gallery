@@ -192,6 +192,14 @@ class ApiError implements Exception {
   String toString() => status > 0 ? 'HTTP $status: $message' : message;
 }
 
+/// 保存の受け取りが送った物と合わなかった（完了済みの可能性がある）。
+/// 続きから送る経路は 400 番台以上の [ApiError] を「サーバー側で失効した」と読んで作り直すが、
+/// これはその失効ではない。作り直すと完了済みの物を閉じて別名で送り直し、R2 に重複が残る
+class StoredObjectMismatch extends ApiError {
+  const StoredObjectMismatch()
+      : super(502, 'アップロード結果を確認できません。再試行してください');
+}
+
 /// 中身がバイト単位で同じ（SHA-256 一致）項目の組。[items] は古い順で、先頭が残す候補。
 class DuplicateGroup {
   final String sha256;

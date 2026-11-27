@@ -10,7 +10,7 @@ import 'transfer_api.dart';
 /// 通常のアップロードとブラウザ取り込みの両方のキューが使う（送り方を二重に持たないため）。
 ///
 /// [uploadId] が null なら作り、[onCheckpoint] を待ってから送る。あれば [parts] の続きから送る。
-/// 続きの送信が 409 でも 400 未満でもない [ApiError] で失敗したら、サーバー側で失効しているので
+/// 続きの送信が 409 でも 400 未満でも [StoredObjectMismatch] でもない [ApiError] で失敗したら、サーバー側で失効しているので
 /// [abortStale]（無ければ multipartAbort）で閉じてから作り直して最初から送る。409 は呼び手へ投げる。
 /// [verifySize] なら完了の受け取りで保存された大きさを確かめる（putFile と同じ確かめ方）。
 Future<void> sendMultipart({
@@ -38,6 +38,8 @@ Future<void> sendMultipart({
       return;
     } on ApiError catch (e) {
       if (e.status == 409 || e.status < 400) rethrow;
+      // 完了の受け取りが合わないのは失効ではない。閉じて作り直すと完了済みの物を重複させる
+      if (e is StoredObjectMismatch) rethrow;
       if (abortStale != null) {
         await abortStale(uploadId);
       } else {
@@ -52,7 +54,7 @@ Future<void> sendMultipart({
   _checkCancelled(cancelToken);
   final id = await api.multipartCreate(lib, key, mime);
   // uploadId の確定は区切り。残さんと再開時に2つ目のセッションを作り、1つ目がサーバーに残る
-  await onCheckpoint(id, const []);
+  await onCheckpoint(id, <UploadPart>[]);
   await _sendParts(api, lib, key, size, partSize, read, id, const [],
       onCheckpoint, onProgress, cancelToken, expectedSize);
 }

@@ -99,6 +99,7 @@ KMP 版（`1ae3879^:kmp/`）にあって Flutter 版に無かった、利用者�
 同じ名前がある時は「名前 (2)」〜「名前 (9)」にする。
 
 HEIC・HEIF・BMP は一覧に出る。原本は作り変えずに保存し、Android のアプリが端末の読み込みで表示する。
+HEIC を読めない環境（Web 版の Chrome・Edge・Firefox、Android 7.0〜8.1）には、Worker が JPEG の写しを返す。原本は変えない。
 
 ## 接続・設定（#145）
 

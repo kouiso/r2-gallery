@@ -1,5 +1,5 @@
 # Copy to wrangler.toml (git-ignored) and fill in your own values.
-name = "r2-gallery-worker"
+name = "r2-gallery"
 main = "src/index.ts"
 compatibility_date = "2026-09-01"
 workers_dev = true
@@ -24,6 +24,10 @@ bucket_name = "your-second-bucket"
 # binding = "REVIEW_DB"
 # database_name = "your-review-db"
 # database_id = "00000000-0000-0000-0000-000000000000"
+
+# HEIC を読めない環境へ JPEG の写しを返す（Cloudflare Images）。無くても動く
+# [images]
+# binding = "IMAGES"
 
 [vars]
 # Set "readOnly": true on a library to disable every write operation for it.

@@ -43,12 +43,13 @@ pnpm exec wrangler dev --local --port 8787 --config worker/wrangler.test.toml --
 
 - Comments: Japanese, explain *why* only. Commit subjects: English Conventional Commits. PR titles: Japanese.
 - No secrets in the repo: worker `wrangler.toml`, `.dev.vars`, keystores, tokens stay git-ignored or in GitHub secrets / 1Password.
-- Worker deploys are operational (Cloudflare account `6e206506efda3871a2d6e81da38b4b0b`, worker `notes-sync`) — never commit credentials for them.
+- Worker deploys are operational (Cloudflare account `6e206506efda3871a2d6e81da38b4b0b`, worker `r2-gallery`) — never commit credentials for them.
 - Media keys must keep a media extension: files uploaded without an extension upload fine but never appear in listings.
 - FAD distribution ships the **Flutter release APK** (`app-release.apk`, applicationId `app.r2gallery`, signed with the pinned debug key) automatically after a merge to `main` — see `.agents/skills/fad-distribute`. Never ship a debug APK: Flutter debug builds run JIT with asserts and are several times slower than the KMP client was.
 - Web hosting: the `pages-dist` branch is the Pages production branch (no build, output = repo root). The Pages project is connected to this repository `kouiso/r2-gallery` directly, so `.github/workflows/web-deploy.yml` builds `flutter/build/web` on every push to `main` and pushes the dist commit to this repository's `pages-dist` (that push triggers the Pages deployment) — never edit `pages-dist` by hand. (Old path: it relayed the same dist to `kouiso/r2-gallery-archive`'s `pages-dist` with `PAGES_DEPLOY_KEY` because the project was bound to the archive repo by id; retired in PR #18 once the new project took over; issue #10 is still open.)
 - `ci.yml` runs `check` / `test` / `secrets-scan` on every push to `main` and every non-draft PR. Before pushing, run `node .github/ci/run.mjs fast` locally; the operator-managed `r2-flutter-build` lane (separate build repository) covers `flutter pub get` / `flutter test` / `flutter build apk --release` / `flutter build web`.
 - `node tools/sync-ai-rules.mjs --check` must stay green.
+- Versioning: the user-facing version is the part of `flutter/pubspec.yaml` `version:` before `+`, changed only in a release PR the owner approves (keep root `package.json` `version` equal). The build number is `<base after +> + git rev-list --count --first-parent HEAD`, printed by `node tools/build-number.mjs`; every build that ships (web-deploy, r2-flutter-build) passes it as `--build-number`. The same commit always gets the same number (redistributing an unchanged commit is allowed as an exception); `--resolve <n>` maps a number back to its commit. iOS is not distributed, so it is out of scope.
 - Never drop a user-facing feature. A rewrite or client replacement ships only after every feature of the old client is listed in `doc/feature-parity.md` and confirmed present in the new one; removing a feature needs the owner's explicit OK first. (The KMP→Flutter replacement in #138 silently lost "今すぐロック"/device lock and the in-app web downloader.)
 
 ## Shared skills
@@ -57,7 +58,7 @@ Canonical skills live in `.agents/skills/<name>/SKILL.md`:
 
 - `fad-distribute` — merging to `main` ships the APK to Firebase App Distribution automatically (operator-managed `r2-flutter-build` lane); confirm or force a release.
 - `fad-invite` — FAD のテスター追加・削除: `fad-invite`. Run it before adding or removing any tester (one person at a time: env, project, OS, person).
-- `worker-deploy` — deploy `worker/` to the `notes-sync` Cloudflare Worker without local CF credentials.
+- `worker-deploy` — deploy `worker/` to the `r2-gallery` Cloudflare Worker without local CF credentials.
 
 Claude Code resolves the generated stubs under `.claude/skills/` which point at the canonical files; other agents read `.agents/skills/` directly.
 

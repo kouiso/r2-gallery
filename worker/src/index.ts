@@ -22,6 +22,7 @@
  * - GET /v1/:lib/meta?key=                    -> review metadata joined from D1 (REVIEW_LIBS only)
  * - GET /m/:lib/<key>?e=&s=                   -> original object (signed, no bearer needed)
  * - GET /t/:lib/<key>?e=&s=                   -> thumbnail from META/.system/thumbs/<lib>/ (falls back to original)
+ * - GET /v/:lib/<key>?e=&s=                   -> HEIC の JPEG の写し（長辺 2560px。signed）
  *
  * Write operations (libraries with readOnly !== true only):
  * - PUT  /v1/:lib/objects?key=               -> upload a small object (body = bytes; refuses to overwrite;

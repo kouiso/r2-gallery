@@ -1579,7 +1579,8 @@ describe("stale thumbnails", () => {
     const orig = env.META.delete.bind(env.META);
     let calls = 0;
     const spy = vi.spyOn(env.META, "delete").mockImplementation(async (k) => {
-      calls += 1;
+      // 数えるのはサムネの削除だけ（batch ごとにアルバムの控えもまとめて消す）
+      if (typeof k === "string" && k.includes("/thumbs/")) calls += 1;
       // 2件ずつの batch の 2 つ目で落とす
       if (calls === 3) throw new Error("subrequest limit");
       return orig(k);

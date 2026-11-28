@@ -1,0 +1,13 @@
+$ curl ... /v1/a/similar/status   # 照合の後
+{
+  "alg": "vs1",
+  "params": "p1",
+  "images": 337,
+  "signed": 337,
+  "failed": 0,
+  "flat": 1,
+  "pending": 0,
+  "pendingWithThumb": 0,
+  "pendingNoThumb": 0,
+  "pendingBytesEstimate": 0
+}

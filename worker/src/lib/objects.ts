@@ -2,6 +2,7 @@ import { SYSTEM_PREFIX, TRASH_PREFIX } from "./const";
 import type { Env } from "./env";
 import { HttpError } from "./http";
 import { libraries } from "./env";
+import { trashAlbumsPath } from "./trash-albums";
 
 /**
  * A head() check before put() still lets a write that lands in between be replaced.
@@ -96,6 +97,68 @@ export async function moveObject(
 }
 
 /**
+ * 中身が同じ写しと言えるか。1 回の put で置いた物の etag は中身の MD5 なので、大きさと etag が
+ * 両方合えば同じ中身。複数パートで写した物は etag が変わるので、ここでは同じと言わない
+ * （別の物を上げ直した所を「戻った」と取り違えて、ゴミ箱側を消さないため）。
+ */
+export const sameCopy = (a: R2Object, b: R2Object): boolean =>
+  a.size === b.size && a.etag === b.etag;
+
+async function deleteLeftover(bucket: R2Bucket, key: string): Promise<void> {
+  // 消せなくても中身は失わない（元の key に同じ物がある）。一時的な失敗に備えて 1 回だけ試し直す
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await bucket.delete(key);
+      return;
+    } catch (e) {
+      console.error("trash_leftover_delete_failed", key, e);
+    }
+  }
+}
+
+/**
+ * ゴミ箱から元の key へ戻す。移動が途中で止まっても、物の在り処で戻ったかを決め直す。
+ * - 元の key への写しは済んだのにゴミ箱側を消せなかった: 戻ったとして、ゴミ箱側を消し直す
+ * - 前回そうなってゴミ箱にも同じ中身が残っている: 同じく戻ったとして、残りを消す
+ * - resumable（前回は戻せたのにアルバムの更新で失敗した）でゴミ箱側が無い: 戻ったとする
+ * 元の key に別の中身がある時は従来どおり destination_exists にする。
+ * 返す resumed は「この呼び出しで写していない」こと（索引の行は呼び出し側で足し直す）。
+ */
+export async function moveBackFromTrash(
+  env: Env,
+  bucket: R2Bucket,
+  trashKey: string,
+  key: string,
+  resumable: boolean,
+): Promise<{ obj: R2Object; resumed: boolean }> {
+  const settled = async (): Promise<R2Object | null> => {
+    const [at, inTrash] = await Promise.all([bucket.head(key), bucket.head(trashKey)]);
+    if (!at) return null;
+    if (!inTrash) return resumable ? at : null;
+    if (!sameCopy(at, inTrash)) return null;
+    await deleteLeftover(bucket, trashKey);
+    return at;
+  };
+  const before = await settled();
+  if (before) return { obj: before, resumed: true };
+  let put: R2Object;
+  try {
+    put = await copyObject(env, bucket, trashKey, bucket, key);
+  } catch (e) {
+    // 写す途中で投げても、元の key に同じ中身が置けていれば戻っている
+    const after = await settled().catch(() => null);
+    if (after) return { obj: after, resumed: false };
+    throw e;
+  }
+  const check = await bucket.head(key);
+  if (!check || check.size !== put.size) throw new HttpError(500, "move_verify_failed");
+  // 写しは元の key に置けた。ゴミ箱側を消せなくても「戻せなかった」にはしない。
+  // 失敗にすると、やり直しは元の key の物とぶつかって 409 になり、アルバムへ戻す道が無くなる
+  await deleteLeftover(bucket, trashKey);
+  return { obj: put, resumed: false };
+}
+
+/**
  * サムネは本体とは別の META に key 単位で置かれ、本体を消しても残る。
  * 同名で別の物を上げ直した時に古い絵が出ないよう、本体が入れ替わる所で必ず消す。
  */
@@ -168,6 +231,15 @@ export async function purgeTrash(env: Env, batchSize = PURGE_BATCH): Promise<num
       }
       await bucket.delete(batch);
       removed += batch.length;
+      // 本体を消した後で、アルバムの所属の控えも消す。控えが残ると、アルバムの並びの跡を書き込みの
+      // たびに 1 件ずつ確かめ直すことになり、1 リクエストの外部呼び出しの上限に届く（控えが無い跡は
+      // 確かめずに落とせる）。本体より先に消すと、消し損ねた本体を戻した時に所属が失われる。
+      // 消せなくても期限切れの本体は消えているので、失敗は記録だけにする（跡は確かめて落とせる）
+      try {
+        await env.META.delete(batch.map((tk) => trashAlbumsPath(lib.id, tk)));
+      } catch (e) {
+        console.error("purge_sidecar_delete_failed", lib.id, e);
+      }
     }
   }
   return removed;

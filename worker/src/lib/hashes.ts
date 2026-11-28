@@ -105,6 +105,36 @@ export async function dropHashBestEffort(env: Env, lib: string, key: string): Pr
   }
 }
 
+/**
+ * まとめてゴミ箱へ送った物の記録を 1 回の書き込みで落とす。1 件ずつ落とすと、40 件で
+ * 数 MB のファイルを 40 回読み書きすることになり、外部呼び出しの上限と CPU 時間を食う。
+ * 落とす物が無ければ書かない。落とせたら true、変える物が無い・失敗した時は false
+ * （失敗は握りつぶす: 一覧に無い key の記録は使われず、走査を終えた時の掃除で消える）。
+ */
+export async function dropHashesBestEffort(
+  env: Env,
+  lib: string,
+  keys: readonly string[],
+): Promise<boolean> {
+  if (!keys.length) return false;
+  let dropped = false;
+  try {
+    await mutateHashes(env, lib, (d) => {
+      dropped = false;
+      for (const key of keys) {
+        if (!(key in d.items)) continue;
+        delete d.items[key];
+        dropped = true;
+      }
+      return dropped;
+    });
+    return dropped;
+  } catch (e) {
+    console.error("hash_drop_failed", lib, keys.length, e);
+    return false;
+  }
+}
+
 /** 今ある物と etag・サイズが合う記録だけを有効とする。合わない記録は古い中身の物。 */
 export function validHash(hashes: HashesFile, row: CatalogRow): string | null {
   const rec = hashes.items[row[0]];

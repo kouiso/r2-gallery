@@ -125,3 +125,54 @@ HEIC を読めない環境（Web 版の Chrome・Edge・Firefox、Android 7.0〜
 |---|---|---|---|
 | LOCK | 今すぐロック・端末ロック・再ロック時間 | ☑ | `lock_test.dart`、`lock_prefetch_test.dart`。生体認証と FLAG_SECURE の Kotlin 側は実機未確認 |
 | WEBDL | アプリ内ブラウザから見つけて R2 に保存 | ☑ | `import_ui_test.dart`、`import_lock_test.dart`、`webdl_*_test.dart` |
+
+## 重複・似ている写真
+
+設定タブの入口を、中身が同じ物だけを出す `DuplicatesScreen`（#106）から、見た目の照合も入れた `SimilarScreen` に
+付け替えた（入口の文字は「重複・似ている写真を探す」）。古い画面の機能を1つも落としていないかを、この表で突き合わせる。
+`DuplicatesScreen` は消さずに残し、見た目の照合に対応していない古い Worker（`/similar/status` が 404）ではそのまま出す。
+
+この節だけ、☑・☐ に加えて次の印を使う。
+
+- △：機能はあり、Dart の流れか Worker のテストでは通しているが、Flutter の画面の操作としてはテストで通していない
+  （下の「残っている穴」）
+
+手元の Worker と合成画像だけで画面を通した記録は `doc/evidence/similar-local/README.md`。
+
+### 古い画面にあった物
+
+| ID | 機能 | 新しい場所 | 状態 | 確かめているテスト・補足 |
+|---|---|---|---|---|
+| D1 | 中身が同じ物の組 | 「重複」の段の「同じファイル」 | ☑ | `similar_screen_test.dart`「オリジナルに札が付き…」、`similar.test.ts`「同じ中身の束（/duplicates）は、全部が重複の段に…」（`/duplicates` の組がどれも「同じファイル」で出る） |
+| D2 | 既定で一番古い物を残す | 「オリジナル」の札 | ☑ | `core.test.ts`「keeps the oldest member of an exact node…」。見た目だけの組では、原本の画素数 → PNG → バイト数 → 古い順に変わる（README「見た目の照合」） |
+| D3 | 残す物を選び直す（「こちらを残す」） | 長押しの「オリジナルにする」 | ☑ | `similar_screen_test.dart`「長押しからオリジナルを選び直すと…」、`similar_controller_test.dart`「relabel の札に入れ替え…」、`similar.test.ts`「残す物を変えると…」。新しいオリジナルと別物と分かった物は選べなくなる |
+| D4 | 1件ずつゴミ箱へ | 長押しの「この1件だけゴミ箱へ」、または丸いチェックで1件だけ選んで下のボタン | ☑ | `similar_screen_test.dart`「長押しからこの1件だけゴミ箱へ送れる」、`similar_controller_test.dart`「長押しの1件だけゴミ箱は他の選択に触らない」。古い画面のように札の下に「ゴミ箱へ」ボタンは並べず、長押しの中に移した |
+| D5 | 消した後の「元に戻す」 | 同じ6秒のスナックバー（`offerOptimisticTrashUndo`）。中身は `POST /similar/undo` | ☑ | `similar_screen_test.dart`「確かめの文に…後で元に戻せる」、`similar_controller_test.dart`「取り消しは 40 件ずつ…」、`similar-trash.test.ts`「消す前のアルバムにそのまま戻し…」、本物の Worker に対しては `test_live/live_similar_test.dart` |
+| D6 | まだ確認できていない物・大きすぎて確認できなかった物の件数 | 重複の段の見出しの内訳（「まだ中身を確認できていない物」「大きすぎて中身を確認できなかった物」に、見た目の照合の内訳が加わる） | ☑ | `similar_screen_test.dart`「まだ中身を確認できていない物があれば、その件数を重複の段の頭に出す」（`hashPending`）、「大きすぎて…」と照合の内訳は同じファイルの一覧のテスト |
+| D7 | 読み取り専用ライブラリの案内（組は見せ、消させない） | 同じ。チェックと下のボタンを出さない | ☑ | `similar_screen_test.dart`「読み取り専用のライブラリでは組だけ見せ…」、`similar-trash.test.ts`（403） |
+| D8 | タップでビューアを開き、ビューアで消したら読み直す | 同じ | ☑ | `similar_screen_test.dart`「タップでビューアを開く」「ビューアでゴミ箱へ送って閉じると一覧を読み直す」（`onChanged` → `reload`） |
+| D9 | 続きのページを読む | 同じ（末尾が見えたら次の組を読む。失敗したら「続きを読み込む」） | ☑ | `similar_screen_test.dart`「末尾まで来たら続きのページを読む」、`similar_controller_test.dart`「すべての重複は先に全ページを読み…」「「すべての重複」の後に届いた古い続きのページは…」、`similar.test.ts`「カーソルで 1 束ずつたどっても…」「消した後もカーソルがずれない」 |
+| D10 | 古い Worker（404）の案内 | 見た目の照合の 404、または大きすぎて見た目の照合を断るライブラリ（`/similar/status` の `tooMany`、413 `too_many_for_similar`）では古い画面へ。上限を超える時は照合を始めず、写真の枚数・上限・PC ツールを古い画面の上に出す。一覧の口だけが落ちた時（5xx など）はエラーの画面から「同じファイルだけを探す」で古い画面へ移れる。古い画面は、重複の確認も無い Worker では今までどおり「まだ重複の確認に対応していません」 | ☑ | `similar_screen_test.dart`「見た目の照合が無い古い Worker（404）では…」「見た目の照合を断る大きなライブラリ（413）では…」「上限を超えると status が言えば…」「一覧の口だけが落ちた時は…」、`similar_controller_test.dart`「一覧の 413 too_many_for_similar は…」「status が上限を超えると言えば…」、`duplicates_screen_test.dart`「古い Worker の 404 は未対応と出す」「設定タブから開き、見た目の照合が無い古い Worker では…」 |
+| D11 | 失敗した時の再試行 | 同じ | ☑ | `similar_screen_test.dart`「読めなかったら再試行で読み直せる」、`similar_controller_test.dart`「status のそれ以外の失敗は error で…」 |
+| D12 | 中身の計算の進み具合（「確認中… あと N 件」、画面を離れたら止まる） | 「中身を確認中… あと N 件」 | ☑ | `similar_screen_test.dart`「中身の計算の途中は残りの件数を出す」、`similar_controller_test.dart`「計算 → 状況 → 照合…」「計算が進まなくなったら打ち切って…」「dispose: 計算の繰り返しを止める」 |
+| D13 | アップロード前の「もうある」確認 | 変えていない | ☑ | `upload_check_test.dart`、`duplicates_api_test.dart` |
+
+### 新しく加わった物
+
+| ID | 機能 | 状態 | 確かめているテスト・補足 |
+|---|---|---|---|
+| N1 | 「重複」「似ている」の2つの段、札（同じファイル／ほぼ同じ／反転／差分かも／似ている） | ☑ | `similar_screen_test.dart`「オリジナルに札が付き…」、`similar.test.ts`「重複の束: …」「似ている束は別の段に…」、`core.test.ts` の pair labels。似ている段には「別の絵のこともあります」の案内 |
+| N2 | 「すべての重複」（全ページを読んでから、同じファイルとほぼ同じだけ。反転・差分かも・似ている・オリジナルは選ばない） | ☑ | `similar_screen_test.dart`「「すべての重複」は残りのページを読み切ってから…」、`similar_controller_test.dart`「すべての重複は先に全ページを読み…」「ページを読み切れなければ何も選ばない」 |
+| N3 | まとめてゴミ箱へ（40件ずつ、同時に2本、進み具合と中止） | ☑ | `similar_controller_test.dart`「40 件ずつ、同時に 2 本までで送り…」「中止したら…」、`similar_screen_test.dart`（進み具合のダイアログ）、`similar-trash.test.ts`「アルバムの書き込みは 1 回…」 |
+| N4 | 確かめの文に種類ごとの件数、似ている・差分かもを含む時の注意 | ☑ | `similar_screen_test.dart`「確かめの文に種類ごとの件数…」「似ている物や差分かもを選ぶと…」。件数が 0 の種類は文に出さない |
+| N5 | 直後の「元に戻す」はアルバムまで消す前と同じに戻す | ☑ | `similar-trash.test.ts`「消す前のアルバムにそのまま戻し、消した時に入れた残す物を外す」、`test_live/live_similar_test.dart` |
+| N6 | アルバムでは消した物の場所にオリジナルが入る。ゴミ箱から1件戻すと元の位置へ戻る（同じファイルとして消した物は、オリジナルがいるアルバムへは戻らない） | ☑ | `similar-trash.test.ts`「ファイルを移し、消した物の位置に残す物を入れ…」「ゴミ箱から戻すと元の位置へ戻り…」「同じファイルとして消した物は…」 |
+| N7 | 移せなかった物を元の組の元の位置へ戻し、件数を知らせる | ☑ | `similar_screen_test.dart`「移せなかった物は元に戻して件数を知らせる」、`similar_controller_test.dart`「一部が移せなければ…」 |
+| N8 | 見た目の照合の同意（残り 300 件超で通信量を見せる）と、この端末での照合（続きから・画面を消さない・途中の結果） | ☑ | `similar_screen_test.dart`「照合が 300 件を超えると…」「300 件以下ならすぐ照合し…」「Web の同意の画面では…」、`signature_backfill_test.dart`、`visual_signature_test.dart` |
+| N9 | Web ではサムネのある物だけ照合し、無い物は「この端末では照合できない物」と出す | ☑ | `similar_controller_test.dart`「Web はサムネのある物だけを数え…」、`signature_backfill_test.dart`「Web でサムネの無い物は手を付けずに残す」 |
+| N10 | PC ツール（読み取り専用の報告・適合率・署名の書き込み） | ☑ | `tools/similar-signatures.test.mjs`。本物の手元の Worker に対しては `doc/evidence/similar-local/`（手順 3） |
+
+### 残っている穴
+
+- 実機（Android の FAD 版）と本番の Worker では通していない。サムネの無い物を端末で縮小して置く流れ（Android だけの経路）は
+  fake のテストと `test_live/live_similar_test.dart`（Dart の VM で動く）だけ。

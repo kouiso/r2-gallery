@@ -1,7 +1,7 @@
 import { journalBestEffort, journalExisting, rowOf } from "../lib/catalog";
 import { MAX_SIMPLE_UPLOAD, SYSTEM_PREFIX, TRASH_PREFIX } from "../lib/const";
 import type { Env } from "../lib/env";
-import { bucketFor, readable, writable } from "../lib/env";
+import { readable, writable } from "../lib/env";
 import { dropHashBestEffort, isSha256Hex, recordHashBestEffort } from "../lib/hashes";
 import { assertUserKey, HttpError, json, readJson, ref } from "../lib/http";
 import { handleImport } from "../lib/import";
@@ -10,15 +10,62 @@ import {
   copyObject,
   createOnly,
   dropThumbBestEffort,
+  moveBackFromTrash,
   moveObject,
 } from "../lib/objects";
 import { loadAlbums, loadIndex, mutateAlbums } from "../lib/store";
-import type { AlbumsFile, GlobalAlbum, GlobalAlbumItem } from "../lib/store";
+import type { AlbumsFile, GlobalAlbum } from "../lib/store";
+import {
+  dropKeeperDependent,
+  foldGhostsIntoOrder,
+  insertByTrashOrder,
+  makeProbe,
+  pruneTrashOrder,
+  trashAlbumsPath,
+  type TrashAlbumMembership,
+} from "../lib/trash-albums";
 import { trashDuplicate } from "./duplicates";
 
-const thumbPath = (lib: string, key: string) => `${SYSTEM_PREFIX}thumbs/${lib}/${key}.webp`;
+// まとめて消す口の取り消しも、戻した物のサムネの有無をこの置き場で確かめる
+export const thumbPath = (lib: string, key: string) => `${SYSTEM_PREFIX}thumbs/${lib}/${key}.webp`;
 
 type WaitUntil = Pick<ExecutionContext, "waitUntil">;
+
+/**
+ * ゴミ箱から戻した物にサムネがあるか（索引に載せる値）。ゴミ箱の間もサムネは元の key の置き場に残して
+ * あるが、置き場は key だけで引くので、ゴミ箱に居る間に同じ key へ別の物を上げ（上げた時に古いサムネは
+ * 消える）、そのサムネを置いてからその物もゴミ箱へ送ると、置き場には後の物のサムネが残る。それを
+ * 戻した物のサムネとして出すと、戻した物の見た目の署名が別の絵から作られ、似ていない写真を「ほぼ同じ」
+ * としてまとめて消してしまう。ゴミ箱の間は元の key のサムネを作る口が無いので、送った時刻より後に
+ * 置かれたサムネは戻した物の物ではない。そういうサムネは消して「サムネ無し」にする（アプリが原本から
+ * 作り直す）。確かめられなかった時は null で、サムネの有無に触れない。ここで 5xx にすると、本体は
+ * 戻ったのに失敗と伝わり、やり直しは「もうゴミ箱に無い」で通らなくなる
+ */
+export async function restoredThumb(
+  env: Env,
+  lib: string,
+  key: string,
+  trashKey: string,
+): Promise<boolean | null> {
+  const path = thumbPath(lib, key);
+  let thumb: R2Object | null;
+  try {
+    thumb = await env.META.head(path);
+  } catch (e) {
+    console.error("thumb_probe_failed", lib, key, e);
+    return null;
+  }
+  if (!thumb) return false;
+  const trashedAt = Number(/^\.trash\/(\d+)\//.exec(trashKey)?.[1]);
+  if (!Number.isFinite(trashedAt) || thumb.uploaded.getTime() <= trashedAt) return true;
+  try {
+    await env.META.delete(path);
+  } catch (e) {
+    // 消せなくても、索引は「サムネ無し」にする（アプリは原本から作り、置き直して上書きする）
+    console.error("stale_thumb_delete_failed", lib, key, e);
+  }
+  return false;
+}
 
 /** 新しく置いた物を索引へ足す。同名の古いサムネは消した後なので、サムネ無しとして足す。 */
 const journalCreated = (env: Env, lib: string, obj: R2Object, ctx?: WaitUntil) =>
@@ -39,149 +86,6 @@ const journalBlocked = async (
   const existing = await bucket.head(key);
   if (existing) await journalExisting(env, lib, existing, ctx);
 };
-
-// ゴミ箱へ送る時に外したアルバムの控え。復元で元のアルバムへ戻すために、
-// 外した項目そのものを META に置く（R2 のゴミ箱には載せない）。
-interface TrashAlbumMembership {
-  albumId: string;
-  item: GlobalAlbumItem;
-}
-const trashAlbumsPath = (lib: string, trashKey: string) =>
-  `${SYSTEM_PREFIX}trash-albums/${lib}/${trashKey.slice(TRASH_PREFIX.length)}.json`;
-const refKey = (i: { lib: string; key: string }) => `${i.lib}:${i.key}`;
-
-// 位置の控えは index ではなく「ゴミ箱の物も含めた並び」を albums.json 側に持つ。
-// index だと、複数枚を送った時に後の物の位置が先に抜けた物の分ずれて、戻すと逆順になる。
-function foldGhostsIntoOrder(album: GlobalAlbum) {
-  const order = album.items.map(refKey);
-  const seen = new Set(order);
-  const prev = album.trashOrder ?? [];
-  prev.forEach((id, i) => {
-    if (seen.has(id)) return;
-    // 手前にいた物のうち残っている最寄りの後ろへ。無ければ先頭
-    let at = 0;
-    for (let j = i - 1; j >= 0; j--) {
-      const k = order.indexOf(prev[j]!);
-      if (k >= 0) {
-        at = k + 1;
-        break;
-      }
-    }
-    order.splice(at, 0, id);
-    seen.add(id);
-  });
-  album.trashOrder = order;
-}
-
-// 候補のうち「まだ戻せる物」を返す。期限切れ purge は控えを消さないので、控えがあり、かつ
-// .trash の実体も元の key も無い物だけを purge 済みと見なす。restore は実体を先に元の key へ戻して
-// からアルバムを更新するので、元の key を見ないと、その間に戻している途中の物が落ちてしまう。
-// 控えの一覧と head の結果はリクエスト内で使い回し、mutateAlbums がやり直す時だけ捨てる
-// （並行した trash が書いた控えを見落として落とさないため）。
-function makeProbe(env: Env) {
-  let lists = new Map<string, Promise<Map<string, string[]>>>();
-  let heads = new Map<string, Promise<boolean>>();
-  const listSidecars = (lib: string) => {
-    let p = lists.get(lib);
-    if (!p) {
-      p = (async () => {
-        const out = new Map<string, string[]>();
-        const prefix = `${SYSTEM_PREFIX}trash-albums/${lib}/`;
-        let cursor: string | undefined;
-        do {
-          const listed = await env.META.list({ prefix, cursor });
-          for (const o of listed.objects) {
-            const m = /^(\d+)\/([\s\S]+)\.json$/.exec(o.key.slice(prefix.length));
-            if (!m) continue;
-            const id = `${lib}:${m[2]}`;
-            out.set(id, [...(out.get(id) ?? []), `${TRASH_PREFIX}${m[1]}/${m[2]}`]);
-          }
-          cursor = listed.truncated ? listed.cursor : undefined;
-        } while (cursor);
-        return out;
-      })();
-      lists.set(lib, p);
-    }
-    return p;
-  };
-  const head = (lib: string, bucket: R2Bucket, key: string) => {
-    const id = `${lib}\n${key}`;
-    let p = heads.get(id);
-    if (!p) {
-      p = bucket.head(key).then((o) => o !== null);
-      heads.set(id, p);
-    }
-    return p;
-  };
-  return {
-    reset() {
-      lists = new Map();
-      heads = new Map();
-    },
-    async live(candidates: Set<string>): Promise<Set<string>> {
-      const live = new Set<string>();
-      for (const id of candidates) {
-        const lib = id.slice(0, id.indexOf(":"));
-        const original = id.slice(lib.length + 1);
-        const t = bucketFor(env, lib);
-        const trashKeys = t ? (await listSidecars(lib)).get(id) : undefined;
-        if (!t || !trashKeys) continue;
-        const alive = await Promise.all([
-          head(lib, t.bucket, original),
-          ...trashKeys.map((k) => head(lib, t.bucket, k)),
-        ]);
-        if (alive.some(Boolean)) live.add(id);
-      }
-      return live;
-    },
-  };
-}
-type Probe = ReturnType<typeof makeProbe>;
-
-// 並びの控えが増え続けないよう、アルバムにも今のゴミ箱にも無い key（アルバムから外した物、
-// purge された物）を落とし、ゴミ箱の物が無くなれば控え自体を消す。mutateAlbums の中で呼ぶ。
-// trash は控えを書いてから albums.json を更新するので、並行して送った物は落ちない。
-async function pruneTrashOrder(probe: Probe, album: GlobalAlbum) {
-  const order = album.trashOrder;
-  if (!order) return;
-  const present = new Set(album.items.map(refKey));
-  const ghosts = new Set(order.filter((k) => !present.has(k)));
-  const live = ghosts.size ? await probe.live(ghosts) : ghosts;
-  if (!live.size) {
-    delete album.trashOrder;
-    return;
-  }
-  album.trashOrder = order.filter((k) => present.has(k) || live.has(k));
-}
-
-function insertByTrashOrder(album: GlobalAlbum, item: GlobalAlbumItem) {
-  const id = refKey(item);
-  const order = album.trashOrder ?? [];
-  const idx = order.indexOf(id);
-  // 項目数の2乗にならないよう、現在の位置は一度だけ作る
-  const where = new Map(album.items.map((i, n) => [refKey(i), n]));
-  let at = album.items.length;
-  if (idx >= 0) {
-    // 最寄りの手前の物の後ろ → 無ければ最寄りの後ろの物の前 → 無ければ先頭
-    at = 0;
-    let found = false;
-    for (let j = idx - 1; j >= 0 && !found; j--) {
-      const k = where.get(order[j]!);
-      if (k !== undefined) {
-        at = k + 1;
-        found = true;
-      }
-    }
-    for (let j = idx + 1; j < order.length && !found; j++) {
-      const k = where.get(order[j]!);
-      if (k !== undefined) {
-        at = k;
-        found = true;
-      }
-    }
-  }
-  album.items.splice(at, 0, item);
-}
 
 /** PUT /v1/:lib/objects?key= — small object upload; refuses to overwrite. */
 export async function handlePutObject(
@@ -432,8 +336,25 @@ export async function handleLibOps(
     try {
       await moveObject(env, bucket, key, bucket, trashKey);
     } catch (e) {
-      if (planned.length) await env.META.delete(sidecar);
-      throw e;
+      // 途中まで進んで投げた時は実物の場所で決める（/similar/trash と同じ）。元が消えて
+      // ゴミ箱に在れば移っているので続ける。元が残っていれば、この呼び出しの写しを消して断る
+      // （控えの無い写しはゴミ箱に出るのに戻せない）
+      // 確かめられなかった時は undefined。物がどこに在るか分からないので控えは消さない
+      const [left, moved] = await Promise.all([bucket.head(key), bucket.head(trashKey)]).catch(
+        () => [undefined, undefined] as const,
+      );
+      if (!(left === null && moved)) {
+        const copied = !(e instanceof HttpError && e.code === "destination_exists");
+        if (left && moved && copied) {
+          await bucket.delete(trashKey).catch((d: unknown) => {
+            console.error("trash_leftover_delete_failed", lib, trashKey, d);
+          });
+        }
+        // 元に残っている（動いていない）か、元にもゴミ箱にも無い（別の操作が先に動かした・消した）
+        // なら、この呼び出しのゴミ箱の物は無いので控えも要らない
+        if (planned.length && left !== undefined) await env.META.delete(sidecar);
+        throw e;
+      }
     }
     // アルバムの更新より先に索引から外す。後ろで失敗しても、一覧に消した物が残らない
     await journalBestEffort(env, lib, { del: [key] });
@@ -470,20 +391,13 @@ export async function handleLibOps(
   // 捨てた）物は従来どおりファイルだけ戻る。
   const sidecar = trashAlbumsPath(lib, trashKey);
   const saved = await env.META.get(sidecar);
-  // 前回、ファイルは戻ったのにアルバムの更新で失敗した場合のやり直し：移動は済んでいるので飛ばす
-  const resumed = saved && !(await bucket.head(trashKey)) && !!(await bucket.head(original));
-  if (!resumed) {
-    const back = await moveObject(env, bucket, trashKey, bucket, original);
-    // ゴミ箱の間もサムネは残してある。あるかを 1 回だけ確かめて索引に足す
-    // 確かめられなかった時はサムネの有無に触れない。ここで 5xx にすると、本体は戻ったのに
-    // 失敗と伝わり、やり直しは「もうゴミ箱に無い」で通らなくなる
-    const hasThumb = await env.META.head(thumbPath(lib, original)).then(
-      (o) => o !== null,
-      (e: unknown) => {
-        console.error("thumb_probe_failed", lib, original, e);
-        return null;
-      },
-    );
+  // 前回、ファイルは戻ったのにアルバムの更新で失敗した場合のやり直しも、写しは済んだのに
+  // ゴミ箱側を消せなかった場合も、物の在り処で決める（中身が同じ写しが元の key に在れば戻っている）
+  const { obj: back } = await moveBackFromTrash(env, bucket, trashKey, original, !!saved);
+  // やり直しでも行を足し直す。前回が索引の追記の前で止まっていると一覧に戻らないため
+  // （同じ行を 2 回足しても、一覧は同じになる）
+  {
+    const hasThumb = await restoredThumb(env, lib, original, trashKey);
     await journalBestEffort(env, lib, {
       put: [rowOf(back)],
       ...(hasThumb === null ? {} : hasThumb ? { thumb: [original] } : { unthumb: [original] }),
@@ -497,7 +411,27 @@ export async function handleLibOps(
       if (attempt++) probe.reset();
       for (const m of memberships) {
         const album = data.albums.find((a) => a.id === m.albumId);
-        if (!album || album.items.some((i) => i.lib === lib && i.key === original)) continue;
+        if (!album) continue;
+        const keeperId = m.keeper ? `${lib}:${m.keeper}` : "";
+        if (album.items.some((i) => i.lib === lib && i.key === original)) {
+          // ゴミ箱から戻した物はもう誰の代わりも要らない。残す物はここでは外さない（従来の決まり）
+          if (keeperId) dropKeeperDependent(album, keeperId, `${lib}:${original}`);
+          continue;
+        }
+        // 中身が同じ物として消した物は、残す側が居るアルバムへは戻さない（ライブラリに戻るだけ）。
+        // 同じ絵が並んで二重になるのを避ける従来の決まり。残す側はここでは外さない:
+        // 残す側を外すのは消した直後の取り消し（/similar/undo）だけ
+        if (m.exact && m.keeper && album.items.some((i) => i.lib === lib && i.key === m.keeper)) {
+          // このアルバムでは、残す側が戻した物の代わりにずっと居ることになる。代わりの控えを丸ごと
+          // 消して、元からアルバムに居た物と同じ扱いにする。控えを残すと、同じ残す側で一緒に消した
+          // 別の物の取り消しが残す側を外し、戻した物も残す側もアルバムから消えてしまう
+          if (album.keeperFor?.[keeperId]) {
+            delete album.keeperFor[keeperId];
+            if (!Object.keys(album.keeperFor).length) delete album.keeperFor;
+          }
+          continue;
+        }
+        if (keeperId) dropKeeperDependent(album, keeperId, `${lib}:${original}`);
         insertByTrashOrder(album, m.item);
         await pruneTrashOrder(probe, album);
       }

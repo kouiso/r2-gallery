@@ -1,0 +1,21 @@
+$ curl -X POST ... /v1/a/ops/restore -d '{"trashKey":".trash/1795719121812/similar-e2e/variants/s04-resave.png"}'
+{"ok":true,"key":"similar-e2e/variants/s04-resave.png"}
+HTTP 200
+$ curl -X POST ... /v1/a/ops/restore -d '{"trashKey":".trash/1795719118860/similar-e2e/x-copies/s01.png"}'
+{"ok":true,"key":"similar-e2e/x-copies/s01.png"}
+HTTP 200
+$ curl ... /v1/a/albums/<id>  # 戻した後
+{
+  "title": "similar-e2e (seed 1)",
+  "count": 8,
+  "keys": [
+    "similar-e2e/originals/s01.png",
+    "similar-e2e/distinct/d01.png",
+    "similar-e2e/originals/s02.png",
+    "similar-e2e/variants/s03-hflip.jpg",
+    "similar-e2e/variants/s03-patch40.jpg",
+    "similar-e2e/variants/s04-patch-small.png",
+    "similar-e2e/variants/s04-resave.png",
+    "similar-e2e/originals/s04.png"
+  ]
+}

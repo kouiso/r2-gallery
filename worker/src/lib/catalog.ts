@@ -63,6 +63,11 @@ interface CatalogState {
 
 export interface Catalog {
   startedAt: number;
+  /**
+   * 今の中身を表す印（索引の etag と当てた追記の数・最後の追記）。中身が変わると必ず変わるので、
+   * 索引から作った重い計算結果（似ている写真の束）を isolate に置いておく時の鍵に使う
+   */
+  readonly stamp: string;
   rows: ReadonlyMap<string, CatalogRow>;
   hasThumb(key: string): boolean;
   view(prefix: string, recursive: boolean, sort: FolderSort, type?: FolderType): FolderView;
@@ -505,6 +510,10 @@ export function buildView(
 function toCatalog(state: CatalogState): Catalog {
   return {
     startedAt: state.startedAt,
+    // WHY: 作った時点の値で固定する。後で同じ isolate の別のリクエストが rows に追記を当て足しても、
+    //      印が古い側に残るだけなので、次の読み込みで印が変わって計算し直しになる（古い結果が居残らない）。
+    //      数だけだと「途中に割り込んだ追記で当て直した」時に同じ数になり得るので、最後の追記も足す
+    stamp: `${state.etag}|${state.applied.length}|${state.applied[state.applied.length - 1] ?? ""}`,
     rows: state.rows,
     hasThumb: (key) => state.thumbs.has(key),
     view(prefix, recursive, sort, type) {

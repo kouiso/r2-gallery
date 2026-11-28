@@ -253,8 +253,8 @@ class _SettingsTabState extends State<SettingsTab> {
             ListTile(
               leading: const Icon(Icons.content_copy_outlined,
                   color: AppColors.accent),
-              title: const Text('重複した写真・動画を探す'),
-              subtitle: Text('中身がまったく同じ物を、今のライブラリから探します',
+              title: const Text('重複・似ている写真を探す'),
+              subtitle: Text('同じファイルと、見た目が同じ・似ている写真を今のライブラリから探します',
                   style: AppText.caption.copyWith(color: AppColors.textDim)),
               onTap: () => openDuplicates(context, app, app.activeLib!),
             ),

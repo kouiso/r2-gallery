@@ -14,11 +14,13 @@ import '../ui/viewer_screen.dart';
 import '../ui/write_guard_notice.dart';
 import '../viewer/viewer_format.dart';
 import 'duplicates_controller.dart';
+import 'similar_screen.dart';
 
 /// 設定タブから開く。重複の確認は時間がかかるので、専用の画面で進み具合を見せる。
+/// 見た目の照合に対応していない古い Worker では、SimilarScreen がこの DuplicatesScreen に切り替える
 Future<void> openDuplicates(BuildContext context, AppState app, String lib) =>
     Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => DuplicatesScreen(app: app, lib: lib),
+      builder: (_) => SimilarScreen(app: app, lib: lib),
     ));
 
 /// 中身がバイト単位で同じ写真・動画の組を出し、利用者が1件ずつ消す画面（#106）。
@@ -29,8 +31,15 @@ class DuplicatesScreen extends StatefulWidget {
 
   /// テストで時刻を固定するための口。
   final DateTime Function() clock;
+
+  /// 画面の上に出す一言。見た目の照合を断られてこの画面に替わった時に、その理由を出す
+  final String? notice;
   const DuplicatesScreen(
-      {super.key, required this.app, required this.lib, this.clock = DateTime.now});
+      {super.key,
+      required this.app,
+      required this.lib,
+      this.clock = DateTime.now,
+      this.notice});
 
   @override
   State<DuplicatesScreen> createState() => _DuplicatesScreenState();
@@ -87,9 +96,34 @@ class _DuplicatesScreenState extends State<DuplicatesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final body =
+        ListenableBuilder(listenable: _c, builder: (context, _) => _body());
+    final notice = widget.notice;
     return Scaffold(
       appBar: AppBar(title: const Text('重複した写真・動画')),
-      body: ListenableBuilder(listenable: _c, builder: (context, _) => _body()),
+      body: notice == null
+          ? body
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ColoredBox(
+                  color: AppColors.surfaceHigh,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.info_outline,
+                            size: 20, color: AppColors.textDim),
+                        const SizedBox(width: 12),
+                        Expanded(child: Text(notice, style: AppText.caption)),
+                      ],
+                    ),
+                  ),
+                ),
+                Expanded(child: body),
+              ],
+            ),
     );
   }
 

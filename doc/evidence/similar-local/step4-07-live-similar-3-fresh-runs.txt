@@ -1,0 +1,93 @@
+# 新しい保存先で 3 回: 種まき → live_similar_test（.work/fix-probe/e2e.sh、ポート 8794、2026-11-27）
+
+## 1 回目: 種まき
+$ node tools/similar-fixture-seed.mjs --endpoint http://127.0.0.1:8794 --token test-access-token --lib a --out .work/fix-probe/expected-1.json
+絵を作っている…
+上げた 50 / 339
+上げた 100 / 339
+上げた 150 / 339
+上げた 200 / 339
+上げた 250 / 339
+上げた 300 / 339
+上げた 339 件・サムネ 245 枚・アルバム 1 つ (9 件)
+期待: .work/fix-probe/expected-1.json（確かめる項目 339 件・時刻の戻り 0 件・残す物を入れ替えた組 0）
+seed 1 exit=0
+
+## 1 回目: live_similar_test
+$ flutter test test_live/live_similar_test.dart --dart-define=LIVE_ENDPOINT=http://127.0.0.1:8794 --dart-define=LIVE_EXPECTED=../.work/fix-probe/expected-1.json
+LIVE status before: images=337 signed=0 pending=337 withThumb=245 noThumb=92
+LIVE backfill: end=BackfillEnd.completed done=337 stored=337 failed=0 errors=0 stale=0 deferred=0 in 10621 ms
+LIVE status after: signed=337 failed=0 flat=1 pending=0
+LIVE groups: dup=31 similar=30
+LIVE album before: [similar-e2e/x-copies/s01.png, similar-e2e/variants/s01-q40.jpg, similar-e2e/distinct/d01.png, similar-e2e/originals/s02.png, similar-e2e/variants/s02-webp.webp, similar-e2e/variants/s03-hflip.jpg, similar-e2e/variants/s03-patch40.jpg, similar-e2e/variants/s04-patch-small.png, similar-e2e/variants/s04-resave.png]
+LIVE selected 181 ({identical: 31, same: 150}) 34403959 bytes / dup reclaimable 34403959
+LIVE commit: trashed=181 kinds={identical: 31, same: 150} failed=0 errors={}
+LIVE album after trash: [similar-e2e/originals/s01.png, similar-e2e/distinct/d01.png, similar-e2e/originals/s02.png, similar-e2e/variants/s03-hflip.jpg, similar-e2e/variants/s03-patch40.jpg, similar-e2e/variants/s04-patch-small.png, similar-e2e/originals/s04.png]
+LIVE undo: restored=181/181 failures={}
+LIVE re-sign after undo: pending 180 -> stored 180
+LIVE b status: images=0 pending=0
+LIVE b similar/trash -> 403, similar/undo -> 403
+00:29 +2: All tests passed!
+live 1 exit=0
+
+## 2 回目: 種まき
+$ node tools/similar-fixture-seed.mjs --endpoint http://127.0.0.1:8794 --token test-access-token --lib a --out .work/fix-probe/expected-2.json
+絵を作っている…
+上げた 50 / 339
+上げた 100 / 339
+上げた 150 / 339
+上げた 200 / 339
+上げた 250 / 339
+上げた 300 / 339
+上げた 339 件・サムネ 245 枚・アルバム 1 つ (9 件)
+warning: 上げた時刻が 102 件で前の物より古い（最大 1070 ms 戻った）。手元の時計が戻ったと見る
+warning: s09 は写しの方が古い（元絵 1795722228451 / 写し 1795722227817）。残す物の期待を写しにした
+期待: .work/fix-probe/expected-2.json（確かめる項目 339 件・時刻を読めた物 339 件・時刻の戻り 102 件・残す物を入れ替えた組 1）
+seed 2 exit=0
+
+## 2 回目: live_similar_test
+$ flutter test test_live/live_similar_test.dart --dart-define=LIVE_ENDPOINT=http://127.0.0.1:8794 --dart-define=LIVE_EXPECTED=../.work/fix-probe/expected-2.json
+LIVE status before: images=337 signed=0 pending=337 withThumb=245 noThumb=92
+LIVE backfill: end=BackfillEnd.completed done=337 stored=337 failed=0 errors=0 stale=0 deferred=0 in 5222 ms
+LIVE status after: signed=337 failed=0 flat=1 pending=0
+LIVE groups: dup=31 similar=30
+LIVE album before: [similar-e2e/x-copies/s01.png, similar-e2e/variants/s01-q40.jpg, similar-e2e/distinct/d01.png, similar-e2e/originals/s02.png, similar-e2e/variants/s02-webp.webp, similar-e2e/variants/s03-hflip.jpg, similar-e2e/variants/s03-patch40.jpg, similar-e2e/variants/s04-patch-small.png, similar-e2e/variants/s04-resave.png]
+LIVE selected 181 ({identical: 31, same: 150}) 34403959 bytes / dup reclaimable 34403959
+LIVE commit: trashed=181 kinds={identical: 31, same: 150} failed=0 errors={}
+LIVE album after trash: [similar-e2e/originals/s01.png, similar-e2e/distinct/d01.png, similar-e2e/originals/s02.png, similar-e2e/variants/s03-hflip.jpg, similar-e2e/variants/s03-patch40.jpg, similar-e2e/variants/s04-patch-small.png, similar-e2e/originals/s04.png]
+LIVE undo: restored=181/181 failures={}
+LIVE re-sign after undo: pending 180 -> stored 180
+LIVE b status: images=0 pending=0
+LIVE b similar/trash -> 403, similar/undo -> 403
+00:15 +2: All tests passed!
+live 2 exit=0
+
+## 3 回目: 種まき
+$ node tools/similar-fixture-seed.mjs --endpoint http://127.0.0.1:8794 --token test-access-token --lib a --out .work/fix-probe/expected-3.json
+絵を作っている…
+上げた 50 / 339
+上げた 100 / 339
+上げた 150 / 339
+上げた 200 / 339
+上げた 250 / 339
+上げた 300 / 339
+上げた 339 件・サムネ 245 枚・アルバム 1 つ (9 件)
+期待: .work/fix-probe/expected-3.json（確かめる項目 339 件・時刻を読めた物 339 件・時刻の戻り 0 件・残す物を入れ替えた組 0）
+seed 3 exit=0
+
+## 3 回目: live_similar_test
+$ flutter test test_live/live_similar_test.dart --dart-define=LIVE_ENDPOINT=http://127.0.0.1:8794 --dart-define=LIVE_EXPECTED=../.work/fix-probe/expected-3.json
+LIVE status before: images=337 signed=0 pending=337 withThumb=245 noThumb=92
+LIVE backfill: end=BackfillEnd.completed done=337 stored=337 failed=0 errors=0 stale=0 deferred=0 in 5459 ms
+LIVE status after: signed=337 failed=0 flat=1 pending=0
+LIVE groups: dup=31 similar=30
+LIVE album before: [similar-e2e/x-copies/s01.png, similar-e2e/variants/s01-q40.jpg, similar-e2e/distinct/d01.png, similar-e2e/originals/s02.png, similar-e2e/variants/s02-webp.webp, similar-e2e/variants/s03-hflip.jpg, similar-e2e/variants/s03-patch40.jpg, similar-e2e/variants/s04-patch-small.png, similar-e2e/variants/s04-resave.png]
+LIVE selected 181 ({identical: 31, same: 150}) 34403959 bytes / dup reclaimable 34403959
+LIVE commit: trashed=181 kinds={identical: 31, same: 150} failed=0 errors={}
+LIVE album after trash: [similar-e2e/originals/s01.png, similar-e2e/distinct/d01.png, similar-e2e/originals/s02.png, similar-e2e/variants/s03-hflip.jpg, similar-e2e/variants/s03-patch40.jpg, similar-e2e/variants/s04-patch-small.png, similar-e2e/originals/s04.png]
+LIVE undo: restored=181/181 failures={}
+LIVE re-sign after undo: pending 180 -> stored 180
+LIVE b status: images=0 pending=0
+LIVE b similar/trash -> 403, similar/undo -> 403
+00:16 +2: All tests passed!
+live 3 exit=0

@@ -163,7 +163,7 @@ export async function handleObjectsCheck(
 }
 
 /** 2 つの中身が同じかを SHA-256 で確かめる。記録が無ければその場で計算する。 */
-async function sameContent(
+export async function sameContent(
   env: Env,
   lib: string,
   bucket: R2Bucket,
@@ -231,6 +231,14 @@ export async function trashDuplicate(
         if (at < 0) continue;
         const gone = a.items[at]!;
         const hasKeeper = a.items.some((i) => i.lib === lib && i.key === keeper);
+        // この口は控えを作らず、消した物はアルバムへ戻らない。残す側はこのアルバムで消した物の
+        // 代わりをずっと務めるので、まとめて消した時の代わりの控えを消して元から居た物と同じ扱いに
+        // する（/ops/restore の同じ中身の場合と同じ）。控えを残すと、同じ残す側で先に消した物の
+        // 取り消し（/similar/undo）が残す側を外し、ここで消した物の居場所がアルバムから消える
+        if (a.keeperFor?.[id(keeper)]) {
+          delete a.keeperFor[id(keeper)];
+          if (!Object.keys(a.keeperFor).length) delete a.keeperFor;
+        }
         if (hasKeeper) {
           a.items.splice(at, 1);
         } else {

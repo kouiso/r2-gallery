@@ -83,6 +83,13 @@ export interface GlobalAlbum {
   items: GlobalAlbumItem[];
   /** ゴミ箱にいる物も含めた並び（`lib:key`）。複数枚を戻しても元の並びに戻すための控え。 */
   trashOrder?: string[];
+  /**
+   * 重複・似ている物として消した物の代わりに、このアルバムへ入れた残す物（`lib:key`）と、
+   * その残す物が代わっているゴミ箱の物（`lib:key`）。直後の取り消しで残す物を外すのは、
+   * 代わっている物が全部戻った時だけにするため（先に消した方だけを取り消しても、後で消した物の
+   * 代わりが居なくならないように）。元からアルバムに居た残す物はここに載らない。
+   */
+  keeperFor?: Record<string, string[]>;
 }
 
 export interface AlbumsFile {

@@ -43,6 +43,15 @@ URL_TTL_SECONDS = "3600"
 # DUP_SCAN_BYTES = "100663296"
 # DUP_SCAN_OBJECTS = "200"
 # DUP_MAX_OBJECT_BYTES = "1073741824"
+# Similar images: libraries with more images than this get 413 too_many_for_similar from GET /similar
+# (before signatures are read) and tooMany: true from /similar/status (the app stays on exact duplicates).
+# Measured peak (catalog, shards, hashes, grouping): ~75 MB at 40000, ~93 MB at 50000; the isolate limit
+# is 128 MB. Measure with tools/similar-model-memory.test.mjs before raising.
+# SIMILAR_MAX_NODES = "40000"
+# Signatures accepted per POST /similar/signatures call (max 200: each one reads 64 KB of the original).
+# SIMILAR_SIG_BATCH = "200"
+# Items per POST /similar/trash and /similar/undo call (max 40: about 12 subrequests per item).
+# SIMILAR_TRASH_BATCH = "40"
 # Comma-separated library ids allowed to join objects to REVIEW_DB review rows.
 # REVIEW_LIBS = "a"
 

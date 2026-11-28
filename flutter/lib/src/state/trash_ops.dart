@@ -92,6 +92,10 @@ class RestoreOutcome {
 
   /// 戻せなかった trashKey と HTTP ステータス（通信失敗は 0）。先に戻した行を外し直すため
   final Map<String, int> failures;
+
+  /// [restored] のうち、ファイルは戻ったがアルバムへは戻せなかった件数（/similar/undo の albums_failed）。
+  /// もうゴミ箱には無いので、アルバムは利用者が手で直すしかない。それを知らせるために分けて数える
+  final int albumsFailed;
   const RestoreOutcome({
     required this.total,
     required this.restored,
@@ -100,6 +104,7 @@ class RestoreOutcome {
     this.notFound = 0,
     this.other = 0,
     this.failures = const {},
+    this.albumsFailed = 0,
   });
 
   int get failed => total - restored;
@@ -155,6 +160,17 @@ String restoreFailureMessage(int status) => switch (status) {
 
 /// まとめて戻した後に出す文言。全部戻れば null。
 String? restoreSummaryMessage(RestoreOutcome r) {
+  // ファイルは戻ったがアルバムへは戻せなかった物。「戻せませんでした」と言うと、一覧には戻って
+  // いるのに食い違い、アルバムを直す必要があることも伝わらない
+  final albums = r.albumsFailed > 0
+      ? '${r.albumsFailed}件は戻しましたが、アルバムには戻せませんでした'
+      : null;
+  final files = _restoreFailedMessage(r);
+  if (files == null) return albums;
+  return albums == null ? files : '$files。$albums';
+}
+
+String? _restoreFailedMessage(RestoreOutcome r) {
   if (r.failed == 0) return null;
   // 同名衝突は利用者が元の場所を見に行けば解決できるので、件数より先に理由を出す（KMP 版と同じ）
   if (r.conflict > 0) return restoreFailureMessage(409);

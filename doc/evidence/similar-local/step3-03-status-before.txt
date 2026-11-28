@@ -1,0 +1,13 @@
+$ curl -H "Authorization: Bearer test-access-token" http://127.0.0.1:8797/v1/a/similar/status   # 照合の前
+{
+  "alg": "vs1",
+  "params": "p1",
+  "images": 337,
+  "signed": 0,
+  "failed": 0,
+  "flat": 0,
+  "pending": 337,
+  "pendingWithThumb": 245,
+  "pendingNoThumb": 92,
+  "pendingBytesEstimate": 12462585
+}

@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../diag/error_details.dart';
 import '../webdl/cookies.dart';
 import '../webdl/detected.dart';
 import '../webdl/sniff_collector.dart';
@@ -213,9 +214,9 @@ class BrowserRescan extends ChangeNotifier {
       final count = await scan().timeout(const Duration(seconds: 10));
       if (epoch != _epoch) return;
       _message = count == 0 ? '新しいメディアはありません' : '$count件の新しいメディアを検出しました';
-    } catch (_) {
+    } catch (e) {
       if (epoch != _epoch) return;
-      _message = '再検知できませんでした。もう一度お試しください';
+      _message = ErrorDetails.compose('再検知できませんでした。もう一度お試しください', e);
     } finally {
       if (epoch == _epoch) {
         _running = false;
@@ -343,7 +344,7 @@ class _BrowserSurfaceState extends State<BrowserSurface>
       _load();
     } catch (e) {
       // WebView の提供元が無い・更新中などで作れない。真っ黒な面にせず、再試行できる表示にする
-      _error = e.runtimeType.toString();
+      _error = ErrorDetails.on ? describeErrorDetail(e) : e.runtimeType.toString();
     }
   }
 

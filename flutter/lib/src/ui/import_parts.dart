@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../diag/error_details.dart';
 import '../transfer/transfer_queue.dart';
 import '../transfer/transfer_rows.dart';
 import '../webdl/detected.dart';
@@ -476,9 +477,10 @@ class _TransferRowTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(r.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                // 詳しい理由を出す設定では理由が数行になるので、切らずに出す（#237）
                 Text(r.label,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                    maxLines: ErrorDetails.on ? null : 2,
+                    overflow: ErrorDetails.on ? null : TextOverflow.ellipsis,
                     style: AppText.caption.copyWith(
                         color: r.status == TransferStatus.error
                             ? AppColors.danger

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../diag/error_details.dart';
 import '../duplicates/duplicates_screen.dart';
 import '../offline/offline_screen.dart';
 import '../state/app_state.dart';
@@ -259,6 +260,23 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ]),
         ],
+        // 決まった文だけのスクショでは原因を追えないので、詳しい理由を出せるようにする（#237）
+        const SettingsHeading('不具合の調査'),
+        SettingsGroup(children: [
+          ValueListenableBuilder<bool>(
+            valueListenable: ErrorDetails.enabled,
+            builder: (context, on, _) => SwitchListTile(
+              key: const ValueKey('error-details-switch'),
+              secondary: const Icon(Icons.bug_report_outlined,
+                  color: AppColors.accent),
+              title: const Text('エラーの詳しい理由を表示'),
+              subtitle: Text('失敗した時に、HTTPの番号や理由を画面に出します。鍵やトークンは伏せます',
+                  style: AppText.caption.copyWith(color: AppColors.textDim)),
+              value: on,
+              onChanged: ErrorDetails.setEnabled,
+            ),
+          ),
+        ]),
         const SettingsHeading('このアプリについて'),
         const AppVersionLabel(),
         const SizedBox(height: 24),

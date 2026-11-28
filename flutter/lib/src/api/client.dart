@@ -69,8 +69,11 @@ class ApiClient {
     if (e is DioException) {
       final body = e.response?.data;
       final code = body is Map ? body['error'] : null;
+      final o = e.requestOptions;
       throw ApiError(e.response?.statusCode ?? 0, e.message ?? 'network error',
-          code: code is String ? code : null);
+          code: code is String ? code : null,
+          request: '${o.method} ${o.uri.path}',
+          kind: e.type.name);
     }
     throw ApiError(0, e.toString());
   }

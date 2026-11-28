@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../api/models.dart';
+import '../diag/error_details.dart';
 import '../state/app_state.dart';
 import '../state/write_guard.dart';
 import '../ui/write_guard_notice.dart';
@@ -119,7 +120,7 @@ class MediaController extends ChangeNotifier implements SelectionSurface {
     );
     final res = await pending.done;
     if (res.failed > 0 && context.mounted) {
-      await _alert(context, failMessage(res.failed));
+      await _alert(context, ErrorDetails.compose(failMessage(res.failed), res.firstError));
     }
     await undo;
   }
@@ -183,7 +184,7 @@ class MediaController extends ChangeNotifier implements SelectionSurface {
     } on Exception catch (e) {
       debugPrint('offline save failed: $e');
       messenger.showSnackBar(
-        const SnackBar(content: Text('オフライン保存に追加できませんでした')),
+        SnackBar(content: Text(ErrorDetails.compose('オフライン保存に追加できませんでした', e))),
       );
     }
   }
@@ -245,8 +246,10 @@ class MediaController extends ChangeNotifier implements SelectionSurface {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(
                 queued > 0 ? 'オフライン保存に追加しました' : '保存済み、または保存待ちです')));
           }
-        } on Exception {
-          if (context.mounted) await _alert(context, 'オフライン保存に追加できませんでした');
+        } on Exception catch (e) {
+          if (context.mounted) {
+            await _alert(context, ErrorDetails.compose('オフライン保存に追加できませんでした', e));
+          }
         }
       case 'offline-remove':
         final remove = await showDialog<bool>(
@@ -263,8 +266,10 @@ class MediaController extends ChangeNotifier implements SelectionSurface {
         if (remove == true && account == app.offlineAccountId) {
           try {
             await app.removeOffline(itemLib, item.key);
-          } on Exception {
-            if (context.mounted) await _alert(context, 'オフライン保存を削除できませんでした');
+          } on Exception catch (e) {
+            if (context.mounted) {
+              await _alert(context, ErrorDetails.compose('オフライン保存を削除できませんでした', e));
+            }
           }
         }
       case 'album':

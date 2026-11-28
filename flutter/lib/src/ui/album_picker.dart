@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api/client.dart';
 import '../api/models.dart';
+import '../diag/error_details.dart';
 import '../state/app_state.dart';
 import '../state/write_guard.dart';
 import 'write_guard_notice.dart';
@@ -150,7 +151,7 @@ class _AlbumPickerDialogState extends State<AlbumPickerDialog> {
         onError: (Object e) {
       if (e is! Exception) throw e;
       debugPrint('album add failed: $e');
-      return failure;
+      return ErrorDetails.compose(failure, e);
     });
     Navigator.of(context).pop(AlbumPickOutcome(done));
   }

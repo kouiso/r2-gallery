@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../api/models.dart';
+import '../diag/error_details.dart';
 import '../state/app_state.dart';
 import '../state/write_guard.dart';
 import '../ui/write_guard_notice.dart';
@@ -159,7 +160,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
         await s.refresh();
         if (!mounted) return;
         if (res.failed > 0) {
-          _showError('ゴミ箱への移動に失敗しました');
+          _showError(ErrorDetails.compose('ゴミ箱への移動に失敗しました', res.firstError));
         } else {
           _offerUndo(res.receipts);
         }

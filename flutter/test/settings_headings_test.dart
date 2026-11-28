@@ -90,13 +90,14 @@ void main() {
   testWidgets('設定タブは見出しで区切られ、今ある操作が全部残っている', (t) async {
     await _pump(t, _mk());
     // テストは VM なので OfflineStore.supported が true: オフライン保存の見出しも出る
-    for (final h in ['接続', 'ロック', 'オフライン保存', 'このアプリについて']) {
+    for (final h in ['接続', 'ロック', 'オフライン保存', '不具合の調査', 'このアプリについて']) {
       expect(_heading(h), findsOneWidget, reason: h);
     }
     double y(String s) => t.getTopLeft(_heading(s)).dy;
     expect(y('接続') < y('ロック'), isTrue);
     expect(y('ロック') < y('オフライン保存'), isTrue);
-    expect(y('オフライン保存') < y('このアプリについて'), isTrue);
+    expect(y('オフライン保存') < y('不具合の調査'), isTrue);
+    expect(y('不具合の調査') < y('このアプリについて'), isTrue);
     for (final s in [
       '画面ロックで保護',
       '開くとき指紋・顔・PINを求めます',
@@ -114,9 +115,9 @@ void main() {
 
   testWidgets('見出しごとに枠は1つで、行の間は線で区切る', (t) async {
     await _pump(t, _mk());
-    // 接続 / ロック / オフライン保存 / このアプリについて
-    expect(find.byType(SettingsGroup), findsNWidgets(4));
-    expect(find.byType(Card), findsNWidgets(4));
+    // 接続 / ロック / オフライン保存 / 不具合の調査 / このアプリについて
+    expect(find.byType(SettingsGroup), findsNWidgets(5));
+    expect(find.byType(Card), findsNWidgets(5));
     // ロックは3行（PINの行は web だけ #29）→ 線は2本
     expect(
       find.descendant(

@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 
 import '../api/client.dart';
 import '../api/models.dart';
+import '../diag/error_details.dart';
 import '../state/pairing.dart';
 import '../store/kv.dart';
 import '../store/private_storage.dart';
@@ -1011,7 +1012,9 @@ class WebTransferQueue extends ChangeNotifier {
     }
   }
 
-  String _describe(Object e) {
+  String _describe(Object e) => ErrorDetails.compose(_shortReason(e), e);
+
+  String _shortReason(Object e) {
     if (e is WebFetchError) {
       return e.status == 403
           ? 'HTTP 403（取得を拒否されました。ページを開き直してもう一度試してください）'

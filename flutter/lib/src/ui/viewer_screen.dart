@@ -9,6 +9,7 @@ import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 import '../api/models.dart';
 import '../api/review_meta.dart';
+import '../diag/error_details.dart';
 import '../state/app_state.dart';
 import '../state/write_guard.dart';
 import '../grid/day_label.dart';
@@ -369,7 +370,7 @@ class _ViewerScreenState extends State<ViewerScreen>
       debugPrint('trash failed: $e');
       if (!mounted) return;
       setState(() => _busy = false);
-      await _alert('ゴミ箱への移動に失敗しました');
+      await _alert(ErrorDetails.compose('ゴミ箱への移動に失敗しました', e));
     }
   }
 
@@ -421,8 +422,8 @@ class _ViewerScreenState extends State<ViewerScreen>
         if (!mounted) return;
         _offlineChanged();
         _flash('このアプリ内の保存を削除しました');
-      } on Exception {
-        if (mounted) await _alert('オフライン保存を削除できませんでした');
+      } on Exception catch (e) {
+        if (mounted) await _alert(ErrorDetails.compose('オフライン保存を削除できませんでした', e));
       } finally {
         if (mounted) setState(() => _saveRequested = false);
       }
@@ -436,8 +437,8 @@ class _ViewerScreenState extends State<ViewerScreen>
       // 台帳へ積んだだけでは保存済みではない。暗号化保存が終わった通知でだけ確定する。
       setState(() => _saved = off.isSaved(lib, item));
       _flash(_saved ? 'このアプリ内に保存しました' : 'オフライン保存に追加しました');
-    } on Exception {
-      if (mounted) await _alert('オフライン保存に追加できませんでした');
+    } on Exception catch (e) {
+      if (mounted) await _alert(ErrorDetails.compose('オフライン保存に追加できませんでした', e));
     } finally {
       if (mounted) setState(() => _saveRequested = false);
     }
@@ -730,7 +731,7 @@ class _ViewerScreenState extends State<ViewerScreen>
       final msg = e is DeviceExportError
           ? e.message
           : '端末への保存に失敗しました';
-      await _alert(msg);
+      await _alert(ErrorDetails.compose(msg, e));
     } finally {
       if (mounted) setState(() => _exporting = false);
     }

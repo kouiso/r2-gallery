@@ -62,4 +62,7 @@ class Keys {
 
   /// ピッカーを開いた時のライブラリ。アプリが落ちた後の選択は次の起動で拾い直すための控え
   static const pendingPickLib = 'r2g.upload.pendingPickLib';
+
+  /// 失敗の詳しい理由を画面に出すか（#237）。'1' で ON
+  static const errorDetails = 'r2g.errorDetails';
 }

@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../api/client.dart';
 import '../api/models.dart';
+import '../diag/error_details.dart';
 import '../offline/offline_store.dart';
 import '../state/pairing.dart';
 import '../store/kv.dart';
@@ -919,7 +920,10 @@ class TransferQueue extends ChangeNotifier {
     return e is SocketException || e is TimeoutException || e is HttpException;
   }
 
-  String _describe(Object e, {required bool upload}) {
+  String _describe(Object e, {required bool upload}) =>
+      ErrorDetails.compose(_shortReason(e, upload: upload), e);
+
+  String _shortReason(Object e, {required bool upload}) {
     if (e is ApiError) {
       return switch (e.status) {
         403 when upload => 'このライブラリには書き込めません（HTTP 403）',
@@ -1148,7 +1152,7 @@ class TransferQueue extends ChangeNotifier {
       t.albumError = null;
     } on Exception catch (e) {
       debugPrint('album attach failed: $e');
-      t.albumError = 'アルバムへの追加だけ失敗しました';
+      t.albumError = ErrorDetails.compose('アルバムへの追加だけ失敗しました', e);
     }
   }
 

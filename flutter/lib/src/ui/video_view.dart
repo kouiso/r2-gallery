@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
+import '../diag/error_details.dart';
 import '../playback/mobile_playback.dart';
 import '../playback/playback_menu.dart';
 import '../playback/playback_session.dart';
@@ -77,6 +78,9 @@ class _VideoViewState extends State<VideoView>
   bool get _pipMode =>
       (_session?.pip ?? false) || (_session?.pipPending ?? false);
   bool _initFailed = false;
+
+  /// 再生を始められなかった理由。設定で詳しい理由を出す時だけ画面に出す（#237）
+  Object? _initError;
   bool _started = false;
   bool _initializing = false;
   bool _pipSeen = false;
@@ -155,6 +159,7 @@ class _VideoViewState extends State<VideoView>
     );
     _session?.addListener(_onPlaybackChanged);
     _initFailed = false;
+    _initError = null;
     _started = false;
     _initializing = false;
     c.addListener(_onTick);
@@ -177,10 +182,13 @@ class _VideoViewState extends State<VideoView>
           setState(() {});
           _maybeStart();
         })
-        .catchError((Object _) {
-          debugPrint('video initialization failed');
+        .catchError((Object e) {
+          debugPrint('video initialization failed: $e');
           if (!mounted || c != _c) return;
-          setState(() => _initFailed = true);
+          setState(() {
+            _initFailed = true;
+            _initError = e;
+          });
           _setControls(true);
         });
   }
@@ -261,7 +269,7 @@ class _VideoViewState extends State<VideoView>
       } else {
         await controller.play();
       }
-    } catch (_) {
+    } catch (e) {
       // 再生開始の非同期失敗を外へ漏らさず、現在のプレイヤーにだけ再試行を出す。
       if (mayPlay()) {
         try {
@@ -270,7 +278,10 @@ class _VideoViewState extends State<VideoView>
           // 再生器自身が壊れている場合も、再試行の表示へ戻す。
         }
         if (!mayPlay()) return;
-        setState(() => _initFailed = true);
+        setState(() {
+          _initFailed = true;
+          _initError = e;
+        });
         _setControls(true);
       }
     }
@@ -790,7 +801,8 @@ class _VideoViewState extends State<VideoView>
               ),
             if (failed && !_pipMode)
               _Overlay(
-                text: '再生できませんでした',
+                text: ErrorDetails.compose('再生できませんでした',
+                    _initError ?? _c.value.errorDescription),
                 icon: Icons.replay,
                 label: 'リトライ',
                 onTap: _retry,
@@ -1109,7 +1121,13 @@ class _Overlay extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(text, style: TextStyle(color: AppColors.onScrimText)),
+            // 詳しい理由を出す設定では複数行になるので、中央寄せで端に余白を取る
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(text,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.onScrimText)),
+            ),
             const SizedBox(height: 8),
             Icon(icon, color: Colors.white, size: 48, semanticLabel: label),
           ],

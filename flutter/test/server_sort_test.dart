@@ -185,6 +185,22 @@ void main() {
     expect(api.calls.length, n);
   });
 
+  test('種別を変えた直後の取得が失敗しても、手元の行は新しい種別で絞って見せる(#26)', () async {
+    final api = _SortingApi()..mixed = true;
+    final g = GalleryState(api);
+    await g.refresh('a');
+    await g.loadMore('a');
+    expect(_keys(g.items), ['p1.jpg', 'v1.mp4', 'p2.png', 'v2.mov']);
+    api.failNext = true;
+    await g.changeKind(MediaKind.video, 'a');
+    expect(g.error, isNotNull);
+    expect(_keys(g.items), ['v1.mp4', 'v2.mov']);
+    // 次の取り直しは種別付きで先頭から
+    await g.refresh('a');
+    expect(api.calls.last, (sort: 'new', type: 'video', cursor: null));
+    expect(_keys(g.items), ['v1.mp4', 'v2.mov']);
+  });
+
   test('type を無視する古い Worker では、混ざった行を端末側で除く(#26)', () async {
     final api = _SortingApi()
       ..mixed = true

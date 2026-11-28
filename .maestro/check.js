@@ -12,7 +12,12 @@ var root = keysIn('/v1/a/folders?prefix=', 'items');
 var trash = keysIn('/v1/a/trash', 'items');
 var ok;
 if (CHECK === 'uploaded') {
-  ok = root.indexOf('maestro-upload.jpg') >= 0;
+  // 上げた側のキーは URI が返す名で決まる。実名の maestro-upload.jpg か、
+  // 写真ピッカー系なら番号・image:ID・media に MIME 拡張子を足した名になる。
+  // どちらでも seed 以外の .jpg が1つあれば届いている。
+  ok = root.some(function (k) {
+    return k === 'maestro-upload.jpg' || (k.slice(-4) === '.jpg' && k !== 'seed-photo.jpg');
+  });
 } else if (CHECK === 'trashed') {
   ok = root.indexOf('seed-photo.jpg') < 0 &&
     trash.indexOf('seed-photo.jpg') >= 0;

@@ -1014,7 +1014,9 @@ describe("groupNodes", () => {
     }
     expect([...seen].sort()).toEqual(["mirror", "same", "similar"]);
     expect(checked).toBeGreaterThan(500);
-  });
+    // 4000 組を 1 組ずつ束ねて突き合わせる正しさの試験で、速さは見ていない。
+    // GitHub のランナーの workerd では既定の 5 秒を超えるので、上限だけ広げる
+  }, 60_000);
 
   it("groups 50 000 random signatures plus 500 planted groups in under 5 s", () => {
     const rnd = mulberry32(42);

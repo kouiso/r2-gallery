@@ -117,6 +117,7 @@ HEIC を読めない環境（Web 版の Chrome・Edge・Firefox、Android 7.0〜
 | S10 | 接続画面の「スキップ」 | ☑ | `settings_port_test.dart` S10 |
 | S11 | 接続の復旧導線（失敗の積み直し、復帰時の再試行） | ☑ | `transfer_queue_test.dart`、`transfers_ui_test.dart` |
 | S12 | ライブラリ切替の補助（鍵、切替元の一覧保持） | ☑ | `settings_port_test.dart` S12、`library_switch_test.dart` |
+| S13 | エラーの詳しい理由を画面に出す切り替え（#237。既定は OFF、トークン・署名は伏せる） | ☑ | `error_details_test.dart`、`settings_headings_test.dart` |
 
 ## main に入っていたもの
 

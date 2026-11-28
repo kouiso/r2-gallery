@@ -90,7 +90,13 @@ class ApiClientTransferApi implements TransferApi {
   ApiError _err(Object e) {
     if (e is ApiError) return e;
     if (e is DioException) {
-      return ApiError(e.response?.statusCode ?? 0, e.message ?? 'network error');
+      final body = e.response?.data;
+      final code = body is Map ? body['error'] : null;
+      final o = e.requestOptions;
+      return ApiError(e.response?.statusCode ?? 0, e.message ?? 'network error',
+          code: code is String ? code : null,
+          request: '${o.method} ${o.uri.path}',
+          kind: e.type.name);
     }
     return ApiError(0, e.toString());
   }

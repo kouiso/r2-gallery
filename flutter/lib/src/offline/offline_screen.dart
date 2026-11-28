@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
+import '../diag/error_details.dart';
 import '../state/app_state.dart';
 import '../transfer/transfer_rows.dart';
 import '../ui/app_lock_layer.dart';
@@ -441,10 +442,10 @@ class _OfflineViewerState extends State<OfflineViewer>
       if (!mounted || request != _request || !_authorized || _video != c) return;
       setState(() {});
       await _playWhenAuthorized(c, request, _playEpoch);
-    } catch (_) {
+    } catch (e) {
       await _releasePlayback();
       if (mounted && request == _request) {
-        setState(() => _error = '再生できませんでした');
+        setState(() => _error = ErrorDetails.compose('再生できませんでした', e));
       }
     }
   }

@@ -23,8 +23,13 @@ class TrashOutcome {
 
   /// 移せたが trashKey が返らなかった (lib, key)。古い Worker では戻す手段が無い
   final List<({String lib, String key})> unrestorable;
+
+  /// 送れなかった中で最初の失敗。設定で詳しい理由を出す時に使う（#237）
+  final Object? firstError;
   const TrashOutcome(this.receipts, this.trashed, this.failed,
-      {this.failedTargets = const [], this.unrestorable = const []});
+      {this.failedTargets = const [],
+      this.unrestorable = const [],
+      this.firstError});
 }
 
 /// (ライブラリ, キー) をまとめてゴミ箱へ送る。
@@ -38,6 +43,7 @@ Future<TrashOutcome> trashAll(
   final unrestorable = <({String lib, String key})>[];
   var trashed = 0;
   var failed = 0;
+  Object? firstError;
   for (var i = 0; i < targets.length; i += 8) {
     final batch = targets.sublist(i, i + 8 > targets.length ? targets.length : i + 8);
     final results = await Future.wait(batch.map((t) async {
@@ -48,8 +54,9 @@ Future<TrashOutcome> trashAll(
           key: t.key,
           trashKey: await api.trash(t.lib, t.key)
         );
-      } on Exception {
-        // 理由はまとめて「N件を移せませんでした」と出すので、ここでは数えるだけ
+      } on Exception catch (e) {
+        // 理由はまとめて「N件を移せませんでした」と出すので、ここでは数えて最初の1件だけ控える
+        firstError ??= e;
         return (ok: false, lib: t.lib, key: t.key, trashKey: '');
       }
     }));
@@ -69,7 +76,9 @@ Future<TrashOutcome> trashAll(
     }
   }
   return TrashOutcome(receipts, trashed, failed,
-      failedTargets: failedTargets, unrestorable: unrestorable);
+      failedTargets: failedTargets,
+      unrestorable: unrestorable,
+      firstError: firstError);
 }
 
 /// まとめて戻した結果。理由ごとに数えるのは、利用者に出す文言が理由で変わるから。

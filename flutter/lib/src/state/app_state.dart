@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart' as hash;
 import 'package:flutter/foundation.dart';
 
 import '../api/client.dart';
+import '../diag/error_details.dart';
 import '../diag/perf_log.dart';
 import '../api/models.dart';
 import '../config/baked.dart' as baked;
@@ -637,6 +638,7 @@ class AppState extends ChangeNotifier {
     deviceLockEnabled =
         !disableLock && await LockSettings.deviceLockEnabled();
     relockGraceMs = await LockSettings.relockGraceMs();
+    await ErrorDetails.load();
     await refreshDeviceLockAvailable();
   }
 
@@ -1022,6 +1024,7 @@ const connectFailedMessage = '接続できませんでした。URLとトーク�
 
 /// 起動失敗の理由を画面に出せる形にする。長すぎる文やトークンらしき並びは出さない。
 String describeStartupError(Object e) {
+  if (ErrorDetails.on) return describeErrorDetail(e);
   var msg = e.toString();
   msg = msg.replaceAll(RegExp(r'Bearer\s+\S+'), 'Bearer ***');
   if (msg.trim().isEmpty) msg = '不明なエラー';
@@ -1120,6 +1123,9 @@ class GalleryState extends ChangeNotifier {
     cursor = null;
     _serverSorted = false;
     _needsFirstPage = true;
+    // 回線の答えを待つ間と取り直しが落ちた時も、手元の行は新しい種別で絞って見せる。
+    // 絞らないと前の種別の一覧が残り、接続先が404の時などに絞り込みが効いていないように見える
+    if (k != MediaKind.all) items = items.where(k.matches).toList();
     return refresh(lib);
   }
 
@@ -1226,7 +1232,7 @@ class GalleryState extends ChangeNotifier {
     } catch (err) {
       if (e != epoch) return;
       // 控えを出していれば消さずに残し、失敗は上の帯で知らせる
-      error = err.toString();
+      error = ErrorDetails.text(err);
     }
     loading = false;
     notifyListeners();
@@ -1335,7 +1341,7 @@ class GalleryState extends ChangeNotifier {
         _saveSnapshot(lib);
       } catch (err) {
         if (e != epoch) return;
-        error = err.toString();
+        error = ErrorDetails.text(err);
         _lastErrorFromMore = false;
       }
       notifyListeners();
@@ -1418,7 +1424,7 @@ class GalleryState extends ChangeNotifier {
       }
     } catch (err) {
       if (e != epoch || _disposed) return;
-      error = err.toString();
+      error = ErrorDetails.text(err);
       notifyListeners();
       return;
     }
@@ -1581,7 +1587,7 @@ class GalleryState extends ChangeNotifier {
       }
       PerfLog.mark('page.fail', {'ms': pageWatch.elapsedMilliseconds});
       // 続きの取得失敗も黙らせず、一覧の上の帯で知らせる
-      error = err.toString();
+      error = ErrorDetails.text(err);
       _noteMoreFailure(_moreFailures, showRetry: true);
     }
     loadingMore = false;

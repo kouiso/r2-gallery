@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../api/client.dart';
 import '../api/models.dart';
+import '../diag/error_details.dart';
 import 'media_selection.dart';
 import '../state/load_more_backoff.dart';
 import '../state/trash_ops.dart';
@@ -446,8 +447,8 @@ class AlbumDetailState extends _PagedMediaState {
           await api.albumOrder(lib, albumId, all);
         }
       }
-    } on ApiError {
-      err = '並び替えに失敗しました';
+    } on ApiError catch (e) {
+      err = ErrorDetails.compose('並び替えに失敗しました', e);
     }
     // 失敗したら動かす前の並びへ戻す。読み直しは要らない（手元の並びがサーバーと同じ）
     if (err != null) _rollbackTo(before);

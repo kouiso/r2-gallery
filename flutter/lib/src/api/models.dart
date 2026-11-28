@@ -182,7 +182,14 @@ class ApiError implements Exception {
 
   /// Worker が本文で返す `{"error": "..."}` の値。同じ 409 でも理由で次の動きが変わるため残す。
   final String? code;
-  const ApiError(this.status, this.message, {this.code});
+
+  /// どの呼び出しで落ちたか（例: `GET /v1/personal/list`）。詳しい理由の表示用で、ホストとクエリは含めない。
+  final String? request;
+
+  /// 通信の失敗の種類（タイムアウト・接続断など）。応答の無い失敗の見分けに使う。
+  final String? kind;
+  const ApiError(this.status, this.message,
+      {this.code, this.request, this.kind});
 
   @override
   String toString() => status > 0 ? 'HTTP $status: $message' : message;

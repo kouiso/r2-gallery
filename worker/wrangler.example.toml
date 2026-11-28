@@ -25,6 +25,10 @@ bucket_name = "your-second-bucket"
 # database_name = "your-review-db"
 # database_id = "00000000-0000-0000-0000-000000000000"
 
+# HEIC を読めない環境へ JPEG の写しを返す（Cloudflare Images）。無くても動く
+# [images]
+# binding = "IMAGES"
+
 [vars]
 # Set "readOnly": true on a library to disable every write operation for it.
 LIBRARIES = '[{"id":"a","binding":"LIB_A","title":"Library A"},{"id":"b","binding":"LIB_B","title":"Library B"}]'

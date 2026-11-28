@@ -1123,6 +1123,9 @@ class GalleryState extends ChangeNotifier {
     cursor = null;
     _serverSorted = false;
     _needsFirstPage = true;
+    // 回線の答えを待つ間と取り直しが落ちた時も、手元の行は新しい種別で絞って見せる。
+    // 絞らないと前の種別の一覧が残り、接続先が404の時などに絞り込みが効いていないように見える
+    if (k != MediaKind.all) items = items.where(k.matches).toList();
     return refresh(lib);
   }
 
